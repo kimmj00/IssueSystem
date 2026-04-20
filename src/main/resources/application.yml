@@ -1,0 +1,27 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/issue_system
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+jpa:
+  hibernate:
+    ddl-auto: update
+  properties:
+    hibernate:
+      format_sql: true
+  open-in-view: false
+
+servlet:
+  multipart:
+    max-file-size: 50MB
+    max-request-size: 100MB
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+
+app:
+  file:
+    upload-dir: D:\isuue_system\uploads
+#    upload-dir: /data/issue-system/uploads
