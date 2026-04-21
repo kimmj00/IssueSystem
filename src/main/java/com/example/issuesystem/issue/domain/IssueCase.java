@@ -40,14 +40,13 @@ public class IssueCase extends BaseTimeEntity {
     @Column(nullable = false, length = 300)
     private String symptomSummary;
 
-    @Lob
-    @Column(nullable = false)
+    @Column(columnDefinition = "text", nullable = false)
     private String symptomDetail;
 
-    @Lob
+    @Column(columnDefinition = "text")
     private String causeDetail;
 
-    @Lob
+    @Column(columnDefinition = "text")
     private String actionDetail;
 
     @Column(length = 200)
