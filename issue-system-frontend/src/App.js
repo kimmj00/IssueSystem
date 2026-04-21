@@ -267,7 +267,7 @@ export default function App() {
             <div className="space-y-6">
               {/* 목록 영역 */}
               <SectionCard title="이슈 목록" description="제목, 증상 요약, 고객사 기준으로 간단 검색이 가능합니다.">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.2fr_1fr_1fr_1fr_auto]">
                   <LabeledInput label="키워드">
                     <input
                         className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none ring-0 focus:border-slate-500"
@@ -323,16 +323,16 @@ export default function App() {
                       ))}
                     </select>
                   </LabeledInput>
-                </div>
 
-                <div className="mt-3 flex justify-end">
-                  <button
-                      type="button"
-                      onClick={() => fetchIssues(0)}
-                      className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
-                  >
-                    검색
-                  </button>
+                  <div className="flex items-end">
+                    <button
+                        type="button"
+                        onClick={() => fetchIssues(0)}
+                        className="h-[42px] min-w-[72px] rounded-lg bg-slate-900 px-3 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+                    >
+                      검색
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
