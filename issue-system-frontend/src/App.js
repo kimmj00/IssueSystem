@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 
-const API_BASE = 'http://localhost:8080';
+const API_BASE =
+    process.env.NODE_ENV === 'development'
+        ? 'http://localhost:8080'
+        : '';
 
 // 인프라 옵션
 // 현재 백엔드 enum과 동일한 값을 사용해야 검색/등록이 정상 동작함

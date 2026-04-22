@@ -1,3 +1,5 @@
+import org.apache.tools.ant.taskdefs.condition.Os
+
 plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.0.5'
@@ -17,14 +19,20 @@ repositories {
 	mavenCentral()
 }
 
+def frontendDir = "$projectDir/issue-system-frontend"
+def frontendBuildDir = "$frontendDir/build"
+def backendStaticDir = "$projectDir/src/main/resources/static"
+
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.projectlombok:lombok'
+
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
@@ -36,4 +44,55 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+/**
+ * 프론트 정적 파일 폴더 비우기
+ * - 이전 build 결과가 남아 있으면 꼬일 수 있어서 먼저 삭제
+ */
+tasks.register('cleanFrontendStatic', Delete) {
+	delete backendStaticDir
+}
+
+/**
+ * 프론트 npm install
+ */
+tasks.register('npmInstall', Exec) {
+	workingDir = file(frontendDir)
+
+	if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+		commandLine 'cmd', '/c', 'npm install'
+	} else {
+		commandLine 'npm', 'install'
+	}
+}
+
+/**
+ * 프론트 React build
+ */
+tasks.register('npmBuild', Exec) {
+	dependsOn 'npmInstall'
+	workingDir = file(frontendDir)
+
+	if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+		commandLine 'cmd', '/c', 'npm run build'
+	} else {
+		commandLine 'npm', 'run', 'build'
+	}
+}
+
+/**
+ * 프론트 build 결과를 Spring Boot static 폴더로 복사
+ */
+tasks.register('copyFrontendBuild', Copy) {
+	dependsOn 'cleanFrontendStatic', 'npmBuild'
+	from frontendBuildDir
+	into backendStaticDir
+}
+
+/**
+ * resources 처리 전에 프론트 빌드 포함
+ */
+tasks.named('processResources') {
+	dependsOn 'copyFrontendBuild'
 }

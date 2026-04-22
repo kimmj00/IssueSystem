@@ -1,21 +1,25 @@
 spring:
+  application:
+    name: issue-system
+
   datasource:
     url: jdbc:postgresql://localhost:5432/issue_system
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
-jpa:
-  hibernate:
-    ddl-auto: update
-  properties:
-    hibernate:
-      format_sql: true
-  open-in-view: false
 
-servlet:
-  multipart:
-    max-file-size: 50MB
-    max-request-size: 100MB
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
 
 logging:
   level:
@@ -23,5 +27,39 @@ logging:
 
 app:
   file:
-    upload-dir: D:\isuue_system\uploads
-#    upload-dir: /data/issue-system/uploads
+    upload-dir: D:/isuue_system/uploads
+
+---
+spring:
+  config:
+    activate:
+      on-profile: deploy
+
+  datasource:
+    url: jdbc:postgresql://localhost:25432/issue_system
+    username: issue
+    password: issue
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: false
+    open-in-view: false
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+logging:
+  level:
+    org.hibernate.SQL: info
+
+app:
+  file:
+    upload-dir: /home/issue/app/uploads
