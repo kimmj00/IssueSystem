@@ -35,6 +35,10 @@ public interface IssueCaseRepository extends JpaRepository<IssueCase, Long> {
             and (:status is null or i.status = cast(:status as varchar))
             and (:customerName is null or :customerName = '' or
                 coalesce(i.customer_name, '') ilike concat('%', :customerName, '%'))
+            and (:category is null or :category = '' or
+                coalesce(i.category, '') ilike concat('%', :category, '%'))
+            and (:deploymentVersion is null or :deploymentVersion = '' or
+                coalesce(i.deployment_version, '') ilike concat('%', :deploymentVersion, '%'))
         order by i.id desc
         """,
             countQuery = """
@@ -55,6 +59,10 @@ public interface IssueCaseRepository extends JpaRepository<IssueCase, Long> {
             and (:status is null or i.status = cast(:status as varchar))
             and (:customerName is null or :customerName = '' or
                 coalesce(i.customer_name, '') ilike concat('%', :customerName, '%'))
+            and (:category is null or :category = '' or
+                coalesce(i.category, '') ilike concat('%', :category, '%'))
+            and (:deploymentVersion is null or :deploymentVersion = '' or
+                coalesce(i.deployment_version, '') ilike concat('%', :deploymentVersion, '%'))
         """,
             nativeQuery = true)
     Page<Long> searchIds(
@@ -62,6 +70,8 @@ public interface IssueCaseRepository extends JpaRepository<IssueCase, Long> {
             @Param("infraType") String infraType,
             @Param("status") String status,
             @Param("customerName") String customerName,
+            @Param("category") String category,
+            @Param("deploymentVersion") String deploymentVersion,
             Pageable pageable
     );
 

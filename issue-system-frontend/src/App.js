@@ -26,7 +26,6 @@ const emptyForm = {
   customerName: '',
   category: '',
   versionInfo: '',          // DB버전
-  agentManagerVersion: '',  // Agent/Manager 버전
   deploymentVersion: '',    // 배포 버전
   status: 'RESOLVED',
   symptomSummary: '',
@@ -100,6 +99,8 @@ export default function App() {
   const [customerFilter, setCustomerFilter] = useState('');
   const [infraFilter, setInfraFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [deploymentVersionFilter, setDeploymentVersionFilter] = useState('');
 
   // 페이징 상태
   const [page, setPage] = useState(0);
@@ -136,8 +137,6 @@ export default function App() {
 
       const text = await res.text();
 
-      console.log('엑셀 업로드 응답 상태:', res.status);
-      console.log('엑셀 업로드 응답 내용:', text);
 
       if (!res.ok) {
         throw new Error(text || '엑셀 업로드에 실패했습니다.');
@@ -176,6 +175,14 @@ export default function App() {
 
       if (customerFilter.trim()) {
         params.append('customerName', customerFilter.trim());
+      }
+
+      if (categoryFilter.trim()) {
+        params.append('category', categoryFilter.trim());
+      }
+
+      if (deploymentVersionFilter.trim()) {
+        params.append('deploymentVersion', deploymentVersionFilter.trim());
       }
 
       if (infraFilter !== 'ALL') {
@@ -320,11 +327,12 @@ export default function App() {
               </div>
           )}
 
+          {/*검색*/}
           <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1.35fr_1fr]">
             <div className="space-y-6">
               {/* 목록 영역 */}
               <SectionCard title="이슈 목록" description="제목, 증상 요약, 고객사 기준으로 간단 검색이 가능합니다.">
-                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.2fr_1fr_1fr_1fr_auto]">
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.0fr_0.7fr_0.9fr_0.75fr_0.6fr_0.6fr_auto]">
                   <LabeledInput label="키워드">
                     <input
                         className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none ring-0 focus:border-slate-500"
@@ -358,9 +366,24 @@ export default function App() {
                   <LabeledInput label="구분">
                     <input
                         className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
-                        value={form.category}
-                        onChange={(e) => handleChange('category', e.target.value)}
-                        placeholder="예: 버그 / 개선 / 추가"
+                        value={categoryFilter}
+                        onChange={(e) => setCategoryFilter(e.target.value)}
+                        placeholder="예: Tomcat / DB / Agent"
+                    />
+                  </LabeledInput>
+
+                  <LabeledInput label="배포버전">
+                    <input
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
+                        value={deploymentVersionFilter}
+                        onChange={(e) => setDeploymentVersionFilter(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            fetchIssues(0);
+                          }
+                        }}
+                        placeholder="예: 20251114.X"
                     />
                   </LabeledInput>
 
@@ -517,11 +540,6 @@ export default function App() {
                         </div>
 
                         <div className="rounded-xl bg-slate-50 p-4">
-                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">버전</div>
-                          <div className="mt-1 text-sm text-slate-900">{selectedIssue.agentManagerVersion || '-'}</div>
-                        </div>
-
-                        <div className="rounded-xl bg-slate-50 p-4">
                           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">배포 버전</div>
                           <div className="mt-1 text-sm text-slate-900">{selectedIssue.deploymentVersion || '-'}</div>
                         </div>
@@ -545,12 +563,12 @@ export default function App() {
             {/* 등록 영역 */}
             <div className="space-y-6">
               <SectionCard title="엑셀 업로드" description="패치리스트 엑셀 파일을 업로드하면 자동으로 이슈 이력에 등록합니다.">
-                <div className="space-y-4">
+                <div className="flex items-center gap-3">
                   <input
                       type="file"
                       accept=".xlsx,.xls"
                       onChange={handleFileChange}
-                      className="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                      className="w-[365px] rounded-lg border border-slate-300 px-3 py-2 text-sm"
                   />
 
                   <button
@@ -578,11 +596,6 @@ export default function App() {
                       </select>
                     </LabeledInput>
 
-                    <LabeledInput label="시스템명">
-                      <input className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500" value={form.systemName} onChange={(e) => handleChange('systemName', e.target.value)} placeholder="예: PostgreSQL" />
-                    </LabeledInput>
-
-
                     <LabeledInput label="고객사명">
                       <input className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
                              value={form.customerName} onChange={(e) => handleChange('customerName', e.target.value)}
@@ -595,15 +608,6 @@ export default function App() {
                           value={form.versionInfo}
                           onChange={(e) => handleChange('versionInfo', e.target.value)}
                           placeholder="예: PostgreSQL 14"
-                      />
-                    </LabeledInput>
-
-                    <LabeledInput label="버전">
-                      <input
-                          className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
-                          value={form.agentManagerVersion}
-                          onChange={(e) => handleChange('agentManagerVersion', e.target.value)}
-                          placeholder="예: Agent 8.0.1 / Manager 8.0.1"
                       />
                     </LabeledInput>
 

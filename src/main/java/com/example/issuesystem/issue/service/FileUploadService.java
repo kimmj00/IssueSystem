@@ -72,7 +72,6 @@ public class FileUploadService {
                     String issueType = getCellValue(row, headerMap.get("유형"));
                     String dbVersion = getCellValue(row, headerMap.get("DB Version"));
                     String deploymentVersion = getCellValue(row, headerMap.get("배포 버전"));
-                    String webPatchVersion = getCellValue(row, headerMap.get("Web패치버전"));
                     String developmentApply = getCellValue(row, headerMap.get("개발적용"));
                     String note = getCellValue(row, headerMap.get("비고"));
 
@@ -116,8 +115,6 @@ public class FileUploadService {
 
                             // 추가 컬럼
                             .category(category)
-                            .deploymentVersion(deploymentVersion)
-                            .agentManagerVersion(webPatchVersion)
                             .build();
 
                     issueCaseRepository.save(issueCase);

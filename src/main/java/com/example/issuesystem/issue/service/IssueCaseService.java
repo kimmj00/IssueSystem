@@ -54,8 +54,6 @@ public class IssueCaseService {
                 .authorName(request.getAuthorName())
                 .category(request.getCategory())
                 .deploymentVersion(request.getDeploymentVersion())
-                .agentManagerVersion(request.getAgentManagerVersion())
-                .category(request.getCategory())
                 .build();
 
         IssueCase saved = issueCaseRepository.save(issueCase);
@@ -98,8 +96,7 @@ public class IssueCaseService {
                 request.getActionDetail(),
                 request.getTags(),
                 request.getCategory(),
-                request.getDeploymentVersion(),
-                request.getAgentManagerVersion()
+                request.getDeploymentVersion()
         );
     }
 
@@ -157,6 +154,8 @@ public class IssueCaseService {
             InfraType infraType,
             IssueStatus status,
             String customerName,
+            String category,
+            String deploymentVersion,
             int page,
             int size
     ) {
@@ -169,6 +168,8 @@ public class IssueCaseService {
                 infraType != null ? infraType.name() : null,
                 status != null ? status.name() : null,
                 customerName,
+                category,
+                deploymentVersion,
                 PageRequest.of(safePage, safeSize)
         );
 

@@ -30,7 +30,6 @@ public class IssueCaseResponse {
     private List<AttachmentResponse> attachments;
     private String category;
     private String deploymentVersion;
-    private String agentManagerVersion;
 
     @Getter
     @Builder
@@ -65,8 +64,6 @@ public class IssueCaseResponse {
                 )
                 .category(issueCase.getCategory())
                 .deploymentVersion(issueCase.getDeploymentVersion())
-                .agentManagerVersion(issueCase.getAgentManagerVersion())
-                .category(issueCase.getCategory())
                 .build();
     }
 }

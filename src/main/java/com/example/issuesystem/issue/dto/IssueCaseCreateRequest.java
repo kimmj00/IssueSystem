@@ -37,7 +37,6 @@ public class IssueCaseCreateRequest {
     private String tags;
     private String category;
     private String deploymentVersion;
-    private String agentManagerVersion;
 
     @NotBlank(message = "작성자는 필수입니다.")
     private String authorName;

@@ -84,9 +84,13 @@ public class IssueCaseController {
             @RequestParam(required = false) InfraType infraType,
             @RequestParam(required = false) IssueStatus status,
             @RequestParam(required = false) String customerName,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String deploymentVersion,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "5") int size
     ) {
-        return ApiResponse.ok(issueCaseService.search(keyword, infraType, status, customerName, page, size));
+        return ApiResponse.ok(
+                issueCaseService.search(keyword, infraType, status, customerName, category, deploymentVersion, page, size)
+        );
     }
 }

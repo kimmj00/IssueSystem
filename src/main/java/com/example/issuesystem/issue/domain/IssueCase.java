@@ -62,9 +62,6 @@ public class IssueCase extends BaseTimeEntity {
     @Column(length = 50)
     private String deploymentVersion;  // 배포버전
 
-    @Column(length = 50)
-    private String agentManagerVersion;  // Agent/Manager 버전
-
     @Builder
     public IssueCase(
             String title,
@@ -80,8 +77,7 @@ public class IssueCase extends BaseTimeEntity {
             String tags,
             String authorName,
             String category,
-            String deploymentVersion,
-            String agentManagerVersion
+            String deploymentVersion
     ) {
         this.title = title;
         this.infraType = infraType;
@@ -97,7 +93,6 @@ public class IssueCase extends BaseTimeEntity {
         this.authorName = authorName;
         this.category = category;
         this.deploymentVersion = deploymentVersion;
-        this.agentManagerVersion = agentManagerVersion;
     }
 
     public void update(
@@ -113,8 +108,7 @@ public class IssueCase extends BaseTimeEntity {
             String actionDetail,
             String tags,
             String category,
-            String deploymentVersion,
-            String agentManagerVersion
+            String deploymentVersion
     ) {
         this.title = title;
         this.infraType = infraType;
@@ -129,6 +123,5 @@ public class IssueCase extends BaseTimeEntity {
         this.tags = tags;
         this.category = category;
         this.deploymentVersion = deploymentVersion;
-        this.agentManagerVersion = agentManagerVersion;
     }
 }
