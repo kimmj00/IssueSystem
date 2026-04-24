@@ -56,17 +56,4 @@ Thumbs.db
 
 # uploads
 uploads/
-/src/main/resources/static/static/js/453.53c66e06.chunk.js
-/src/main/resources/static/static/js/453.53c66e06.chunk.js.map
-/src/main/resources/static/asset-manifest.json
-/src/main/resources/static/favicon.ico
-/src/main/resources/static/index.html
-/src/main/resources/static/logo192.png
-/src/main/resources/static/logo512.png
-/src/main/resources/static/static/js/main.1b3bcd04.js
-/src/main/resources/static/static/js/main.1b3bcd04.js.LICENSE.txt
-/src/main/resources/static/static/js/main.1b3bcd04.js.map
-/src/main/resources/static/static/css/main.ab54d937.css
-/src/main/resources/static/static/css/main.ab54d937.css.map
-/src/main/resources/static/manifest.json
-/src/main/resources/static/robots.txt
+/src/main/resources/static/*
