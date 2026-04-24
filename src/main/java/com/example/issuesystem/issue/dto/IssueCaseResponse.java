@@ -28,6 +28,9 @@ public class IssueCaseResponse {
     private String authorName;
     private LocalDateTime createdAt;
     private List<AttachmentResponse> attachments;
+    private String category;
+    private String deploymentVersion;
+    private String agentManagerVersion;
 
     @Getter
     @Builder
@@ -60,6 +63,10 @@ public class IssueCaseResponse {
                                 .fileSize(file.getFileSize())
                                 .build()).toList()
                 )
+                .category(issueCase.getCategory())
+                .deploymentVersion(issueCase.getDeploymentVersion())
+                .agentManagerVersion(issueCase.getAgentManagerVersion())
+                .category(issueCase.getCategory())
                 .build();
     }
 }

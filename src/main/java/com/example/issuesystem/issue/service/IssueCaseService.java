@@ -52,6 +52,10 @@ public class IssueCaseService {
                 .actionDetail(request.getActionDetail())
                 .tags(request.getTags())
                 .authorName(request.getAuthorName())
+                .category(request.getCategory())
+                .deploymentVersion(request.getDeploymentVersion())
+                .agentManagerVersion(request.getAgentManagerVersion())
+                .category(request.getCategory())
                 .build();
 
         IssueCase saved = issueCaseRepository.save(issueCase);
@@ -92,7 +96,10 @@ public class IssueCaseService {
                 request.getSymptomDetail(),
                 request.getCauseDetail(),
                 request.getActionDetail(),
-                request.getTags()
+                request.getTags(),
+                request.getCategory(),
+                request.getDeploymentVersion(),
+                request.getAgentManagerVersion()
         );
     }
 

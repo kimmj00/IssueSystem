@@ -13,6 +13,8 @@ const infraOptions = [
   'OAM', 'WNMS', 'CMS', 'K8S', 'TRMS', 'NPM', 'BRMS'
 ];
 
+const categoryOptions = ['Tomcat', 'JAVA', 'WEB', 'DB', 'Agent', 'Manager', '보안취약'];
+
 // 상태 옵션
 const statusOptions = ['OPEN', 'RESOLVED', 'CLOSED'];
 
@@ -22,7 +24,10 @@ const emptyForm = {
   infraType: 'EMS',
   systemName: '',
   customerName: '',
-  versionInfo: '',
+  category: '',
+  versionInfo: '',          // DB버전
+  agentManagerVersion: '',  // Agent/Manager 버전
+  deploymentVersion: '',    // 배포 버전
   status: 'RESOLVED',
   symptomSummary: '',
   symptomDetail: '',
@@ -103,6 +108,55 @@ export default function App() {
   const [totalElements, setTotalElements] = useState(0);
   const [hasNext, setHasNext] = useState(false);
   const [hasPrevious, setHasPrevious] = useState(false);
+
+  // 파일 상태를 관리하는 useState 훅
+  const [file, setFile] = useState(null);
+
+  // 파일 선택 시, 선택된 파일을 상태에 저장하는 함수
+  const handleFileChange = (e) => {
+    // 선택한 파일을 상태에 저장
+    setFile(e.target.files[0]);
+  };
+
+  // 업로드 버튼 클릭 시 실행되는 함수
+  const handleUpload = async () => {
+    if (!file) {
+      alert('업로드할 엑셀 파일을 선택하세요.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/issue-cases/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const text = await res.text();
+
+      console.log('엑셀 업로드 응답 상태:', res.status);
+      console.log('엑셀 업로드 응답 내용:', text);
+
+      if (!res.ok) {
+        throw new Error(text || '엑셀 업로드에 실패했습니다.');
+      }
+
+      const result = JSON.parse(text);
+
+      if (!result.success) {
+        throw new Error(result.message || '엑셀 업로드에 실패했습니다.');
+      }
+
+      alert(`엑셀 업로드 완료: ${result.data}건 등록`);
+      setFile(null);
+      await fetchIssues(0);
+    } catch (error) {
+      console.error(error);
+      alert(error.message || '엑셀 업로드 중 오류가 발생했습니다.');
+    }
+  };
 
   /**
    * 목록 조회
@@ -250,7 +304,7 @@ export default function App() {
 
   return (
       <div className="min-h-screen bg-slate-50 text-slate-900">
-        <div className="mx-auto max-w-[1600px] px-6 py-8 sm:px-8 lg:px-10">
+        <div className="mx-auto max-w-[1900px] px-6 py-8 sm:px-8 lg:px-12">
           {/* 페이지 제목 */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold tracking-tight">이슈관리 시스템</h1>
@@ -266,7 +320,7 @@ export default function App() {
               </div>
           )}
 
-          <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1.25fr_0.95fr]">
+          <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1.35fr_1fr]">
             <div className="space-y-6">
               {/* 목록 영역 */}
               <SectionCard title="이슈 목록" description="제목, 증상 요약, 고객사 기준으로 간단 검색이 가능합니다.">
@@ -298,6 +352,15 @@ export default function App() {
                           }
                         }}
                         placeholder="고객사명"
+                    />
+                  </LabeledInput>
+
+                  <LabeledInput label="구분">
+                    <input
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
+                        value={form.category}
+                        onChange={(e) => handleChange('category', e.target.value)}
+                        placeholder="예: 버그 / 개선 / 추가"
                     />
                   </LabeledInput>
 
@@ -340,7 +403,7 @@ export default function App() {
 
                 <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
                   <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-200 text-sm">
+                    <table className="min-w-[1200px] divide-y divide-slate-200 text-sm">
                       <thead className="bg-slate-100">
                       <tr>
                         <th className="px-4 py-3 text-left font-semibold">ID</th>
@@ -373,7 +436,9 @@ export default function App() {
                                   <div className="mt-1 text-xs text-slate-500">{issue.symptomSummary}</div>
                                 </td>
                                 <td className="px-4 py-3">{issue.infraType}</td>
-                                <td className="px-4 py-3">{issue.customerName || '-'}</td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  {issue.customerName || '-'}
+                                </td>
                                 <td className="px-4 py-3"><Badge>{issue.status}</Badge></td>
                                 <td className="px-4 py-3">{issue.authorName}</td>
                               </tr>
@@ -435,14 +500,32 @@ export default function App() {
                           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">시스템명</div>
                           <div className="mt-1 text-sm text-slate-900">{selectedIssue.systemName}</div>
                         </div>
+
+                        <div className="rounded-xl bg-slate-50 p-4">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">구분</div>
+                          <div className="mt-1 text-sm text-slate-900">{selectedIssue.category || '-'}</div>
+                        </div>
+
                         <div className="rounded-xl bg-slate-50 p-4">
                           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">고객사</div>
                           <div className="mt-1 text-sm text-slate-900">{selectedIssue.customerName || '-'}</div>
                         </div>
+
                         <div className="rounded-xl bg-slate-50 p-4">
-                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">버전</div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">DB버전</div>
                           <div className="mt-1 text-sm text-slate-900">{selectedIssue.versionInfo || '-'}</div>
                         </div>
+
+                        <div className="rounded-xl bg-slate-50 p-4">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">버전</div>
+                          <div className="mt-1 text-sm text-slate-900">{selectedIssue.agentManagerVersion || '-'}</div>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-50 p-4">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">배포 버전</div>
+                          <div className="mt-1 text-sm text-slate-900">{selectedIssue.deploymentVersion || '-'}</div>
+                        </div>
+
                         <div className="rounded-xl bg-slate-50 p-4">
                           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">작성자</div>
                           <div className="mt-1 text-sm text-slate-900">{selectedIssue.authorName}</div>
@@ -460,7 +543,26 @@ export default function App() {
             </div>
 
             {/* 등록 영역 */}
-            <div>
+            <div className="space-y-6">
+              <SectionCard title="엑셀 업로드" description="패치리스트 엑셀 파일을 업로드하면 자동으로 이슈 이력에 등록합니다.">
+                <div className="space-y-4">
+                  <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={handleFileChange}
+                      className="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+
+                  <button
+                      type="button"
+                      onClick={handleUpload}
+                      className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+                  >
+                    엑셀 업로드
+                  </button>
+                </div>
+              </SectionCard>
+
               <SectionCard title="이슈 등록" description="React에서 바로 백엔드 JSON 등록 API를 호출합니다.">
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -480,12 +582,38 @@ export default function App() {
                       <input className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500" value={form.systemName} onChange={(e) => handleChange('systemName', e.target.value)} placeholder="예: PostgreSQL" />
                     </LabeledInput>
 
+
                     <LabeledInput label="고객사명">
-                      <input className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500" value={form.customerName} onChange={(e) => handleChange('customerName', e.target.value)} placeholder="예: A고객사" />
+                      <input className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
+                             value={form.customerName} onChange={(e) => handleChange('customerName', e.target.value)}
+                             placeholder="예: A고객사" />
+                    </LabeledInput>
+
+                    <LabeledInput label="DB버전">
+                      <input
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
+                          value={form.versionInfo}
+                          onChange={(e) => handleChange('versionInfo', e.target.value)}
+                          placeholder="예: PostgreSQL 14"
+                      />
                     </LabeledInput>
 
                     <LabeledInput label="버전">
-                      <input className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500" value={form.versionInfo} onChange={(e) => handleChange('versionInfo', e.target.value)} placeholder="예: 14" />
+                      <input
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
+                          value={form.agentManagerVersion}
+                          onChange={(e) => handleChange('agentManagerVersion', e.target.value)}
+                          placeholder="예: Agent 8.0.1 / Manager 8.0.1"
+                      />
+                    </LabeledInput>
+
+                    <LabeledInput label="배포 버전">
+                      <input
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
+                          value={form.deploymentVersion}
+                          onChange={(e) => handleChange('deploymentVersion', e.target.value)}
+                          placeholder="예: 20251114.X"
+                      />
                     </LabeledInput>
 
                     <LabeledInput label="상태">
@@ -496,6 +624,43 @@ export default function App() {
                       </select>
                     </LabeledInput>
                   </div>
+                    <LabeledInput label="구분">
+                      <div className="flex gap-2">
+                        <select
+                            className="w-[140px] shrink-0 rounded-xl border border-slate-300 px-2 py-2"
+                            value={categoryOptions.includes(form.category) ? form.category : 'DIRECT'}
+                            onChange={(e) => {
+                              const value = e.target.value;
+
+                              if (value === 'DIRECT') {
+                                handleChange('category', '');
+                              } else {
+                                handleChange('category', value);
+                              }
+                            }}
+                        >
+                          <option value="">선택</option>
+                          {categoryOptions.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                          ))}
+                          <option value="DIRECT">직접입력</option>
+                        </select>
+
+                        <input
+                            className={`flex-1 rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500 ${
+                                categoryOptions.includes(form.category)
+                                    ? 'bg-slate-100 text-slate-500 cursor-not-allowed'
+                                    : 'bg-white'
+                            }`}
+                            value={form.category}
+                            onChange={(e) => handleChange('category', e.target.value)}
+                            disabled={categoryOptions.includes(form.category)}
+                            placeholder="직접입력 또는 선택값"
+                        />
+                      </div>
+                    </LabeledInput>
 
                   <LabeledInput label="증상 요약">
                     <input className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500" value={form.symptomSummary} onChange={(e) => handleChange('symptomSummary', e.target.value)} placeholder="예: DB 연결이 간헐적으로 끊김" />

@@ -34,4 +34,7 @@ public class IssueCaseUpdateRequest {
     private String causeDetail;
     private String actionDetail;
     private String tags;
+    private String category;
+    private String deploymentVersion;
+    private String agentManagerVersion;
 }
