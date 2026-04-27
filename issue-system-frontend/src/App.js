@@ -310,8 +310,8 @@ export default function App() {
   };
 
   return (
-      <div className="min-h-screen bg-slate-50 text-slate-900">
-        <div className="mx-auto max-w-[1900px] px-6 py-8 sm:px-8 lg:px-12">
+      <div className="min-h-screen w-full overflow-x-hidden bg-slate-50 text-slate-900">
+        <div className="mx-auto w-full max-w-[1760px] px-4 py-6 sm:px-6 lg:px-8">
           {/* 페이지 제목 */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold tracking-tight">이슈관리 시스템</h1>
@@ -328,11 +328,11 @@ export default function App() {
           )}
 
           {/*검색*/}
-          <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1.35fr_1fr]">
+          <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1.45fr)_minmax(380px,0.75fr)]">
             <div className="space-y-6">
               {/* 목록 영역 */}
               <SectionCard title="이슈 목록" description="제목, 증상 요약, 고객사 기준으로 간단 검색이 가능합니다.">
-                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.0fr_0.7fr_0.9fr_0.75fr_0.6fr_0.6fr_auto]">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[1fr_0.8fr_0.9fr_0.8fr_0.65fr_0.65fr_auto]">
                   <LabeledInput label="키워드">
                     <input
                         className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none ring-0 focus:border-slate-500"
@@ -426,7 +426,7 @@ export default function App() {
 
                 <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
                   <div className="overflow-x-auto">
-                    <table className="min-w-[1200px] divide-y divide-slate-200 text-sm">
+                    <table className="w-full min-w-[900px] divide-y divide-slate-200 text-sm">
                       <thead className="bg-slate-100">
                       <tr>
                         <th className="px-4 py-3 text-left font-semibold">ID</th>
@@ -563,12 +563,12 @@ export default function App() {
             {/* 등록 영역 */}
             <div className="space-y-6">
               <SectionCard title="엑셀 업로드" description="패치리스트 엑셀 파일을 업로드하면 자동으로 이슈 이력에 등록합니다.">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                   <input
                       type="file"
                       accept=".xlsx,.xls"
                       onChange={handleFileChange}
-                      className="w-[365px] rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm sm:w-[365px]"
                   />
 
                   <button
