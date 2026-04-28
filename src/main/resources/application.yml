@@ -27,7 +27,7 @@ logging:
 
 app:
   file:
-    upload-dir: D:/isuue_system/uploads
+    upload-dir: D:/issue_system/uploads
 
 ---
 spring:
