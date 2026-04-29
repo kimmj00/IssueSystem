@@ -71,9 +71,9 @@ spring:
       on-profile: supabase
 
   datasource:
-    url: jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres # Supabase JDBC URL
-    username: postgres.bbqndzavhqsbkefwfjgo # Supabase DB 계정
-    password: qmfpdlswm12! # Supabase DB 비밀번호
+    url: ${DB_URL} # Supabase JDBC URL
+    username: ${DB_USERNAME} # Supabase pooler 사용자명
+    password: ${DB_PASSWORD} # Supabase DB 비밀번호
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 5
