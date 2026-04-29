@@ -63,3 +63,38 @@ logging:
 app:
   file:
     upload-dir: /home/issue/app/uploads
+
+---
+spring:
+  config:
+    activate:
+      on-profile: supabase
+
+  datasource:
+    url: jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres # Supabase JDBC URL
+    username: postgres.bbqndzavhqsbkefwfjgo # Supabase DB 계정
+    password: qmfpdlswm12! # Supabase DB 비밀번호
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: false
+    open-in-view: false
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+logging:
+  level:
+    org.hibernate.SQL: info
+
+app:
+  file:
+    upload-dir: /tmp/issue_system/uploads # Render 무료 서버용 임시 업로드 경로
