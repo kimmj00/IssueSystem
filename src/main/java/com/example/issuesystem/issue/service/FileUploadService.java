@@ -12,7 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -24,23 +26,30 @@ public class FileUploadService {
 
     /**
      * 엑셀 업로드 처리
-     * - xlsx, xls 모두 WorkbookFactory로 처리
-     * - 모든 시트를 순회
-     * - "번호", "INFRA", "패치내역"이 있는 행을 헤더로 판단
-     * - 헤더명 기준으로 컬럼을 찾아 저장
+     * - 엑셀을 읽어서 IssueCase 목록으로 변환
+     * - 한 행마다 save() 하지 않고, 일정 개수씩 모아서 saveAll() 처리
      */
     @Transactional
     public int processExcelFile(MultipartFile file) {
         int savedCount = 0;
 
+        // 한 번에 저장할 데이터 개수
+        // Render + Supabase 조합에서는 50~100 정도가 무난함
+        final int BATCH_SIZE = 100;
+
+        // DB 저장 전 임시로 데이터를 모아두는 리스트
+        List<IssueCase> batch = new ArrayList<>();
+
         log.info("엑셀 파일 처리 시작");
 
         try (InputStream inputStream = file.getInputStream();
              Workbook workbook = WorkbookFactory.create(inputStream)) {
+
             log.info("Workbook 생성 성공, 시트 개수={}", workbook.getNumberOfSheets());
 
             for (Sheet sheet : workbook) {
                 log.info("시트 처리 시작: {}", sheet.getSheetName());
+
                 Map<String, Integer> headerMap = findHeaderRow(sheet);
                 log.info("헤더맵: {}", headerMap);
 
@@ -62,7 +71,7 @@ public class FileUploadService {
                     String no = getCellValue(row, headerMap.get("번호"));
                     String patchContent = getCellValue(row, headerMap.get("패치내역"));
 
-                    // 번호와 패치내역이 없으면 데이터 행이 아니라고 판단
+                    // 번호와 패치내역이 모두 없으면 실제 데이터 행이 아니라고 판단
                     if (isBlank(no) && isBlank(patchContent)) {
                         continue;
                     }
@@ -85,14 +94,16 @@ public class FileUploadService {
                             // 시스템명: 엑셀 INFRA 원본값 저장
                             .systemName(isBlank(originalInfra) ? "미지정" : originalInfra)
 
-                            // 고객사: 패치리스트는 고객사 개념이 없으므로 공백
+                            // 고객사: 패치리스트에서는 개발적용 값을 임시 저장
                             .customerName(isBlank(developmentApply) ? null : developmentApply)
 
-                            // DB버전은 기존 versionInfo에 저장
+                            // DB 버전
                             .versionInfo(dbVersion)
+
+                            // 배포 버전
                             .deploymentVersion(deploymentVersion)
 
-                            // 패치 이력은 처리 완료 이력으로 간주
+                            // 엑셀 업로드 데이터는 처리 완료 이력으로 간주
                             .status(IssueStatus.RESOLVED)
 
                             // 증상 요약: 패치내역 첫 줄
@@ -101,32 +112,53 @@ public class FileUploadService {
                             // 증상 상세: 전체 패치내역
                             .symptomDetail(defaultText(patchContent, "패치내역 없음"))
 
-                            // 원인: 엑셀에 별도 원인 컬럼이 없으므로 비워둠
+                            // 원인: 엑셀에 별도 원인 컬럼이 없으므로 null
                             .causeDetail(null)
 
-                            // 조치 내용: 비고/스크립트 등 참고 내용
+                            // 조치 내용: 비고 컬럼 저장
                             .actionDetail(note)
 
-                            // 태그: 원본 인프라, 유형, 시트명 등을 검색용으로 저장
+                            // 검색용 태그
                             .tags(makeTags(originalInfra, category, issueType, sheet.getSheetName()))
 
                             // 작성자: 엑셀 업로드 자동 등록
                             .authorName("excel-upload")
 
-                            // 추가 컬럼
+                            // 구분
                             .category(category)
                             .build();
 
-                    issueCaseRepository.save(issueCase);
-                    savedCount++;
-                    log.info("저장 대상 row={}, infra={}, category={}, patchContent={}",
-                            rowNum, originalInfra, category, makeSummary(patchContent));
+                    // 바로 저장하지 않고 batch 리스트에 모음
+                    batch.add(issueCase);
+
+                    // batch가 일정 개수 이상이면 한 번에 저장
+                    if (batch.size() >= BATCH_SIZE) {
+                        issueCaseRepository.saveAll(batch);
+                        savedCount += batch.size();
+
+                        log.info("엑셀 업로드 중간 저장 완료: 누적 {}건", savedCount);
+
+                        // 저장 완료한 데이터는 메모리에서 제거
+                        batch.clear();
+                    }
                 }
             }
 
+            // 마지막에 남아 있는 데이터 저장
+            if (!batch.isEmpty()) {
+                issueCaseRepository.saveAll(batch);
+                savedCount += batch.size();
+
+                log.info("엑셀 업로드 마지막 저장 완료: 누적 {}건", savedCount);
+
+                batch.clear();
+            }
+
+            log.info("엑셀 파일 처리 완료: 총 {}건 저장", savedCount);
 
             return savedCount;
-        } catch (Throwable  e) {
+
+        } catch (Throwable e) {
             log.error("엑셀 파싱 실패", e);
             throw new IllegalStateException("엑셀 업로드 처리 중 오류가 발생했습니다: " + e.getMessage(), e);
         }
@@ -150,7 +182,9 @@ public class FileUploadService {
                 }
             }
 
-            if (temp.containsKey("번호") && temp.containsKey("INFRA") && temp.containsKey("패치내역")) {
+            if (temp.containsKey("번호")
+                    && temp.containsKey("INFRA")
+                    && temp.containsKey("패치내역")) {
                 temp.put("_HEADER_ROW", row.getRowNum());
                 return temp;
             }
@@ -172,7 +206,6 @@ public class FileUploadService {
 
     /**
      * 셀 타입과 상관없이 문자열로 변환
-     * - 문자열, 숫자, 날짜, 수식, 빈 셀 모두 처리
      */
     private String getCellValue(Cell cell) {
         if (cell == null) {
@@ -186,7 +219,6 @@ public class FileUploadService {
     /**
      * 엑셀 INFRA 값을 InfraType enum으로 변환
      * - enum에 없는 값은 EMS로 기본 처리
-     * - 예: "공통"은 현재 InfraType enum에 없으므로 EMS 처리
      */
     private InfraType resolveInfraType(String value) {
         if (isBlank(value)) {
@@ -240,6 +272,9 @@ public class FileUploadService {
         return limit(sb.toString(), 200);
     }
 
+    /**
+     * 태그 문자열 누적
+     */
     private void appendTag(StringBuilder sb, String value) {
         if (isBlank(value)) {
             return;
@@ -252,10 +287,16 @@ public class FileUploadService {
         sb.append(value.trim());
     }
 
+    /**
+     * 값이 비어 있으면 기본값 반환
+     */
     private String defaultText(String value, String defaultValue) {
         return isBlank(value) ? defaultValue : value;
     }
 
+    /**
+     * 문자열 최대 길이 제한
+     */
     private String limit(String value, int maxLength) {
         if (value == null) {
             return null;
@@ -264,6 +305,9 @@ public class FileUploadService {
         return value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 
+    /**
+     * null 또는 공백 문자열 체크
+     */
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }

@@ -14,6 +14,10 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        jdbc:
+          batch_size: 50 # Hibernate가 insert를 일정 개수씩 묶어서 처리하도록 설정
+        order_inserts: true # 같은 종류의 insert를 모아서 실행
+        order_updates: true # update도 정렬해서 실행
     open-in-view: false
 
   servlet:
@@ -49,6 +53,10 @@ spring:
     properties:
       hibernate:
         format_sql: false
+        jdbc:
+          batch_size: 50 # Hibernate가 insert를 일정 개수씩 묶어서 처리하도록 설정
+        order_inserts: true # 같은 종류의 insert를 모아서 실행
+        order_updates: true # update도 정렬해서 실행
     open-in-view: false
 
   servlet:
@@ -85,6 +93,10 @@ spring:
     properties:
       hibernate:
         format_sql: false
+        jdbc:
+          batch_size: 50 # Hibernate가 insert를 일정 개수씩 묶어서 처리하도록 설정
+        order_inserts: true # 같은 종류의 insert를 모아서 실행
+        order_updates: true # update도 정렬해서 실행
     open-in-view: false
 
   servlet:
