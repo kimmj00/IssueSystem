@@ -71,9 +71,6 @@ spring:
       on-profile: supabase
 
   datasource:
-    url: ${DB_URL} # Supabase JDBC URL
-    username: ${DB_USERNAME} # Supabase pooler 사용자명
-    password: ${DB_PASSWORD} # Supabase DB 비밀번호
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 5
