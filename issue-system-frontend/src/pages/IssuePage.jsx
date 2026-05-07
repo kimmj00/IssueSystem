@@ -356,27 +356,31 @@ export default function IssuePage() {
               </LabeledInput>
             </div>
 
-            <div className="ml-auto flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+            {/* 검색 버튼: 상태 select 바로 오른쪽 */}
+            <div className="flex w-full items-end sm:w-auto">
               <button
-                type="button"
-                onClick={handleSearch}
-                className={`${toolbarButtonClass} w-full bg-slate-900 text-white hover:bg-slate-800 sm:w-[88px]`}
+                  type="button"
+                  onClick={handleSearch}
+                  className={`${toolbarButtonClass} w-full bg-slate-900 text-white hover:bg-slate-800 sm:w-[88px]`}
               >
                 검색
               </button>
+            </div>
 
+            {/* 우측 액션 버튼: 엑셀 업로드 / 추가 */}
+            <div className="ml-auto flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
               <button
-                type="button"
-                onClick={() => setIsUploadModalOpen(true)}
-                className={`${toolbarButtonClass} w-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:w-[120px]`}
+                  type="button"
+                  onClick={() => setIsUploadModalOpen(true)}
+                  className={`${toolbarButtonClass} w-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:w-[120px]`}
               >
                 엑셀 업로드
               </button>
 
               <button
-                type="button"
-                onClick={() => setIsCreateModalOpen(true)}
-                className={`${toolbarButtonClass} w-full bg-slate-900 text-white hover:bg-slate-800 sm:w-[88px]`}
+                  type="button"
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className={`${toolbarButtonClass} w-full bg-slate-900 text-white hover:bg-slate-800 sm:w-[88px]`}
               >
                 추가
               </button>
