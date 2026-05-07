@@ -14,8 +14,7 @@ import java.util.Set;
 /**
  * 지식공유 본문 엔티티
  *
- * 인프라는 다중 선택이 가능하므로
- * knowledge_share_infra 테이블에 별도로 저장한다.
+ * 인프라는 다중 선택이 가능하므로 knowledge_share_infra 테이블에 별도로 저장한다.
  */
 @Getter
 @Entity
@@ -27,34 +26,26 @@ public class KnowledgeShare extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /**
-     * 지식공유 제목
-     */
+    /** 지식공유 제목 */
     @Column(nullable = false, length = 200)
     private String title;
 
-    /**
-     * 고객사명
-     */
+    /** 고객사명 */
     @Column(length = 100)
     private String customerName;
 
-    /**
-     * 담당자 또는 작성자
-     */
+    /** 담당자 또는 작성자 */
     @Column(nullable = false, length = 100)
     private String authorName;
 
     /**
-     * 기존 화면 호환용 필드
+     * 기존 화면 호환용 필드.
      * 실제 첨부파일은 knowledge_share_attachment에 저장한다.
      */
     @Column(length = 255)
     private String attachmentName;
 
-    /**
-     * 지식공유 내용
-     */
+    /** 지식공유 내용 */
     @Column(columnDefinition = "text", nullable = false)
     private String content;
 

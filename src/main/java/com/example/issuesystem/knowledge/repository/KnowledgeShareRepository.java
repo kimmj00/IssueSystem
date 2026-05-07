@@ -10,9 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 
-/**
- * 지식공유 Repository
- */
+/** 지식공유 Repository */
 public interface KnowledgeShareRepository extends JpaRepository<KnowledgeShare, Long> {
 
     /**

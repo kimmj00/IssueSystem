@@ -10,9 +10,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
-/**
- * 지식공유 응답 DTO
- */
+/** 지식공유 응답 DTO */
 @Getter
 @Builder
 public class KnowledgeShareResponse {
@@ -28,9 +26,7 @@ public class KnowledgeShareResponse {
     private LocalDateTime updatedAt;
     private List<AttachmentResponse> attachments;
 
-    /**
-     * 첨부파일 응답 DTO
-     */
+    /** 첨부파일 응답 DTO */
     @Getter
     @Builder
     public static class AttachmentResponse {
@@ -50,6 +46,7 @@ public class KnowledgeShareResponse {
                 .authorName(knowledgeShare.getAuthorName())
                 .attachmentName(knowledgeShare.getAttachmentName())
                 .content(knowledgeShare.getContent())
+                // @ElementCollection을 DTO 생성 시점에 실제 Set으로 복사한다.
                 .infraTypes(
                         knowledgeShare.getInfraTypes() == null
                                 ? Set.of()
@@ -61,12 +58,12 @@ public class KnowledgeShareResponse {
                         attachments == null
                                 ? List.of()
                                 : attachments.stream()
-                                  .map(file -> AttachmentResponse.builder()
-                                               .id(file.getId())
-                                               .originalFileName(file.getOriginalFileName())
-                                               .fileSize(file.getFileSize())
-                                               .build())
-                                  .toList()
+                                .map(file -> AttachmentResponse.builder()
+                                        .id(file.getId())
+                                        .originalFileName(file.getOriginalFileName())
+                                        .fileSize(file.getFileSize())
+                                        .build())
+                                .toList()
                 )
                 .build();
     }

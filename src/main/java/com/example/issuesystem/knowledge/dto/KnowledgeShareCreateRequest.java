@@ -26,7 +26,7 @@ public class KnowledgeShareCreateRequest {
     private String authorName;
 
     /**
-     * 기존 화면 호환용
+     * 기존 화면 호환용.
      * 실제 첨부파일은 MultipartFile files로 받는다.
      */
     private String attachmentName;
@@ -34,9 +34,7 @@ public class KnowledgeShareCreateRequest {
     @NotBlank(message = "내용은 필수입니다.")
     private String content;
 
-    /**
-     * 등록 시 인프라 다중 선택
-     */
+    /** 등록 시 인프라 다중 선택 */
     @NotEmpty(message = "인프라는 하나 이상 선택해야 합니다.")
     private Set<InfraType> infraTypes;
 }

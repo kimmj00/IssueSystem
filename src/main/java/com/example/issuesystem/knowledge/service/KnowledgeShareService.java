@@ -10,24 +10,19 @@ import com.example.issuesystem.knowledge.repository.KnowledgeShareAttachmentRepo
 import com.example.issuesystem.knowledge.repository.KnowledgeShareRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.net.MalformedURLException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * 지식공유 서비스
- */
+/** 지식공유 서비스 */
 @Service
 @RequiredArgsConstructor
 public class KnowledgeShareService {
@@ -41,7 +36,7 @@ public class KnowledgeShareService {
      *
      * 1. 본문 먼저 저장
      * 2. 저장된 ID 기준으로 첨부파일 디렉터리 생성
-     * 3. 첨부파일 저장 후 attachment 테이블 기록
+     * 3. 첨부파일 압축/암호화 저장 후 attachment 테이블 기록
      */
     @Transactional
     public Long create(KnowledgeShareCreateRequest request, List<MultipartFile> files) {
@@ -97,11 +92,7 @@ public class KnowledgeShareService {
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 10 : size;
 
-        /*
-         * PostgreSQL은 :startDate is null 같은 조건에서
-         * null 파라미터 타입을 추론하지 못할 수 있다.
-         * 그래서 Repository에는 날짜 null을 넘기지 않는다.
-         */
+        // PostgreSQL의 null 날짜 파라미터 타입 추론 오류를 피하기 위해 기본 범위를 넣는다.
         LocalDateTime startDateTime = startDate != null
                 ? startDate.atStartOfDay()
                 : LocalDateTime.of(1970, 1, 1, 0, 0);
@@ -147,38 +138,30 @@ public class KnowledgeShareService {
 
     /**
      * 첨부파일 다운로드 정보 조회
+     *
+     * 저장된 파일은 압축 후 암호화되어 있으므로 다운로드 시 복호화/압축해제된 Resource를 반환한다.
      */
     @Transactional
     public DownloadFile getDownloadFile(Long attachmentId) {
         KnowledgeShareAttachment attachment = attachmentRepository.findById(attachmentId)
                 .orElseThrow(() -> new IllegalArgumentException("첨부파일을 찾을 수 없습니다."));
 
-        Path path = Paths.get(attachment.getStoredPath()).toAbsolutePath().normalize();
+        InputStreamResource resource = new InputStreamResource(
+                fileStorageService.decryptToInputStream(attachment.getStoredPath())
+        );
 
-        try {
-            Resource resource = new UrlResource(path.toUri());
-
-            if (!resource.exists() || !resource.isReadable()) {
-                throw new IllegalArgumentException("첨부파일을 읽을 수 없습니다.");
-            }
-
-            return new DownloadFile(
-                    resource,
-                    attachment.getOriginalFileName(),
-                    attachment.getFileSize()
-            );
-        } catch (MalformedURLException e) {
-            throw new IllegalArgumentException("첨부파일 경로가 올바르지 않습니다.", e);
-        }
+        return new DownloadFile(
+                resource,
+                attachment.getOriginalFileName(),
+                attachment.getFileSize()
+        );
     }
 
     private List<MultipartFile> emptyIfNull(List<MultipartFile> files) {
         return files == null ? Collections.emptyList() : files;
     }
 
-    /**
-     * 다운로드 응답에 필요한 파일 정보
-     */
+    /** 다운로드 응답에 필요한 파일 정보 */
     public record DownloadFile(
             Resource resource,
             String originalFileName,

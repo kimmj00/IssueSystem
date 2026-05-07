@@ -23,6 +23,12 @@ import java.util.List;
 
 /**
  * 지식공유 API Controller
+ *
+ * 기능:
+ * 1. 지식공유 등록(JSON / multipart)
+ * 2. 지식공유 검색
+ * 3. 지식공유 단건 상세 조회
+ * 4. 첨부파일 다운로드
  */
 @RestController
 @RequiredArgsConstructor
@@ -34,7 +40,7 @@ public class KnowledgeShareController {
     /**
      * 지식공유 등록 - 첨부파일 포함
      *
-     * request: JSON
+     * request: JSON 파트
      * files: 첨부파일 목록
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -87,7 +93,22 @@ public class KnowledgeShareController {
     }
 
     /**
+     * 지식공유 단건 상세 조회
+     *
+     * 목록 클릭 후 새 창 상세보기에서 사용한다.
+     */
+    @GetMapping("/{id}")
+    public ApiResponse<KnowledgeShareResponse> get(
+            @PathVariable Long id
+    ) {
+        return ApiResponse.ok(knowledgeShareService.get(id));
+    }
+
+    /**
      * 첨부파일 다운로드
+     *
+     * 서버에 저장된 파일은 압축 후 암호화되어 있으므로,
+     * Service에서 복호화/압축해제된 Resource를 받아 원본 파일명으로 내려준다.
      */
     @GetMapping("/attachments/{attachmentId}/download")
     public ResponseEntity<Resource> downloadAttachment(
@@ -105,15 +126,5 @@ public class KnowledgeShareController {
                 .contentLength(downloadFile.fileSize())
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(downloadFile.resource());
-    }
-
-    /**
-     * 지식공유 단건 상세 조회
-     */
-    @GetMapping("/{id}")
-    public ApiResponse<KnowledgeShareResponse> get(
-            @PathVariable Long id
-    ) {
-        return ApiResponse.ok(knowledgeShareService.get(id));
     }
 }
