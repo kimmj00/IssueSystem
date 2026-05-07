@@ -117,3 +117,8 @@ app:
     upload-dir: /tmp/issue_system/uploads # Render 무료 서버용 임시 업로드 경로
   crypto:
     file-secret-key: ${FILE_SECRET_KEY}
+
+supabase:
+  url: ${SUPABASE_URL} # 예: https://xxxx.supabase.co
+  service-role-key: ${SUPABASE_SERVICE_ROLE_KEY} # Render 환경변수로만 관리
+  storage-bucket: ${SUPABASE_STORAGE_BUCKET:knowledge-share-attachments} # 지식공유 첨부파일 bucket

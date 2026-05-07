@@ -9,10 +9,15 @@ import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.HexFormat;
@@ -23,11 +28,16 @@ import java.util.zip.GZIPOutputStream;
 /**
  * 지식공유 첨부파일 저장 서비스
  *
- * 저장 방식:
- * 1. 저장 파일명에는 원본 확장자를 붙이지 않는다.
- * 2. 파일 내용을 GZIP으로 압축한다.
- * 3. 압축된 데이터를 AES-GCM으로 암호화한다.
- * 4. 다운로드 시 복호화 후 압축해제해서 원본 파일명으로 내려준다.
+ * 변경 후 저장 방식:
+ * 1. 원본 파일을 GZIP으로 압축한다.
+ * 2. 압축된 데이터를 AES-GCM으로 암호화한다.
+ * 3. 암호화된 바이트를 Supabase Storage에 업로드한다.
+ * 4. DB에는 로컬 경로가 아니라 Supabase Storage object key를 저장한다.
+ *
+ * 다운로드 방식:
+ * 1. DB storedPath(object key) 기준으로 Supabase Storage에서 암호화 파일을 읽는다.
+ * 2. AES-GCM 복호화 후 GZIP 압축해제한다.
+ * 3. 원본 파일 스트림을 Controller로 반환한다.
  */
 @Service
 public class KnowledgeFileStorageService {
@@ -35,32 +45,33 @@ public class KnowledgeFileStorageService {
     private static final int GCM_TAG_LENGTH_BIT = 128;
     private static final int IV_LENGTH_BYTE = 12;
 
-    private final Path uploadRoot;
+    private final String supabaseUrl;
+    private final String serviceRoleKey;
+    private final String bucketName;
     private final SecretKeySpec secretKeySpec;
     private final SecureRandom secureRandom = new SecureRandom();
+    private final HttpClient httpClient = HttpClient.newHttpClient();
 
     public KnowledgeFileStorageService(
-            @Value("${app.file.upload-dir}") String uploadDir,
+            @Value("${app.supabase.url}") String supabaseUrl,
+            @Value("${app.supabase.service-role-key}") String serviceRoleKey,
+            @Value("${app.supabase.storage-bucket:knowledge-share-attachments}") String bucketName,
             @Value("${app.crypto.file-secret-key:issue-system-local-dev-secret-key-32}") String fileSecretKey
     ) {
-        this.uploadRoot = Paths.get(uploadDir).toAbsolutePath().normalize();
+        this.supabaseUrl = removeTrailingSlash(supabaseUrl);
+        this.serviceRoleKey = serviceRoleKey;
+        this.bucketName = bucketName;
         this.secretKeySpec = createSecretKey(fileSecretKey);
-
-        try {
-            Files.createDirectories(this.uploadRoot);
-        } catch (Exception e) {
-            throw new IllegalStateException("업로드 디렉터리를 생성할 수 없습니다.", e);
-        }
     }
 
     /**
      * 첨부파일 저장
      *
-     * 기존 방식:
-     * UUID + 원본 확장자 형태로 원본 파일을 그대로 저장
+     * 기존:
+     * Render 로컬 디스크에 저장
      *
-     * 변경 방식:
-     * 확장자 없는 랜덤 파일명으로 압축 후 암호화 저장
+     * 변경:
+     * Supabase Storage에 암호화된 파일 업로드
      */
     public StoredFileInfo store(MultipartFile file, Long knowledgeShareId) {
         if (file == null || file.isEmpty()) {
@@ -68,23 +79,23 @@ public class KnowledgeFileStorageService {
         }
 
         String originalFileName = normalizeOriginalFileName(file.getOriginalFilename());
+
+        // 확장자 없는 랜덤 저장 파일명
         String storedFileName = generateOpaqueFileName();
 
-        Path knowledgeDir = uploadRoot
-                .resolve("knowledge")
-                .resolve(String.valueOf(knowledgeShareId));
+        // Supabase Storage에 저장할 object key
+        // DB storedPath에는 이 값을 저장한다.
+        String objectKey = "knowledge/" + knowledgeShareId + "/" + storedFileName;
 
         try {
-            Files.createDirectories(knowledgeDir);
+            byte[] encryptedBytes = compressAndEncrypt(file.getInputStream());
 
-            Path target = knowledgeDir.resolve(storedFileName);
-
-            compressEncryptAndSave(file.getInputStream(), target);
+            uploadToSupabase(objectKey, encryptedBytes);
 
             return new StoredFileInfo(
                     originalFileName,
                     storedFileName,
-                    target.toString(),
+                    objectKey,
                     file.getSize()
             );
         } catch (Exception e) {
@@ -93,20 +104,17 @@ public class KnowledgeFileStorageService {
     }
 
     /**
-     * 암호화·압축 저장된 파일을 원본 InputStream으로 반환한다.
+     * Supabase Storage에 저장된 암호화 파일을 읽어서 원본 InputStream으로 반환한다.
      *
-     * 파일 구조:
-     * 앞 12바이트: IV
-     * 이후 바이트: AES-GCM으로 암호화된 GZIP 데이터
+     * storedPath는 더 이상 로컬 경로가 아니라 Supabase Storage object key다.
      */
     public InputStream decryptToInputStream(String storedPath) {
         try {
-            InputStream fileInputStream = Files.newInputStream(
-                    Paths.get(storedPath).toAbsolutePath().normalize(),
-                    StandardOpenOption.READ
-            );
+            byte[] encryptedBytes = downloadFromSupabase(storedPath);
 
-            byte[] iv = fileInputStream.readNBytes(IV_LENGTH_BYTE);
+            ByteArrayInputStream encryptedInputStream = new ByteArrayInputStream(encryptedBytes);
+
+            byte[] iv = encryptedInputStream.readNBytes(IV_LENGTH_BYTE);
 
             if (iv.length != IV_LENGTH_BYTE) {
                 throw new IllegalArgumentException("암호화 파일 형식이 올바르지 않습니다.");
@@ -119,9 +127,9 @@ public class KnowledgeFileStorageService {
                     new GCMParameterSpec(GCM_TAG_LENGTH_BIT, iv)
             );
 
-            CipherInputStream cipherInputStream = new CipherInputStream(fileInputStream, cipher);
+            CipherInputStream cipherInputStream = new CipherInputStream(encryptedInputStream, cipher);
 
-            // 저장 파일 → AES 복호화 → GZIP 압축해제 → 원본 반환
+            // Supabase 파일 → AES 복호화 → GZIP 압축해제 → 원본 반환
             return new GZIPInputStream(cipherInputStream);
         } catch (Exception e) {
             throw new IllegalStateException("첨부파일 복호화/압축해제에 실패했습니다.", e);
@@ -129,26 +137,22 @@ public class KnowledgeFileStorageService {
     }
 
     /**
-     * 첨부파일을 압축 후 암호화해서 저장한다.
+     * 원본 파일을 압축 후 암호화해서 byte[]로 반환한다.
      *
-     * 처리 순서:
-     * 원본 파일 읽기 → GZIP 압축 → AES-GCM 암호화 → 확장자 없는 파일로 저장
+     * 저장 포맷:
+     * 앞 12바이트: IV
+     * 이후 바이트: AES-GCM으로 암호화된 GZIP 데이터
      */
-    private void compressEncryptAndSave(InputStream plainInputStream, Path target) {
+    private byte[] compressAndEncrypt(InputStream plainInputStream) {
         byte[] iv = new byte[IV_LENGTH_BYTE];
         secureRandom.nextBytes(iv);
 
         try (
                 InputStream in = plainInputStream;
-                OutputStream fileOut = Files.newOutputStream(
-                        target,
-                        StandardOpenOption.CREATE,
-                        StandardOpenOption.TRUNCATE_EXISTING,
-                        StandardOpenOption.WRITE
-                )
+                ByteArrayOutputStream byteOut = new ByteArrayOutputStream()
         ) {
-            // IV는 비밀값이 아니며, 복호화에 필요하므로 파일 앞부분에 저장한다.
-            fileOut.write(iv);
+            // IV는 복호화에 필요하므로 암호화 파일 앞부분에 저장한다.
+            byteOut.write(iv);
 
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(
@@ -158,14 +162,132 @@ public class KnowledgeFileStorageService {
             );
 
             try (
-                    CipherOutputStream cipherOut = new CipherOutputStream(fileOut, cipher);
+                    CipherOutputStream cipherOut = new CipherOutputStream(byteOut, cipher);
                     GZIPOutputStream gzipOut = new GZIPOutputStream(cipherOut)
             ) {
                 in.transferTo(gzipOut);
             }
+
+            return byteOut.toByteArray();
         } catch (Exception e) {
-            throw new IllegalStateException("첨부파일 압축/암호화 저장에 실패했습니다.", e);
+            throw new IllegalStateException("첨부파일 압축/암호화 처리에 실패했습니다.", e);
         }
+    }
+
+    /**
+     * Supabase Storage에 object 업로드
+     */
+    private void uploadToSupabase(String objectKey, byte[] encryptedBytes) {
+        try {
+            String uploadUrl = supabaseUrl
+                    + "/storage/v1/object/"
+                    + urlEncodePath(bucketName)
+                    + "/"
+                    + urlEncodePath(objectKey);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(uploadUrl))
+                    .header("Authorization", "Bearer " + serviceRoleKey)
+                    .header("apikey", serviceRoleKey)
+                    .header("Content-Type", "application/octet-stream")
+                    .header("x-upsert", "true")
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(encryptedBytes))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException(
+                        "Supabase Storage 업로드 실패. status="
+                                + response.statusCode()
+                                + ", body="
+                                + response.body()
+                );
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("Supabase Storage 업로드 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    /**
+     * Supabase Storage에서 object 다운로드
+     */
+    private byte[] downloadFromSupabase(String objectKey) {
+        try {
+            String downloadUrl = supabaseUrl
+                    + "/storage/v1/object/"
+                    + urlEncodePath(bucketName)
+                    + "/"
+                    + urlEncodePath(objectKey);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(downloadUrl))
+                    .header("Authorization", "Bearer " + serviceRoleKey)
+                    .header("apikey", serviceRoleKey)
+                    .GET()
+                    .build();
+
+            HttpResponse<byte[]> response = httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofByteArray()
+            );
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException(
+                        "Supabase Storage 다운로드 실패. status="
+                                + response.statusCode()
+                );
+            }
+
+            return response.body();
+        } catch (Exception e) {
+            throw new IllegalStateException("Supabase Storage 다운로드 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    /**
+     * Supabase object path URL 인코딩
+     *
+     * slash(/)는 경로 구분자로 유지하고,
+     * 각 segment만 인코딩한다.
+     */
+    private String urlEncodePath(String path) {
+        String[] parts = path.split("/");
+
+        StringBuilder encoded = new StringBuilder();
+
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) {
+                encoded.append("/");
+            }
+
+            encoded.append(
+                    URLEncoder.encode(parts[i], StandardCharsets.UTF_8)
+                            .replace("+", "%20")
+            );
+        }
+
+        return encoded.toString();
+    }
+
+    /**
+     * URL 마지막 / 제거
+     */
+    private String removeTrailingSlash(String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("Supabase URL은 필수입니다.");
+        }
+
+        String trimmed = value.trim();
+
+        if (trimmed.endsWith("/")) {
+            return trimmed.substring(0, trimmed.length() - 1);
+        }
+
+        return trimmed;
     }
 
     /**
@@ -215,8 +337,7 @@ public class KnowledgeFileStorageService {
     /**
      * 저장된 파일 정보
      *
-     * fileSize는 원본 파일 크기다.
-     * 실제 디스크에 저장되는 압축/암호화 파일 크기와 다를 수 있다.
+     * storedPath는 로컬 파일 경로가 아니라 Supabase Storage object key다.
      */
     public record StoredFileInfo(
             String originalFileName,
