@@ -53,10 +53,10 @@ public class KnowledgeFileStorageService {
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     public KnowledgeFileStorageService(
-            @Value("${app.supabase.url}") String supabaseUrl,
-            @Value("${app.supabase.service-role-key}") String serviceRoleKey,
-            @Value("${app.supabase.storage-bucket:knowledge-share-attachments}") String bucketName,
-            @Value("${app.crypto.file-secret-key:issue-system-local-dev-secret-key-32}") String fileSecretKey
+            @Value("${SUPABASE_URL}") String supabaseUrl,
+            @Value("${SUPABASE_SERVICE_ROLE_KEY}") String serviceRoleKey,
+            @Value("${SUPABASE_STORAGE_BUCKET}") String bucketName,
+            @Value("${FILE_SECRET_KEY}") String fileSecretKey
     ) {
         this.supabaseUrl = removeTrailingSlash(supabaseUrl);
         this.serviceRoleKey = serviceRoleKey;
