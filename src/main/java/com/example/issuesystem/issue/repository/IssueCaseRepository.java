@@ -15,15 +15,11 @@ public interface IssueCaseRepository extends JpaRepository<IssueCase, Long> {
     /**
      * 검색 조건에 맞는 이슈 ID만 먼저 페이징 조회한다.
      *
-     * 처리 방식:
-     * 1. native query + ILIKE로 PostgreSQL text 검색을 안정적으로 처리
-     * 2. 엔티티 전체를 native query로 바로 매핑하지 않고 ID만 조회
-     * 3. Service에서 findByIdIn으로 엔티티를 다시 읽어 매핑 꼬임을 피함
-     *
-     * 기간 조건:
-     * - Service에서 startDate/endDate가 null이면 기본 범위를 넣어서 전달한다.
-     * - 따라서 여기서는 :startDate is null 같은 조건을 쓰지 않는다.
-     * - PostgreSQL의 null timestamp 파라미터 타입 추론 오류를 피하기 위함이다.
+     * 최적화 이유:
+     * - native query + ILIKE로 PostgreSQL 텍스트 검색을 안정적으로 처리
+     * - 엔티티 전체를 native query로 바로 매핑하지 않고 ID만 조회
+     * - 이후 findByIdIn으로 필요한 엔티티만 다시 읽어 매핑 꼬임을 피함
+     * - created_at 기간 조건은 null 대신 Service에서 기본 범위를 넣어 PostgreSQL 타입 추론 오류를 방지
      */
     @Query(value = """
         select i.id
@@ -89,8 +85,6 @@ public interface IssueCaseRepository extends JpaRepository<IssueCase, Long> {
             Pageable pageable
     );
 
-    /**
-     * ID 목록으로 이슈 엔티티 재조회
-     */
+    /** ID 목록으로 이슈 엔티티 재조회 */
     List<IssueCase> findByIdIn(List<Long> ids);
 }

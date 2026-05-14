@@ -34,11 +34,7 @@ public class IssueCaseService {
     private final IssueAttachmentRepository issueAttachmentRepository;
     private final FileStorageService fileStorageService;
 
-    /**
-     * 이슈 등록
-     * - 이슈 본문 저장
-     * - 첨부파일이 있으면 파일 저장 후 첨부 테이블에 기록
-     */
+    /** 이슈 등록 */
     @Transactional
     public Long create(IssueCaseCreateRequest request, List<MultipartFile> files) {
         IssueCase issueCase = IssueCase.builder()
@@ -61,10 +57,6 @@ public class IssueCaseService {
         IssueCase saved = issueCaseRepository.save(issueCase);
 
         for (MultipartFile file : emptyIfNull(files)) {
-            if (file == null || file.isEmpty()) {
-                continue;
-            }
-
             FileStorageService.StoredFileInfo stored = fileStorageService.store(file, saved.getId());
 
             IssueAttachment attachment = IssueAttachment.builder()
@@ -81,9 +73,7 @@ public class IssueCaseService {
         return saved.getId();
     }
 
-    /**
-     * 이슈 수정
-     */
+    /** 이슈 수정 */
     @Transactional
     public void update(Long id, IssueCaseUpdateRequest request) {
         IssueCase issueCase = issueCaseRepository.findById(id)
@@ -106,9 +96,7 @@ public class IssueCaseService {
         );
     }
 
-    /**
-     * 단건 상세 조회
-     */
+    /** 단건 상세 조회 */
     @Transactional
     public IssueCaseResponse get(Long id) {
         IssueCase issueCase = issueCaseRepository.findById(id)
@@ -118,11 +106,7 @@ public class IssueCaseService {
         return IssueCaseResponse.from(issueCase, attachments);
     }
 
-    /**
-     * 전체 목록 조회
-     * 현재는 주로 search API를 쓰므로 우선순위는 낮지만,
-     * 관리자용 또는 단순 전체 조회용으로 유지한다.
-     */
+    /** 전체 목록 조회 */
     @Transactional
     public List<IssueCaseResponse> getAll() {
         List<IssueCase> issues = issueCaseRepository.findAll();
@@ -150,17 +134,9 @@ public class IssueCaseService {
     /**
      * 검색 + 페이징 조회
      *
-     * 처리 순서:
-     * 1. 조건에 맞는 ID만 먼저 페이지 조회
-     * 2. 해당 ID들로 엔티티 재조회
-     * 3. 첨부파일도 한 번에 조회해서 N+1 완화
-     * 4. 원래 ID 순서대로 응답 순서 복원
-     *
      * 기간 검색:
-     * - startDate가 없으면 1970-01-01부터 검색한다.
-     * - endDate가 없으면 9999-12-31까지 검색한다.
-     * - Repository에는 날짜 null을 넘기지 않는다.
-     * - PostgreSQL null timestamp 파라미터 타입 추론 오류를 피하기 위함이다.
+     * - startDate: 해당 날짜 00:00:00 이상
+     * - endDate: 해당 날짜 다음날 00:00:00 미만
      */
     @Transactional
     public PageResponse<IssueCaseResponse> search(
@@ -178,6 +154,7 @@ public class IssueCaseService {
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 5 : size;
 
+        // PostgreSQL native query의 날짜 파라미터 타입 추론 오류 방지를 위해 null 대신 기본 범위를 넣는다.
         LocalDateTime startDateTime = startDate != null
                 ? startDate.atStartOfDay()
                 : LocalDateTime.of(1970, 1, 1, 0, 0);
@@ -236,9 +213,6 @@ public class IssueCaseService {
         return PageResponse.from(responsePage);
     }
 
-    /**
-     * null 파일 리스트 방지용 유틸
-     */
     private List<MultipartFile> emptyIfNull(List<MultipartFile> files) {
         return files == null ? Collections.emptyList() : files;
     }

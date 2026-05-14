@@ -25,11 +25,7 @@ public class IssueCaseController {
 
     private final IssueCaseService issueCaseService;
 
-    /**
-     * multipart 기반 이슈 등록
-     * - request: JSON 본문
-     * - files: 첨부파일 목록
-     */
+    /** multipart 기반 이슈 등록 */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<Long> create(
             @Valid @RequestPart("request") IssueCaseCreateRequest request,
@@ -38,18 +34,13 @@ public class IssueCaseController {
         return ApiResponse.ok(issueCaseService.create(request, files));
     }
 
-    /**
-     * JSON 기반 이슈 등록
-     * 프론트 초기 개발 단계에서 사용하기 편한 등록 API
-     */
+    /** JSON 기반 이슈 등록 */
     @PostMapping("/json")
     public ApiResponse<Long> createJson(@Valid @RequestBody IssueCaseCreateRequest request) {
         return ApiResponse.ok(issueCaseService.create(request, null));
     }
 
-    /**
-     * 이슈 수정
-     */
+    /** 이슈 수정 */
     @PutMapping("/{id}")
     public ApiResponse<Void> update(
             @PathVariable Long id,
@@ -59,18 +50,13 @@ public class IssueCaseController {
         return ApiResponse.okMessage("수정되었습니다.");
     }
 
-    /**
-     * 이슈 단건 상세 조회
-     */
+    /** 이슈 단건 상세 조회 */
     @GetMapping("/{id}")
     public ApiResponse<IssueCaseResponse> get(@PathVariable Long id) {
         return ApiResponse.ok(issueCaseService.get(id));
     }
 
-    /**
-     * 전체 목록 조회
-     * 현재는 search API를 주로 쓰지만 호환용으로 유지
-     */
+    /** 전체 목록 조회 */
     @GetMapping
     public ApiResponse<List<IssueCaseResponse>> getAll() {
         return ApiResponse.ok(issueCaseService.getAll());
@@ -78,15 +64,10 @@ public class IssueCaseController {
 
     /**
      * 검색 + 페이징 조회
-     * page는 0부터 시작한다.
      *
-     * 기간 검색:
-     * - startDate: 해당 날짜 00:00:00 이상
-     * - endDate: 해당 날짜 다음날 00:00:00 미만
-     *
-     * 예:
-     * startDate=2026-05-01, endDate=2026-05-07
-     * 실제 검색 범위는 2026-05-01 00:00:00 <= createdAt < 2026-05-08 00:00:00 이다.
+     * startDate/endDate:
+     * - yyyy-MM-dd 형식
+     * - endDate는 해당 날짜 전체를 포함하도록 Service에서 다음날 00:00 미만으로 변환한다.
      */
     @GetMapping("/search")
     public ApiResponse<PageResponse<IssueCaseResponse>> search(
