@@ -18,6 +18,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +61,10 @@ public class IssueCaseService {
         IssueCase saved = issueCaseRepository.save(issueCase);
 
         for (MultipartFile file : emptyIfNull(files)) {
+            if (file == null || file.isEmpty()) {
+                continue;
+            }
+
             FileStorageService.StoredFileInfo stored = fileStorageService.store(file, saved.getId());
 
             IssueAttachment attachment = IssueAttachment.builder()
@@ -115,7 +121,7 @@ public class IssueCaseService {
     /**
      * 전체 목록 조회
      * 현재는 주로 search API를 쓰므로 우선순위는 낮지만,
-     * 관리자용 또는 단순 전체 조회용으로 유지
+     * 관리자용 또는 단순 전체 조회용으로 유지한다.
      */
     @Transactional
     public List<IssueCaseResponse> getAll() {
@@ -143,10 +149,18 @@ public class IssueCaseService {
 
     /**
      * 검색 + 페이징 조회
-     * 1) 조건에 맞는 ID만 먼저 페이지 조회
-     * 2) 해당 ID들로 엔티티 재조회
-     * 3) 첨부파일도 한 번에 조회해서 N+1 완화
-     * 4) 원래 ID 순서대로 응답 순서 복원
+     *
+     * 처리 순서:
+     * 1. 조건에 맞는 ID만 먼저 페이지 조회
+     * 2. 해당 ID들로 엔티티 재조회
+     * 3. 첨부파일도 한 번에 조회해서 N+1 완화
+     * 4. 원래 ID 순서대로 응답 순서 복원
+     *
+     * 기간 검색:
+     * - startDate가 없으면 1970-01-01부터 검색한다.
+     * - endDate가 없으면 9999-12-31까지 검색한다.
+     * - Repository에는 날짜 null을 넘기지 않는다.
+     * - PostgreSQL null timestamp 파라미터 타입 추론 오류를 피하기 위함이다.
      */
     @Transactional
     public PageResponse<IssueCaseResponse> search(
@@ -156,12 +170,21 @@ public class IssueCaseService {
             String customerName,
             String category,
             String deploymentVersion,
+            LocalDate startDate,
+            LocalDate endDate,
             int page,
             int size
     ) {
-        // 방어 로직: 음수 페이지나 0 이하 size 방지
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 5 : size;
+
+        LocalDateTime startDateTime = startDate != null
+                ? startDate.atStartOfDay()
+                : LocalDateTime.of(1970, 1, 1, 0, 0);
+
+        LocalDateTime endDateTime = endDate != null
+                ? endDate.plusDays(1).atStartOfDay()
+                : LocalDateTime.of(9999, 12, 31, 0, 0);
 
         Page<Long> idPage = issueCaseRepository.searchIds(
                 keyword,
@@ -170,6 +193,8 @@ public class IssueCaseService {
                 customerName,
                 category,
                 deploymentVersion,
+                startDateTime,
+                endDateTime,
                 PageRequest.of(safePage, safeSize)
         );
 

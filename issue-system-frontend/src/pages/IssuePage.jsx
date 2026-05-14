@@ -41,6 +41,38 @@ function buildPageItems(currentPage, totalPages) {
   return items;
 }
 
+// input[type="date"]에 들어갈 yyyy-MM-dd 문자열 생성
+function toDateInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+// 기본 시작일: 현재일 기준 한 달 전
+function getDefaultStartDate() {
+  const date = new Date();
+  date.setMonth(date.getMonth() - 1);
+
+  return toDateInputValue(date);
+}
+
+// 기본 종료일: 현재일
+function getDefaultEndDate() {
+  return toDateInputValue(new Date());
+}
+
+// 등록일 표시 포맷
+// 예: 2026-05-14T10:30:20 → 2026-05-14 10:30
+function formatDateTime(value) {
+  if (!value) {
+    return '-';
+  }
+
+  return String(value).replace('T', ' ').slice(0, 16);
+}
+
 // 검색 영역에서 반복되는 input 스타일입니다.
 const searchInputClass =
   'h-9 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none ring-0 focus:border-slate-500';
@@ -76,6 +108,9 @@ export default function IssuePage() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [deploymentVersionFilter, setDeploymentVersionFilter] = useState('');
+  // 기간 검색 조건. 기본값은 비워두어 기존처럼 전체 기간을 조회한다.
+  const [startDateFilter, setStartDateFilter] = useState(getDefaultStartDate);
+  const [endDateFilter, setEndDateFilter] = useState(getDefaultEndDate);
 
   // 페이징 상태
   // 기본 표시 개수는 5개로 유지하되, 사용자가 select로 변경할 수 있게 합니다.
@@ -103,6 +138,10 @@ export default function IssuePage() {
       if (deploymentVersionFilter.trim()) params.append('deploymentVersion', deploymentVersionFilter.trim());
       if (infraFilter !== 'ALL') params.append('infraType', infraFilter);
       if (statusFilter !== 'ALL') params.append('status', statusFilter);
+      // 기간 조건이 있을 때만 전송한다.
+      // 값이 없으면 백엔드에서 전체 기간으로 조회한다.
+      if (startDateFilter) params.append('startDate', startDateFilter);
+      if (endDateFilter) params.append('endDate', endDateFilter);
 
       // 백엔드 search API의 page, size 파라미터로 페이징을 제어합니다.
       params.append('page', targetPage);
@@ -356,12 +395,34 @@ export default function IssuePage() {
               </LabeledInput>
             </div>
 
-            {/* 검색 버튼: 상태 select 바로 오른쪽 */}
+            <div className="w-full sm:w-[145px]">
+              <LabeledInput label="시작일" compact>
+                <input
+                  type="date"
+                  className={searchInputClass}
+                  value={startDateFilter}
+                  onChange={(e) => setStartDateFilter(e.target.value)}
+                />
+              </LabeledInput>
+            </div>
+
+            <div className="w-full sm:w-[145px]">
+              <LabeledInput label="종료일" compact>
+                <input
+                  type="date"
+                  className={searchInputClass}
+                  value={endDateFilter}
+                  onChange={(e) => setEndDateFilter(e.target.value)}
+                />
+              </LabeledInput>
+            </div>
+
+            {/* 검색 버튼: 검색 조건 바로 오른쪽 */}
             <div className="flex w-full items-end sm:w-auto">
               <button
-                  type="button"
-                  onClick={handleSearch}
-                  className={`${toolbarButtonClass} w-full bg-slate-900 text-white hover:bg-slate-800 sm:w-[88px]`}
+                type="button"
+                onClick={handleSearch}
+                className={`${toolbarButtonClass} w-full bg-slate-900 text-white hover:bg-slate-800 sm:w-[88px]`}
               >
                 검색
               </button>
@@ -370,17 +431,17 @@ export default function IssuePage() {
             {/* 우측 액션 버튼: 엑셀 업로드 / 추가 */}
             <div className="ml-auto flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
               <button
-                  type="button"
-                  onClick={() => setIsUploadModalOpen(true)}
-                  className={`${toolbarButtonClass} w-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:w-[120px]`}
+                type="button"
+                onClick={() => setIsUploadModalOpen(true)}
+                className={`${toolbarButtonClass} w-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:w-[120px]`}
               >
                 엑셀 업로드
               </button>
 
               <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(true)}
-                  className={`${toolbarButtonClass} w-full bg-slate-900 text-white hover:bg-slate-800 sm:w-[88px]`}
+                type="button"
+                onClick={() => setIsCreateModalOpen(true)}
+                className={`${toolbarButtonClass} w-full bg-slate-900 text-white hover:bg-slate-800 sm:w-[88px]`}
               >
                 추가
               </button>
@@ -391,28 +452,33 @@ export default function IssuePage() {
         <SectionCard title="이슈 목록" description="목록 행을 클릭하면 상세보기가 새 창으로 열립니다.">
           <div className="overflow-hidden rounded-2xl border border-slate-200">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] divide-y divide-slate-200 text-sm">
+              <table className="w-full min-w-[1300px] divide-y divide-slate-200 text-sm">
                 <thead className="bg-slate-100">
                   <tr>
-                    <th className="px-4 py-3 text-left font-semibold">ID</th>
-                    <th className="px-4 py-3 text-left font-semibold">제목</th>
-                    <th className="px-4 py-3 text-left font-semibold">인프라</th>
-                    <th className="px-4 py-3 text-left font-semibold">고객사</th>
-                    <th className="px-4 py-3 text-left font-semibold">상태</th>
-                    <th className="px-4 py-3 text-left font-semibold">작성자</th>
+                    {/* ID 컬럼 제거 */}
+                    <th className="w-[14%] px-4 py-3 text-left font-semibold">제목</th>
+                    <th className="w-[18%] px-4 py-3 text-left font-semibold">증상 요약</th>
+                    <th className="w-[26%] px-4 py-3 text-left font-semibold">증상 상세</th>
+                    <th className="w-[8%] px-4 py-3 text-left font-semibold">인프라</th>
+                    <th className="w-[9%] px-4 py-3 text-left font-semibold">고객사</th>
+                    <th className="w-[8%] px-4 py-3 text-left font-semibold">상태</th>
+                    <th className="w-[8%] px-4 py-3 text-left font-semibold">작성자</th>
+                    <th className="w-[9%] px-4 py-3 text-left font-semibold">등록일</th>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {loadingList ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                      {/* 컬럼이 8개이므로 colSpan도 8 */}
+                      <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
                         불러오는 중...
                       </td>
                     </tr>
                   ) : issues.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                      {/* 컬럼이 8개이므로 colSpan도 8 */}
+                      <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
                         등록된 이슈가 없습니다.
                       </td>
                     </tr>
@@ -423,15 +489,43 @@ export default function IssuePage() {
                         onClick={() => openDetailWindow(issue.id)}
                         className="cursor-pointer transition hover:bg-slate-50"
                       >
-                        <td className="px-4 py-3">{issue.id}</td>
                         <td className="px-4 py-3">
-                          <div className="font-medium text-slate-900">{issue.title}</div>
-                          <div className="mt-1 text-xs text-slate-500">{issue.symptomSummary}</div>
+                          <div className="max-w-[220px] truncate font-medium text-slate-900">
+                            {issue.title || '-'}
+                          </div>
                         </td>
-                        <td className="px-4 py-3">{issue.infraType}</td>
-                        <td className="whitespace-nowrap px-4 py-3">{issue.customerName || '-'}</td>
-                        <td className="px-4 py-3"><Badge>{issue.status}</Badge></td>
-                        <td className="px-4 py-3">{issue.authorName}</td>
+
+                        <td className="px-4 py-3 text-slate-700">
+                          <div className="max-w-[280px] truncate">
+                            {issue.symptomSummary || '-'}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3 text-slate-700">
+                          <div className="max-w-[430px] truncate">
+                            {issue.symptomDetail || '-'}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {issue.infraType || '-'}
+                        </td>
+
+                        <td className="whitespace-nowrap px-4 py-3">
+                          {issue.customerName || '-'}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <Badge>{issue.status}</Badge>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {issue.authorName || '-'}
+                        </td>
+
+                        <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                          {formatDateTime(issue.createdAt)}
+                        </td>
                       </tr>
                     ))
                   )}

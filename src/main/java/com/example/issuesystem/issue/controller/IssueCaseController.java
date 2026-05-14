@@ -10,10 +10,12 @@ import com.example.issuesystem.issue.dto.IssueCaseUpdateRequest;
 import com.example.issuesystem.issue.service.IssueCaseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -76,7 +78,15 @@ public class IssueCaseController {
 
     /**
      * 검색 + 페이징 조회
-     * page는 0부터 시작
+     * page는 0부터 시작한다.
+     *
+     * 기간 검색:
+     * - startDate: 해당 날짜 00:00:00 이상
+     * - endDate: 해당 날짜 다음날 00:00:00 미만
+     *
+     * 예:
+     * startDate=2026-05-01, endDate=2026-05-07
+     * 실제 검색 범위는 2026-05-01 00:00:00 <= createdAt < 2026-05-08 00:00:00 이다.
      */
     @GetMapping("/search")
     public ApiResponse<PageResponse<IssueCaseResponse>> search(
@@ -86,11 +96,24 @@ public class IssueCaseController {
             @RequestParam(required = false) String customerName,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String deploymentVersion,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "5") int size
     ) {
         return ApiResponse.ok(
-                issueCaseService.search(keyword, infraType, status, customerName, category, deploymentVersion, page, size)
+                issueCaseService.search(
+                        keyword,
+                        infraType,
+                        status,
+                        customerName,
+                        category,
+                        deploymentVersion,
+                        startDate,
+                        endDate,
+                        page,
+                        size
+                )
         );
     }
 }

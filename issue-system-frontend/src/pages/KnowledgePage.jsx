@@ -441,108 +441,118 @@ export default function KnowledgePage() {
           >
             <div className="overflow-hidden rounded-2xl border border-slate-200">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1100px] divide-y divide-slate-200 text-sm">
+                <table className="w-full min-w-[1200px] divide-y divide-slate-200 text-sm">
                   <thead className="bg-slate-100">
-                  <tr>
-                    <th className="w-[15%] px-4 py-3 text-left font-semibold">
-                      제목
-                    </th>
-                    <th className="w-[9%] px-4 py-3 text-left font-semibold">
-                      인프라
-                    </th>
-                    <th className="w-[10%] px-4 py-3 text-left font-semibold">
-                      고객사
-                    </th>
-                    <th className="w-[9%] px-4 py-3 text-left font-semibold">
-                      담당자
-                    </th>
-                    <th className="w-[13%] px-4 py-3 text-left font-semibold">
-                      등록일
-                    </th>
-                    <th className="w-[26%] px-4 py-3 text-left font-semibold">
-                      내용
-                    </th>
-                    <th className="w-[18%] px-4 py-3 text-left font-semibold">
-                      첨부파일
-                    </th>
-                  </tr>
+                    <tr>
+                      {/* 제목 다음에 내용이 바로 오도록 컬럼 순서 변경 */}
+                      <th className="w-[15%] px-4 py-3 text-left font-semibold">
+                        제목
+                      </th>
+                      <th className="w-[28%] px-4 py-3 text-left font-semibold">
+                        내용
+                      </th>
+                      <th className="w-[9%] px-4 py-3 text-left font-semibold">
+                        인프라
+                      </th>
+                      <th className="w-[10%] px-4 py-3 text-left font-semibold">
+                        고객사
+                      </th>
+                      <th className="w-[9%] px-4 py-3 text-left font-semibold">
+                        담당자
+                      </th>
+                      <th className="w-[12%] px-4 py-3 text-left font-semibold">
+                        등록일
+                      </th>
+                      <th className="w-[17%] px-4 py-3 text-left font-semibold">
+                        첨부파일
+                      </th>
+                    </tr>
                   </thead>
 
                   <tbody className="divide-y divide-slate-100 bg-white">
-                  {loading ? (
+                    {loading ? (
                       <tr>
+                        {/* 컬럼이 7개이므로 colSpan도 7 */}
                         <td
-                            colSpan={7}
-                            className="px-4 py-8 text-center text-slate-500"
+                          colSpan={7}
+                          className="px-4 py-8 text-center text-slate-500"
                         >
                           불러오는 중...
                         </td>
                       </tr>
-                  ) : items.length === 0 ? (
+                    ) : items.length === 0 ? (
                       <tr>
+                        {/* 컬럼이 7개이므로 colSpan도 7 */}
                         <td
-                            colSpan={7}
-                            className="px-4 py-8 text-center text-slate-500"
+                          colSpan={7}
+                          className="px-4 py-8 text-center text-slate-500"
                         >
                           등록된 지식공유 글이 없습니다.
                         </td>
                       </tr>
-                  ) : (
+                    ) : (
                       items.map((item) => (
-                          <tr
-                              key={item.id}
-                              onClick={() => openKnowledgeDetailWindow(item.id)}
-                              className="cursor-pointer transition hover:bg-slate-50"
-                          >
-                            <td className="px-4 py-3">
-                              <div className="font-medium text-slate-900">
-                                {item.title}
+                        <tr
+                          key={item.id}
+                          onClick={() => openKnowledgeDetailWindow(item.id)}
+                          className="cursor-pointer transition hover:bg-slate-50"
+                        >
+                          {/* 제목 */}
+                          <td className="px-4 py-3">
+                            <div className="max-w-[240px] truncate font-medium text-slate-900">
+                              {item.title || '-'}
+                            </div>
+                          </td>
+
+                          {/* 내용: 제목 바로 다음에 표시 */}
+                          <td className="px-4 py-3 text-slate-600">
+                            <div className="max-w-[460px] truncate">
+                              {item.content || '-'}
+                            </div>
+                          </td>
+
+                          {/* 인프라 */}
+                          <td className="px-4 py-3 text-slate-700">
+                            {(item.infraTypes || []).join(', ') || '-'}
+                          </td>
+
+                          {/* 고객사 */}
+                          <td className="px-4 py-3 text-slate-700">
+                            {item.customerName || '-'}
+                          </td>
+
+                          {/* 담당자 */}
+                          <td className="px-4 py-3 text-slate-700">
+                            {item.authorName || '-'}
+                          </td>
+
+                          {/* 등록일 */}
+                          <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                            {formatDateTime(item.createdAt)}
+                          </td>
+
+                          {/* 첨부파일 */}
+                          <td className="px-4 py-3">
+                            {item.attachments && item.attachments.length > 0 ? (
+                              <div className="space-y-1">
+                                {item.attachments.map((file) => (
+                                  <a
+                                    key={file.id}
+                                    href={downloadUrl(file.id)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="block max-w-[220px] truncate text-sm font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900"
+                                  >
+                                    {file.originalFileName}
+                                  </a>
+                                ))}
                               </div>
-                            </td>
-
-                            <td className="px-4 py-3 text-slate-700">
-                              {(item.infraTypes || []).join(', ') || '-'}
-                            </td>
-
-                            <td className="px-4 py-3 text-slate-700">
-                              {item.customerName || '-'}
-                            </td>
-
-                            <td className="px-4 py-3 text-slate-700">
-                              {item.authorName || '-'}
-                            </td>
-
-                            <td className="px-4 py-3 whitespace-nowrap text-slate-700">
-                              {formatDateTime(item.createdAt)}
-                            </td>
-
-                            <td className="px-4 py-3 text-slate-600">
-                              <div className="max-w-[520px] truncate">
-                                {item.content || '-'}
-                              </div>
-                            </td>
-
-                            <td className="px-4 py-3">
-                              {item.attachments && item.attachments.length > 0 ? (
-                                  <div className="space-y-1">
-                                    {item.attachments.map((file) => (
-                                        <a
-                                            key={file.id}
-                                            href={downloadUrl(file.id)}
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="block max-w-[220px] truncate text-sm font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900"
-                                        >
-                                          {file.originalFileName}
-                                        </a>
-                                    ))}
-                                  </div>
-                              ) : (
-                                  <span className="text-slate-400">-</span>
-                              )}
-                            </td>
-                          </tr>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
+                          </td>
+                        </tr>
                       ))
-                  )}
+                    )}
                   </tbody>
                 </table>
               </div>
