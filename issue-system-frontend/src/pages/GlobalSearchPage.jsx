@@ -11,8 +11,8 @@ const toolbarButtonClass =
   'h-9 shrink-0 rounded-lg px-3 text-sm font-semibold shadow-sm transition';
 
 // 통합검색 목록은 더 이상 최대 50건 고정 표시가 아니라 페이지 단위로 조회한다.
-const DEFAULT_PAGE_SIZE = 10;
-const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
+const DEFAULT_PAGE_SIZE = 7;
+const PAGE_SIZE_OPTIONS = [7, 10, 20, 50];
 
 function toDateInputValue(date) {
   const year = date.getFullYear();
@@ -475,7 +475,6 @@ export default function GlobalSearchPage() {
     <>
       <PageTitle
         title="통합검색"
-        description="이슈관리 시스템과 지식공유 DB를 단일 API로 검색합니다."
       />
 
       <div className="space-y-5">
@@ -614,7 +613,6 @@ export default function GlobalSearchPage() {
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             <SectionCard
               title={`이슈 결과 (${(issueTotal || 0).toLocaleString()}건)`}
-              description="검색 조건과 일치도가 높은 순으로 페이지 단위 표시합니다."
             >
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
@@ -693,7 +691,6 @@ export default function GlobalSearchPage() {
 
             <SectionCard
               title={`지식공유 결과 (${(knowledgeTotal || 0).toLocaleString()}건)`}
-              description="검색 조건과 일치도가 높은 순으로 페이지 단위 표시합니다."
             >
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
