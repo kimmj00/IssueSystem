@@ -7,6 +7,8 @@ export default function Sidebar({ activeMenu, setActiveMenu }) {
     { key: 'GLOBAL_SEARCH', label: '통합 검색', description: '전체 검색' },
     { key: 'ISSUE', label: '이슈관리 시스템', description: '장애·패치 이력' },
     { key: 'KNOWLEDGE', label: '지식공유', description: '운영 지식' },
+    // 아직 구상 전인 메뉴이므로 빈 페이지로 연결합니다.
+    { key: 'PATCH_HISTORY', label: '패치이력', description: '준비 중' },
   ];
 
   return (
@@ -51,7 +53,7 @@ export default function Sidebar({ activeMenu, setActiveMenu }) {
                  * 선택된 메뉴는 흰색 배경이므로 텍스트 색상을 직접 지정합니다.
                  * 부모 text 색상 상속을 피해서 선택 상태에서도 글자가 선명하게 보이도록 처리합니다.
                  */
-                className={`group rounded-xl border px-4 py-2 text-left transition ${
+                className={`group rounded-xl border px-3 py-2 text-left transition ${
                   active
                     ? 'border-white bg-white shadow-sm'
                     : 'border-transparent text-slate-300 hover:bg-white/10 hover:text-white'

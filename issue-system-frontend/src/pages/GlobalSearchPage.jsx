@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import SectionCard from '../components/common/SectionCard';
 import LabeledInput from '../components/common/LabeledInput';
 import { API_BASE, infraOptions } from '../constants/issueOptions';
-import PageTitle from '../components/common/PageTitle';
 
 const searchInputClass =
   'h-9 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none ring-0 focus:border-slate-500';
@@ -38,7 +37,8 @@ function formatDateTime(value) {
     return '-';
   }
 
-  return String(value).replace('T', ' ').slice(0, 16);
+  // 통합검색 목록에서는 시간까지 보여주면 컬럼이 좁아지므로 년-월-일만 표시한다.
+  return String(value).replace('T', ' ').slice(0, 10);
 }
 
 function normalizeList(value) {
@@ -170,102 +170,6 @@ function TruncateCell({ value, className = '', strong = false }) {
   );
 }
 
-function PaginationBar({
-  page,
-  size,
-  totalPages,
-  totalElements,
-  hasPrevious,
-  hasNext,
-  onMovePage,
-  onChangeSize,
-}) {
-  const pageItems = buildPageItems(page, totalPages);
-
-  return (
-    <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-        <span>
-          전체 {totalElements.toLocaleString()}건 / {totalPages === 0 ? 0 : page + 1}페이지 / {totalPages}페이지
-        </span>
-
-        <label className="flex items-center gap-2">
-          <span>표시 개수</span>
-          <select
-            value={size}
-            onChange={(e) => onChangeSize(Number(e.target.value))}
-            className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 outline-none focus:border-slate-500"
-          >
-            {PAGE_SIZE_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}개
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-1 lg:justify-end">
-        <button
-          type="button"
-          onClick={() => onMovePage(0)}
-          disabled={!hasPrevious}
-          className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          처음
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onMovePage(page - 1)}
-          disabled={!hasPrevious}
-          className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          이전
-        </button>
-
-        {pageItems.map((item) => (
-          typeof item === 'string' ? (
-            <span key={item} className="px-1 text-xs text-slate-400">
-              ...
-            </span>
-          ) : (
-            <button
-              key={item}
-              type="button"
-              onClick={() => onMovePage(item)}
-              className={`h-8 min-w-8 rounded-lg border px-2 text-xs ${
-                item === page
-                  ? 'border-slate-900 bg-slate-900 text-white'
-                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              {item + 1}
-            </button>
-          )
-        ))}
-
-        <button
-          type="button"
-          onClick={() => onMovePage(page + 1)}
-          disabled={!hasNext}
-          className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          다음
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onMovePage(totalPages - 1)}
-          disabled={!hasNext}
-          className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          마지막
-        </button>
-      </div>
-    </div>
-  );
-}
 
 export default function GlobalSearchPage() {
   const [keyword, setKeyword] = useState('');
@@ -279,6 +183,11 @@ export default function GlobalSearchPage() {
   const [issueTotal, setIssueTotal] = useState(0);
   const [knowledgeTotal, setKnowledgeTotal] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+
+  // 패치이력은 아직 백엔드/API가 없으므로 통합검색 화면에는 0건 placeholder로만 표시한다.
+  // 추후 패치이력 API가 생기면 이 값을 실제 응답값으로 교체하면 된다.
+  const patchHistoryTotal = 0;
+  const patchHistoryRows = [];
 
   const [issuePage, setIssuePage] = useState(0);
   const [issueSize, setIssueSize] = useState(DEFAULT_PAGE_SIZE);
@@ -473,9 +382,11 @@ export default function GlobalSearchPage() {
 
   return (
     <>
-      <PageTitle
-        title="통합검색"
-      />
+      <div className="mb-4 flex items-center gap-8">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">통합검색</h1>
+        <p className="border-l border-slate-300 pl-6 text-sm text-slate-500">
+        </p>
+      </div>
 
       <div className="space-y-5">
         <SectionCard className="p-3">
@@ -562,7 +473,7 @@ export default function GlobalSearchPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
             label="이슈관리 시스템"
             count={issueTotal}
@@ -572,8 +483,12 @@ export default function GlobalSearchPage() {
             count={knowledgeTotal}
           />
           <SummaryCard
+            label="패치이력"
+            count={patchHistoryTotal}
+          />
+          <SummaryCard
             label="전체 결과"
-            count={totalCount}
+            count={totalCount + patchHistoryTotal}
           />
         </div>
 
@@ -610,7 +525,7 @@ export default function GlobalSearchPage() {
             </div>
           </SectionCard>
         ) : (
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2 2xl:grid-cols-3">
             <SectionCard
               title={`이슈 결과 (${(issueTotal || 0).toLocaleString()}건)`}
             >
@@ -618,11 +533,10 @@ export default function GlobalSearchPage() {
                 <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
                   <thead className="bg-slate-100">
                     <tr>
-                      <th className="w-[17%] whitespace-nowrap px-2 py-3 text-left font-semibold">제목</th>
-                      <th className="w-[24%] whitespace-nowrap px-2 py-3 text-left font-semibold">증상 요약</th>
-                      <th className="w-[25%] whitespace-nowrap px-2 py-3 text-left font-semibold">증상 상세</th>
-                      <th className="w-[8%] whitespace-nowrap px-2 py-3 text-left font-semibold">인프라</th>
-                      <th className="w-[12%] whitespace-nowrap px-2 py-3 text-left font-semibold">고객사</th>
+                      <th className="w-[24%] whitespace-nowrap px-2 py-3 text-left font-semibold">제목</th>
+                      {/*<th className="w-[38%] whitespace-nowrap px-2 py-3 text-left font-semibold">증상 요약</th>*/}
+                      <th className="w-[10%] whitespace-nowrap px-2 py-3 text-left font-semibold">인프라</th>
+                      <th className="w-[14%] whitespace-nowrap px-2 py-3 text-left font-semibold">고객사</th>
                       <th className="w-[14%] whitespace-nowrap px-2 py-3 text-left font-semibold">등록일</th>
                     </tr>
                   </thead>
@@ -630,13 +544,13 @@ export default function GlobalSearchPage() {
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {loading ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                        <td colSpan={3} className="px-4 py-8 text-center text-slate-500">
                           검색 중...
                         </td>
                       </tr>
                     ) : issueRows.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                        <td colSpan={3} className="px-4 py-8 text-center text-slate-500">
                           검색된 이슈가 없습니다.
                         </td>
                       </tr>
@@ -651,13 +565,9 @@ export default function GlobalSearchPage() {
                             <TruncateCell value={issue.title} strong />
                           </td>
 
-                          <td className="min-w-0 px-2 py-3 text-slate-700">
-                            <TruncateCell value={issue.summary} />
-                          </td>
-
-                          <td className="min-w-0 px-2 py-3 text-slate-700">
-                            <TruncateCell value={issue.detail} />
-                          </td>
+                          {/*<td className="min-w-0 px-2 py-3 text-slate-700">*/}
+                          {/*  <TruncateCell value={issue.summary} />*/}
+                          {/*</td>*/}
 
                           <td className="min-w-0 px-2 py-3">
                             <TruncateCell value={normalizeList(issue.infraTypes).join(', ')} />
@@ -766,9 +676,98 @@ export default function GlobalSearchPage() {
                 onChangeSize={changeKnowledgeSize}
               />
             </SectionCard>
+
+            <SectionCard
+              title={`패치이력 결과 (${patchHistoryTotal.toLocaleString()}건)`}
+              description="패치이력 기능은 아직 구상 전입니다."
+            >
+              <div className="overflow-hidden rounded-2xl border border-slate-200">
+                <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
+                  <thead className="bg-slate-100">
+                    <tr>
+                      <th className="w-[22%] whitespace-nowrap px-2 py-3 text-left font-semibold">제목</th>
+                      <th className="w-[30%] whitespace-nowrap px-2 py-3 text-left font-semibold">내용</th>
+                      <th className="w-[12%] whitespace-nowrap px-2 py-3 text-left font-semibold">인프라</th>
+                      <th className="w-[16%] whitespace-nowrap px-2 py-3 text-left font-semibold">고객사</th>
+                      <th className="w-[20%] whitespace-nowrap px-2 py-3 text-left font-semibold">등록일</th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {patchHistoryRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="px-4 py-8 text-center text-slate-500">
+                          패치이력 기능은 아직 준비 중입니다.
+                        </td>
+                      </tr>
+                    ) : (
+                      patchHistoryRows.map((item) => (
+                        <tr
+                          key={item.id}
+                          className="cursor-pointer bg-white transition hover:bg-slate-50"
+                        >
+                          <td className="min-w-0 px-2 py-3">
+                            <TruncateCell value={item.title} strong />
+                          </td>
+
+                          <td className="min-w-0 px-2 py-3 text-slate-700">
+                            <TruncateCell value={item.summary || item.detail} />
+                          </td>
+
+                          <td className="min-w-0 px-2 py-3 text-slate-700">
+                            <TruncateCell value={normalizeList(item.infraTypes).join(', ')} />
+                          </td>
+
+                          <td className="min-w-0 px-2 py-3">
+                            <TruncateCell value={item.customerName} />
+                          </td>
+
+                          <td className="min-w-0 px-2 py-3 text-slate-700">
+                            <TruncateCell value={formatDateTime(item.createdAt)} />
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-500">
+                <span className="truncate">전체 0건 · 0/0페이지</span>
+                <span className="shrink-0">표시 {DEFAULT_PAGE_SIZE}개</span>
+              </div>
+            </SectionCard>
           </div>
         )}
       </div>
     </>
+  );
+}
+
+
+function PaginationBar({ page, size, totalPages, totalElements, onMovePage, onChangeSize }) {
+  const pages = [];
+  const maxVisible = 5; // 앞뒤 보여줄 숫자
+  const startPage = Math.max(0, page - Math.floor(maxVisible/2));
+  const endPage = Math.min(totalPages, startPage + maxVisible);
+
+  for (let i = startPage; i < endPage; i++) {
+    pages.push(i);
+  }
+
+  return (
+    <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
+      <button onClick={() => onMovePage(0)} disabled={page===0} className="px-2 py-1 border rounded disabled:opacity-40">&lt;&lt;</button>
+      <button onClick={() => onMovePage(page-1)} disabled={page===0} className="px-2 py-1 border rounded disabled:opacity-40">&lt;</button>
+
+      {pages[0] > 0 && <span>...</span>}
+      {pages.map(i => (
+        <button key={i} onClick={() => onMovePage(i)} className={`px-2 py-1 border rounded ${i===page ? 'bg-slate-900 text-white' : ''}`}>{i+1}</button>
+      ))}
+      {pages[pages.length-1] < totalPages-1 && <span>...</span>}
+
+      <button onClick={() => onMovePage(page+1)} disabled={page===totalPages-1} className="px-2 py-1 border rounded disabled:opacity-40">&gt;</button>
+      <button onClick={() => onMovePage(totalPages-1)} disabled={page===totalPages-1} className="px-2 py-1 border rounded disabled:opacity-40">&gt;&gt;</button>
+    </div>
   );
 }

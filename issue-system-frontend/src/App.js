@@ -3,10 +3,11 @@ import Sidebar from './components/layout/Sidebar';
 import GlobalSearchPage from './pages/GlobalSearchPage';
 import IssuePage from './pages/IssuePage';
 import KnowledgePage from './pages/KnowledgePage';
+import PatchHistoryPage from './pages/PatchHistoryPage';
 import IssueDetailWindow from './pages/IssueDetailWindow';
 import KnowledgeDetailWindow from './pages/KnowledgeDetailWindow';
 
-const menuKeys = ['GLOBAL_SEARCH', 'ISSUE', 'KNOWLEDGE'];
+const menuKeys = ['GLOBAL_SEARCH', 'ISSUE', 'KNOWLEDGE', 'PATCH_HISTORY'];
 
 // 현재 URL 또는 localStorage에서 마지막 메뉴를 읽어온다.
 function getInitialMenu() {
@@ -37,6 +38,7 @@ export default function App() {
   // GLOBAL_SEARCH: 통합 검색
   // ISSUE: 이슈관리 시스템
   // KNOWLEDGE: 지식공유
+  // PATCH_HISTORY: 패치이력
   const [activeMenu, setActiveMenu] = useState(getInitialMenu);
 
   const handleMenuChange = (menuKey) => {
@@ -73,6 +75,7 @@ export default function App() {
         {activeMenu === 'GLOBAL_SEARCH' && <GlobalSearchPage />}
         {activeMenu === 'ISSUE' && <IssuePage />}
         {activeMenu === 'KNOWLEDGE' && <KnowledgePage />}
+        {activeMenu === 'PATCH_HISTORY' && <PatchHistoryPage />}
       </main>
     </div>
   );
