@@ -11,9 +11,7 @@ import com.example.issuesystem.issue.service.IssueCaseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -25,19 +23,25 @@ public class IssueCaseController {
 
     private final IssueCaseService issueCaseService;
 
-    /** multipart 기반 이슈 등록 */
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ApiResponse<Long> create(
-            @Valid @RequestPart("request") IssueCaseCreateRequest request,
-            @RequestPart(value = "files", required = false) List<MultipartFile> files
-    ) {
-        return ApiResponse.ok(issueCaseService.create(request, files));
+    /**
+     * 이슈 등록
+     *
+     * issue_attachment 테이블을 사용하지 않으므로 multipart 기반 첨부파일 등록은 제거했다.
+     * 프론트에서 기존에 사용하던 /api/issue-cases/json 경로는 아래 createJson()으로 유지한다.
+     */
+    @PostMapping
+    public ApiResponse<Long> create(@Valid @RequestBody IssueCaseCreateRequest request) {
+        return ApiResponse.ok(issueCaseService.create(request));
     }
 
-    /** JSON 기반 이슈 등록 */
+    /**
+     * JSON 기반 이슈 등록
+     *
+     * 기존 프론트 코드가 /api/issue-cases/json으로 요청하고 있어 호환용으로 유지한다.
+     */
     @PostMapping("/json")
     public ApiResponse<Long> createJson(@Valid @RequestBody IssueCaseCreateRequest request) {
-        return ApiResponse.ok(issueCaseService.create(request, null));
+        return ApiResponse.ok(issueCaseService.create(request));
     }
 
     /** 이슈 수정 */

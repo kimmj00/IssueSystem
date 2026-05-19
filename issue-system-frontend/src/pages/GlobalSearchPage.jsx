@@ -567,17 +567,14 @@ export default function GlobalSearchPage() {
           <SummaryCard
             label="이슈관리 시스템"
             count={issueTotal}
-            description={`현재 페이지 ${issueRows.length}건 표시`}
           />
           <SummaryCard
             label="지식공유 DB"
             count={knowledgeTotal}
-            description={`현재 페이지 ${knowledgeRows.length}건 표시`}
           />
           <SummaryCard
             label="전체 결과"
             count={totalCount}
-            description="이슈 + 지식공유 합산"
           />
         </div>
 

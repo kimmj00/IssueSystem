@@ -2,13 +2,11 @@ package com.example.issuesystem.issue.service;
 
 import com.example.issuesystem.common.PageResponse;
 import com.example.issuesystem.issue.domain.InfraType;
-import com.example.issuesystem.issue.domain.IssueAttachment;
 import com.example.issuesystem.issue.domain.IssueCase;
 import com.example.issuesystem.issue.domain.IssueStatus;
 import com.example.issuesystem.issue.dto.IssueCaseCreateRequest;
 import com.example.issuesystem.issue.dto.IssueCaseResponse;
 import com.example.issuesystem.issue.dto.IssueCaseUpdateRequest;
-import com.example.issuesystem.issue.repository.IssueAttachmentRepository;
 import com.example.issuesystem.issue.repository.IssueCaseRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -16,11 +14,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -31,12 +27,14 @@ import java.util.stream.Collectors;
 public class IssueCaseService {
 
     private final IssueCaseRepository issueCaseRepository;
-    private final IssueAttachmentRepository issueAttachmentRepository;
-    private final FileStorageService fileStorageService;
 
-    /** 이슈 등록 */
+    /**
+     * 이슈 등록
+     *
+     * issue_attachment 테이블을 사용하지 않으므로 첨부파일 저장 로직은 제거했다.
+     */
     @Transactional
-    public Long create(IssueCaseCreateRequest request, List<MultipartFile> files) {
+    public Long create(IssueCaseCreateRequest request) {
         IssueCase issueCase = IssueCase.builder()
                 .title(request.getTitle())
                 .infraType(request.getInfraType())
@@ -54,23 +52,7 @@ public class IssueCaseService {
                 .deploymentVersion(request.getDeploymentVersion())
                 .build();
 
-        IssueCase saved = issueCaseRepository.save(issueCase);
-
-        for (MultipartFile file : emptyIfNull(files)) {
-            FileStorageService.StoredFileInfo stored = fileStorageService.store(file, saved.getId());
-
-            IssueAttachment attachment = IssueAttachment.builder()
-                    .issueCase(saved)
-                    .originalFileName(stored.originalFileName())
-                    .storedFileName(stored.storedFileName())
-                    .storedPath(stored.storedPath())
-                    .fileSize(stored.fileSize())
-                    .build();
-
-            issueAttachmentRepository.save(attachment);
-        }
-
-        return saved.getId();
+        return issueCaseRepository.save(issueCase).getId();
     }
 
     /** 이슈 수정 */
@@ -102,32 +84,14 @@ public class IssueCaseService {
         IssueCase issueCase = issueCaseRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("이슈 사례를 찾을 수 없습니다."));
 
-        List<IssueAttachment> attachments = issueAttachmentRepository.findByIssueCaseId(id);
-        return IssueCaseResponse.from(issueCase, attachments);
+        return IssueCaseResponse.from(issueCase);
     }
 
     /** 전체 목록 조회 */
     @Transactional
     public List<IssueCaseResponse> getAll() {
-        List<IssueCase> issues = issueCaseRepository.findAll();
-
-        if (issues.isEmpty()) {
-            return List.of();
-        }
-
-        List<Long> ids = issues.stream()
-                .map(IssueCase::getId)
-                .toList();
-
-        Map<Long, List<IssueAttachment>> attachmentMap = issueAttachmentRepository.findByIssueCaseIdIn(ids)
-                .stream()
-                .collect(Collectors.groupingBy(file -> file.getIssueCase().getId()));
-
-        return issues.stream()
-                .map(issueCase -> IssueCaseResponse.from(
-                        issueCase,
-                        attachmentMap.getOrDefault(issueCase.getId(), List.of())
-                ))
+        return issueCaseRepository.findAll().stream()
+                .map(IssueCaseResponse::from)
                 .toList();
     }
 
@@ -191,17 +155,12 @@ public class IssueCaseService {
         Map<Long, IssueCase> issueMap = issues.stream()
                 .collect(Collectors.toMap(IssueCase::getId, Function.identity()));
 
-        Map<Long, List<IssueAttachment>> attachmentMap = issueAttachmentRepository.findByIssueCaseIdIn(ids)
-                .stream()
-                .collect(Collectors.groupingBy(file -> file.getIssueCase().getId()));
-
+        // searchIds()에서 가져온 ID 순서를 유지한다.
+        // findByIdIn()은 DB가 반환 순서를 보장하지 않으므로 idPage의 ids 순서대로 다시 정렬한다.
         List<IssueCaseResponse> content = ids.stream()
                 .map(issueMap::get)
                 .filter(issue -> issue != null)
-                .map(issueCase -> IssueCaseResponse.from(
-                        issueCase,
-                        attachmentMap.getOrDefault(issueCase.getId(), List.of())
-                ))
+                .map(IssueCaseResponse::from)
                 .toList();
 
         Page<IssueCaseResponse> responsePage = new PageImpl<>(
@@ -211,9 +170,5 @@ public class IssueCaseService {
         );
 
         return PageResponse.from(responsePage);
-    }
-
-    private List<MultipartFile> emptyIfNull(List<MultipartFile> files) {
-        return files == null ? Collections.emptyList() : files;
     }
 }
