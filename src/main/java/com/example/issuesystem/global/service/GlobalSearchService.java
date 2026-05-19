@@ -3,9 +3,9 @@ package com.example.issuesystem.global.service;
 import com.example.issuesystem.common.PageResponse;
 import com.example.issuesystem.global.dto.GlobalSearchItemResponse;
 import com.example.issuesystem.global.dto.GlobalSearchResponse;
-import com.example.issuesystem.issue.domain.InfraType;
-import com.example.issuesystem.issue.dto.IssueCaseResponse;
-import com.example.issuesystem.issue.service.IssueCaseService;
+import com.example.issuesystem.common.domain.InfraType;
+import com.example.issuesystem.patchhistory.dto.PatchHistoryResponse;
+import com.example.issuesystem.patchhistory.service.PatchHistoryService;
 import com.example.issuesystem.knowledge.dto.KnowledgeShareResponse;
 import com.example.issuesystem.knowledge.service.KnowledgeShareService;
 import jakarta.transaction.Transactional;
@@ -20,7 +20,7 @@ import java.util.List;
  * 통합검색 서비스
  *
  * 변경 사항:
- * 1. 이슈/지식공유를 각각 PageResponse로 조회한다.
+ * 1. 패치이력/지식공유를 각각 PageResponse로 조회한다.
  * 2. 기존처럼 최대 50건으로 잘라서 보여주는 구조를 제거한다.
  * 3. DB 쿼리에서 이미 검색 점수 순으로 정렬하므로 Service에서는 결과 순서를 다시 섞지 않는다.
  */
@@ -28,7 +28,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class GlobalSearchService {
 
-    private final IssueCaseService issueCaseService;
+    private final PatchHistoryService patchHistoryService;
     private final KnowledgeShareService knowledgeShareService;
 
     @Transactional
@@ -38,19 +38,19 @@ public class GlobalSearchService {
             String customerName,
             LocalDate startDate,
             LocalDate endDate,
-            int issuePage,
-            int issueSize,
+            int patchHistoryPage,
+            int patchHistorySize,
             int knowledgePage,
             int knowledgeSize
     ) {
-        int safeIssuePage = Math.max(issuePage, 0);
+        int safePatchHistoryPage = Math.max(patchHistoryPage, 0);
         int safeKnowledgePage = Math.max(knowledgePage, 0);
 
         // 한 번에 너무 많이 가져오면 화면과 DB 모두 부담이 커지므로 50개까지만 허용한다.
-        int safeIssueSize = normalizeSize(issueSize, 10);
+        int safePatchHistorySize = normalizeSize(patchHistorySize, 10);
         int safeKnowledgeSize = normalizeSize(knowledgeSize, 10);
 
-        PageResponse<IssueCaseResponse> issuePageResult = issueCaseService.search(
+        PageResponse<PatchHistoryResponse> patchHistoryPageResult = patchHistoryService.search(
                 keyword,
                 infraType,
                 null,
@@ -59,8 +59,8 @@ public class GlobalSearchService {
                 null,
                 startDate,
                 endDate,
-                safeIssuePage,
-                safeIssueSize
+                safePatchHistoryPage,
+                safePatchHistorySize
         );
 
         PageResponse<KnowledgeShareResponse> knowledgePageResult = knowledgeShareService.search(
@@ -73,28 +73,28 @@ public class GlobalSearchService {
                 safeKnowledgeSize
         );
 
-        List<GlobalSearchItemResponse> issues = issuePageResult.getContent().stream()
-                .map(issue -> toIssueItem(issue, keyword, infraType, customerName))
+        List<GlobalSearchItemResponse> patchHistories = patchHistoryPageResult.getContent().stream()
+                .map(patchHistory -> toPatchHistoryItem(patchHistory, keyword, infraType, customerName))
                 .toList();
 
         List<GlobalSearchItemResponse> knowledgeShares = knowledgePageResult.getContent().stream()
                 .map(item -> toKnowledgeItem(item, keyword, infraType, customerName))
                 .toList();
 
-        long issueTotal = issuePageResult.getTotalElements();
+        long patchHistoryTotal = patchHistoryPageResult.getTotalElements();
         long knowledgeTotal = knowledgePageResult.getTotalElements();
 
         return GlobalSearchResponse.builder()
-                .issueTotal(issueTotal)
+                .patchHistoryTotal(patchHistoryTotal)
                 .knowledgeTotal(knowledgeTotal)
-                .total(issueTotal + knowledgeTotal)
-                .issues(issues)
+                .total(patchHistoryTotal + knowledgeTotal)
+                .patchHistories(patchHistories)
                 .knowledgeShares(knowledgeShares)
-                .issuePage(issuePageResult.getPage())
-                .issueSize(issuePageResult.getSize())
-                .issueTotalPages(issuePageResult.getTotalPages())
-                .issueHasNext(issuePageResult.isHasNext())
-                .issueHasPrevious(issuePageResult.isHasPrevious())
+                .patchHistoryPage(patchHistoryPageResult.getPage())
+                .patchHistorySize(patchHistoryPageResult.getSize())
+                .patchHistoryTotalPages(patchHistoryPageResult.getTotalPages())
+                .patchHistoryHasNext(patchHistoryPageResult.isHasNext())
+                .patchHistoryHasPrevious(patchHistoryPageResult.isHasPrevious())
                 .knowledgePage(knowledgePageResult.getPage())
                 .knowledgeSize(knowledgePageResult.getSize())
                 .knowledgeTotalPages(knowledgePageResult.getTotalPages())
@@ -103,25 +103,25 @@ public class GlobalSearchService {
                 .build();
     }
 
-    private GlobalSearchItemResponse toIssueItem(
-            IssueCaseResponse issue,
+    private GlobalSearchItemResponse toPatchHistoryItem(
+            PatchHistoryResponse patchHistory,
             String keyword,
             InfraType infraType,
             String customerName
     ) {
-        int score = calculateIssueScore(issue, keyword, infraType, customerName);
+        int score = calculatePatchHistoryScore(patchHistory, keyword, infraType, customerName);
 
         return GlobalSearchItemResponse.builder()
-                .sourceType("ISSUE")
-                .sourceLabel("이슈관리 시스템")
-                .id(issue.getId())
-                .title(issue.getTitle())
-                .summary(issue.getSymptomSummary())
-                .detail(issue.getSymptomDetail())
-                .infraTypes(issue.getInfraType() == null ? List.of() : List.of(issue.getInfraType().name()))
-                .customerName(issue.getCustomerName())
-                .authorName(issue.getAuthorName())
-                .createdAt(issue.getCreatedAt())
+                .sourceType("PATCH_HISTORY")
+                .sourceLabel("패치이력")
+                .id(patchHistory.getId())
+                .title(patchHistory.getTitle())
+                .summary(patchHistory.getSymptomSummary())
+                .detail(patchHistory.getSymptomDetail())
+                .infraTypes(patchHistory.getInfraType() == null ? List.of() : List.of(patchHistory.getInfraType().name()))
+                .customerName(patchHistory.getCustomerName())
+                .authorName(patchHistory.getAuthorName())
+                .createdAt(patchHistory.getCreatedAt())
                 .matchScore(score)
                 .matchLevel(toMatchLevel(score))
                 .build();
@@ -164,8 +164,8 @@ public class GlobalSearchService {
         return Math.min(size, 50);
     }
 
-    private int calculateIssueScore(
-            IssueCaseResponse issue,
+    private int calculatePatchHistoryScore(
+            PatchHistoryResponse patchHistory,
             String keyword,
             InfraType infraType,
             String customerName
@@ -176,34 +176,34 @@ public class GlobalSearchService {
 
         if (!normalizedKeyword.isBlank()) {
             // 전체 검색어가 그대로 포함되면 높은 점수를 준다.
-            if (contains(issue.getTitle(), normalizedKeyword)) score += 120;
-            if (containsWithoutSpace(issue.getTitle(), normalizedKeyword)) score += 100;
-            if (contains(issue.getSymptomSummary(), normalizedKeyword)) score += 80;
-            if (contains(issue.getSymptomDetail(), normalizedKeyword)) score += 50;
-            if (contains(issue.getActionDetail(), normalizedKeyword)) score += 35;
-            if (contains(issue.getCauseDetail(), normalizedKeyword)) score += 30;
+            if (contains(patchHistory.getTitle(), normalizedKeyword)) score += 120;
+            if (containsWithoutSpace(patchHistory.getTitle(), normalizedKeyword)) score += 100;
+            if (contains(patchHistory.getSymptomSummary(), normalizedKeyword)) score += 80;
+            if (contains(patchHistory.getSymptomDetail(), normalizedKeyword)) score += 50;
+            if (contains(patchHistory.getActionDetail(), normalizedKeyword)) score += 35;
+            if (contains(patchHistory.getCauseDetail(), normalizedKeyword)) score += 30;
 
             // 검색어를 쪼갠 token이 많이 맞을수록 점수를 올린다.
             for (String token : tokens) {
-                if (contains(issue.getTitle(), token)) score += 30;
-                if (contains(issue.getSymptomSummary(), token)) score += 20;
-                if (contains(issue.getSymptomDetail(), token)) score += 12;
-                if (contains(issue.getActionDetail(), token)) score += 8;
-                if (contains(issue.getCauseDetail(), token)) score += 8;
-                if (contains(issue.getTags(), token)) score += 6;
-                if (contains(issue.getSystemName(), token)) score += 6;
-                if (contains(issue.getCustomerName(), token)) score += 6;
-                if (contains(issue.getCategory(), token)) score += 4;
-                if (contains(issue.getDeploymentVersion(), token)) score += 4;
-                if (contains(issue.getVersionInfo(), token)) score += 4;
+                if (contains(patchHistory.getTitle(), token)) score += 30;
+                if (contains(patchHistory.getSymptomSummary(), token)) score += 20;
+                if (contains(patchHistory.getSymptomDetail(), token)) score += 12;
+                if (contains(patchHistory.getActionDetail(), token)) score += 8;
+                if (contains(patchHistory.getCauseDetail(), token)) score += 8;
+                if (contains(patchHistory.getTags(), token)) score += 6;
+                if (contains(patchHistory.getSystemName(), token)) score += 6;
+                if (contains(patchHistory.getCustomerName(), token)) score += 6;
+                if (contains(patchHistory.getCategory(), token)) score += 4;
+                if (contains(patchHistory.getDeploymentVersion(), token)) score += 4;
+                if (contains(patchHistory.getVersionInfo(), token)) score += 4;
             }
         }
 
-        if (infraType != null && infraType.equals(issue.getInfraType())) {
+        if (infraType != null && infraType.equals(patchHistory.getInfraType())) {
             score += 20;
         }
 
-        if (!normalize(customerName).isBlank() && contains(issue.getCustomerName(), normalize(customerName))) {
+        if (!normalize(customerName).isBlank() && contains(patchHistory.getCustomerName(), normalize(customerName))) {
             score += 20;
         }
 

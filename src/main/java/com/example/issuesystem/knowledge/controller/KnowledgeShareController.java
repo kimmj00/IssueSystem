@@ -2,7 +2,7 @@ package com.example.issuesystem.knowledge.controller;
 
 import com.example.issuesystem.common.ApiResponse;
 import com.example.issuesystem.common.PageResponse;
-import com.example.issuesystem.issue.domain.InfraType;
+import com.example.issuesystem.common.domain.InfraType;
 import com.example.issuesystem.knowledge.dto.KnowledgeShareCreateRequest;
 import com.example.issuesystem.knowledge.dto.KnowledgeShareResponse;
 import com.example.issuesystem.knowledge.service.KnowledgeShareService;

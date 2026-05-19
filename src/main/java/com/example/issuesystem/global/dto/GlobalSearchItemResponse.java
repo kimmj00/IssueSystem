@@ -10,7 +10,7 @@ import java.util.List;
  * 통합검색 결과 1건 응답 DTO
  *
  * sourceType:
- * - ISSUE: 이슈관리 시스템 결과
+ * - PATCH_HISTORY: 패치이력 결과
  * - KNOWLEDGE: 지식공유 DB 결과
  */
 @Getter

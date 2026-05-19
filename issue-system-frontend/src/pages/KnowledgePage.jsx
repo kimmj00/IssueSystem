@@ -39,11 +39,11 @@ const infraOptions = [
 // 페이지당 표시 개수 옵션
 const sizeOptions = [5, 10, 20, 50];
 
-// 이슈관리 시스템 검색 영역과 동일한 input 스타일
+// 패치이력 검색 영역과 동일한 input 스타일
 const searchInputClass =
     'h-9 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none ring-0 focus:border-slate-500';
 
-// 이슈관리 시스템 검색 영역과 동일한 button 스타일
+// 패치이력 검색 영역과 동일한 button 스타일
 const toolbarButtonClass =
     'h-9 shrink-0 rounded-lg px-3 text-sm font-semibold shadow-sm transition';
 
@@ -331,7 +331,7 @@ export default function KnowledgePage() {
         )}
 
         <div className="space-y-5">
-          {/* 검색 영역: 이슈관리 시스템과 같은 크기감으로 맞춤 */}
+          {/* 검색 영역: 패치이력과 같은 크기감으로 맞춤 */}
           <SectionCard className="p-3">
             <div className="flex flex-wrap items-end gap-2">
               <div className="w-full sm:w-[170px]">
@@ -431,7 +431,7 @@ export default function KnowledgePage() {
             </div>
           </SectionCard>
 
-          {/* 목록 영역: 이슈관리 시스템과 같은 카드 구조로 맞춤 */}
+          {/* 목록 영역: 패치이력과 같은 카드 구조로 맞춤 */}
           <SectionCard
               title="지식 목록"
               description="제목과 내용, 인프라, 고객사 기준으로 조회합니다."

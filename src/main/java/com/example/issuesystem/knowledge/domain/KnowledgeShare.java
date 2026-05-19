@@ -1,7 +1,7 @@
 package com.example.issuesystem.knowledge.domain;
 
 import com.example.issuesystem.common.BaseTimeEntity;
-import com.example.issuesystem.issue.domain.InfraType;
+import com.example.issuesystem.common.domain.InfraType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;

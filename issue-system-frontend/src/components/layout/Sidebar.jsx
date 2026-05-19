@@ -5,10 +5,11 @@ import React from 'react';
 export default function Sidebar({ activeMenu, setActiveMenu }) {
   const menus = [
     { key: 'GLOBAL_SEARCH', label: '통합 검색', description: '전체 검색' },
-    { key: 'ISSUE', label: '이슈관리 시스템', description: '장애·패치 이력' },
+    // 기존 패치이력 메뉴에 들어 있던 실제 기능은 패치리스트 조회/업로드였으므로 패치이력으로 표시합니다.
+    { key: 'PATCH_HISTORY', label: '패치이력', description: '패치리스트 조회' },
     { key: 'KNOWLEDGE', label: '지식공유', description: '운영 지식' },
-    // 아직 구상 전인 메뉴이므로 빈 페이지로 연결합니다.
-    { key: 'PATCH_HISTORY', label: '패치이력', description: '준비 중' },
+    // 기존 패치이력 빈 페이지는 작업 및 이슈이력 메뉴로 표시합니다.
+    { key: 'WORK_ISSUE_HISTORY', label: '작업 및 이슈이력', description: '준비 중' },
   ];
 
   return (
@@ -21,15 +22,15 @@ export default function Sidebar({ activeMenu, setActiveMenu }) {
           className="flex min-w-[210px] shrink-0 items-center gap-3 text-left"
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-sm font-black text-slate-950 shadow-sm">
-            IS
+            PH
           </div>
 
           <div className="min-w-0">
             <div className="truncate text-sm font-bold tracking-wide text-white">
-              Issue System
+              Patch History
             </div>
             <div className="mt-0.5 truncate text-xs text-slate-400">
-              이슈 관리 / 지식 공유
+              패치이력 / 지식공유
             </div>
           </div>
         </button>

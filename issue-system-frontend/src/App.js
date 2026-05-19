@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import Sidebar from './components/layout/Sidebar';
 import GlobalSearchPage from './pages/GlobalSearchPage';
-import IssuePage from './pages/IssuePage';
-import KnowledgePage from './pages/KnowledgePage';
 import PatchHistoryPage from './pages/PatchHistoryPage';
-import IssueDetailWindow from './pages/IssueDetailWindow';
+import KnowledgePage from './pages/KnowledgePage';
+import WorkIssueHistoryPage from './pages/WorkIssueHistoryPage';
+import PatchHistoryDetailWindow from './pages/PatchHistoryDetailWindow';
 import KnowledgeDetailWindow from './pages/KnowledgeDetailWindow';
 
-const menuKeys = ['GLOBAL_SEARCH', 'ISSUE', 'KNOWLEDGE', 'PATCH_HISTORY'];
+// 메뉴 키는 화면 의미에 맞게 정리했습니다.
+// 기존 ISSUE 메뉴는 실제 패치리스트 기능이므로 PATCH_HISTORY로 변경했습니다.
+// 기존 PATCH_HISTORY 빈 페이지는 작업 및 이슈이력 메뉴로 변경했습니다.
+const menuKeys = ['GLOBAL_SEARCH', 'PATCH_HISTORY', 'KNOWLEDGE', 'WORK_ISSUE_HISTORY'];
 
 // 현재 URL 또는 localStorage에서 마지막 메뉴를 읽어온다.
 function getInitialMenu() {
@@ -24,7 +27,8 @@ function getInitialMenu() {
     return menuFromStorage;
   }
 
-  return 'ISSUE';
+  // 기본 진입 화면은 실제 데이터 기능이 있는 패치이력으로 둡니다.
+  return 'PATCH_HISTORY';
 }
 
 // 앱 최상위 컴포넌트
@@ -36,9 +40,9 @@ export default function App() {
 
   // 현재 선택된 메뉴
   // GLOBAL_SEARCH: 통합 검색
-  // ISSUE: 이슈관리 시스템
-  // KNOWLEDGE: 지식공유
   // PATCH_HISTORY: 패치이력
+  // KNOWLEDGE: 지식공유
+  // WORK_ISSUE_HISTORY: 작업 및 이슈이력
   const [activeMenu, setActiveMenu] = useState(getInitialMenu);
 
   const handleMenuChange = (menuKey) => {
@@ -57,8 +61,13 @@ export default function App() {
     }
   };
 
+  if (popupType === 'patch-history-detail') {
+    return <PatchHistoryDetailWindow />;
+  }
+
+  // 기존에 열린 /?popup=issue-detail 링크도 깨지지 않도록 호환 처리합니다.
   if (popupType === 'issue-detail') {
-    return <IssueDetailWindow />;
+    return <PatchHistoryDetailWindow />;
   }
 
   if (popupType === 'knowledge-detail') {
@@ -73,9 +82,9 @@ export default function App() {
       {/* 화면이 너무 넓어 보이지 않도록 최대 폭을 제한하고 중앙 정렬한다. */}
       <main className="mx-auto w-full max-w-[1720px] px-4 py-6 sm:px-6 lg:px-8">
         {activeMenu === 'GLOBAL_SEARCH' && <GlobalSearchPage />}
-        {activeMenu === 'ISSUE' && <IssuePage />}
-        {activeMenu === 'KNOWLEDGE' && <KnowledgePage />}
         {activeMenu === 'PATCH_HISTORY' && <PatchHistoryPage />}
+        {activeMenu === 'KNOWLEDGE' && <KnowledgePage />}
+        {activeMenu === 'WORK_ISSUE_HISTORY' && <WorkIssueHistoryPage />}
       </main>
     </div>
   );

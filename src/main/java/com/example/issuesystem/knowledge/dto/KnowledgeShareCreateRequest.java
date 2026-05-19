@@ -1,6 +1,6 @@
 package com.example.issuesystem.knowledge.dto;
 
-import com.example.issuesystem.issue.domain.InfraType;
+import com.example.issuesystem.common.domain.InfraType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.Getter;

@@ -1,7 +1,7 @@
 package com.example.issuesystem.knowledge.service;
 
 import com.example.issuesystem.common.PageResponse;
-import com.example.issuesystem.issue.domain.InfraType;
+import com.example.issuesystem.common.domain.InfraType;
 import com.example.issuesystem.knowledge.domain.KnowledgeShare;
 import com.example.issuesystem.knowledge.domain.KnowledgeShareAttachment;
 import com.example.issuesystem.knowledge.dto.KnowledgeShareCreateRequest;

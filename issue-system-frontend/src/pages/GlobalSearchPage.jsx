@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import SectionCard from '../components/common/SectionCard';
 import LabeledInput from '../components/common/LabeledInput';
-import { API_BASE, infraOptions } from '../constants/issueOptions';
+import { API_BASE, infraOptions } from '../constants/patchHistoryOptions';
 
 const searchInputClass =
   'h-9 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none ring-0 focus:border-slate-500';
@@ -107,8 +107,8 @@ function buildSearchParams({
   customerName,
   startDate,
   endDate,
-  issuePage,
-  issueSize,
+  patchHistoryPage,
+  patchHistorySize,
   knowledgePage,
   knowledgeSize,
 }) {
@@ -134,9 +134,9 @@ function buildSearchParams({
     params.append('endDate', endDate);
   }
 
-  // 이슈와 지식공유를 각각 독립적으로 페이징한다.
-  params.append('issuePage', String(issuePage));
-  params.append('issueSize', String(issueSize));
+  // 패치이력과 지식공유를 각각 독립적으로 페이징한다.
+  params.append('patchHistoryPage', String(patchHistoryPage));
+  params.append('patchHistorySize', String(patchHistorySize));
   params.append('knowledgePage', String(knowledgePage));
   params.append('knowledgeSize', String(knowledgeSize));
 
@@ -178,22 +178,22 @@ export default function GlobalSearchPage() {
   const [startDate, setStartDate] = useState(getDefaultStartDate);
   const [endDate, setEndDate] = useState(getDefaultEndDate);
 
-  const [issueRows, setIssueRows] = useState([]);
+  const [patchHistoryRows, setPatchHistoryRows] = useState([]);
   const [knowledgeRows, setKnowledgeRows] = useState([]);
-  const [issueTotal, setIssueTotal] = useState(0);
+  const [patchHistoryTotal, setPatchHistoryTotal] = useState(0);
   const [knowledgeTotal, setKnowledgeTotal] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
 
-  // 패치이력은 아직 백엔드/API가 없으므로 통합검색 화면에는 0건 placeholder로만 표시한다.
-  // 추후 패치이력 API가 생기면 이 값을 실제 응답값으로 교체하면 된다.
-  const patchHistoryTotal = 0;
-  const patchHistoryRows = [];
+  // 작업 및 이슈이력은 아직 백엔드/API가 없으므로 통합검색 화면에는 0건 placeholder로만 표시한다.
+  // 추후 작업 및 이슈이력 API가 생기면 이 값을 실제 응답값으로 교체하면 된다.
+  const workIssueHistoryTotal = 0;
+  const workIssueHistoryRows = [];
 
-  const [issuePage, setIssuePage] = useState(0);
-  const [issueSize, setIssueSize] = useState(DEFAULT_PAGE_SIZE);
-  const [issueTotalPages, setIssueTotalPages] = useState(0);
-  const [issueHasNext, setIssueHasNext] = useState(false);
-  const [issueHasPrevious, setIssueHasPrevious] = useState(false);
+  const [patchHistoryPage, setPatchHistoryPage] = useState(0);
+  const [patchHistorySize, setPatchHistorySize] = useState(DEFAULT_PAGE_SIZE);
+  const [patchHistoryTotalPages, setPatchHistoryTotalPages] = useState(0);
+  const [patchHistoryHasNext, setPatchHistoryHasNext] = useState(false);
+  const [patchHistoryHasPrevious, setPatchHistoryHasPrevious] = useState(false);
 
   const [knowledgePage, setKnowledgePage] = useState(0);
   const [knowledgeSize, setKnowledgeSize] = useState(DEFAULT_PAGE_SIZE);
@@ -208,8 +208,8 @@ export default function GlobalSearchPage() {
   const abortRef = useRef(null);
 
   const searchAll = async ({
-    targetIssuePage = issuePage,
-    targetIssueSize = issueSize,
+    targetPatchHistoryPage = patchHistoryPage,
+    targetPatchHistorySize = patchHistorySize,
     targetKnowledgePage = knowledgePage,
     targetKnowledgeSize = knowledgeSize,
   } = {}) => {
@@ -231,8 +231,8 @@ export default function GlobalSearchPage() {
         customerName,
         startDate,
         endDate,
-        issuePage: targetIssuePage,
-        issueSize: targetIssueSize,
+        patchHistoryPage: targetPatchHistoryPage,
+        patchHistorySize: targetPatchHistorySize,
         knowledgePage: targetKnowledgePage,
         knowledgeSize: targetKnowledgeSize,
       });
@@ -249,17 +249,17 @@ export default function GlobalSearchPage() {
 
       const data = body.data || {};
 
-      setIssueRows(data.issues || []);
+      setPatchHistoryRows(data.patchHistories || []);
       setKnowledgeRows(data.knowledgeShares || []);
-      setIssueTotal(data.issueTotal || 0);
+      setPatchHistoryTotal(data.patchHistoryTotal || 0);
       setKnowledgeTotal(data.knowledgeTotal || 0);
       setTotalCount(data.total || 0);
 
-      setIssuePage(data.issuePage || 0);
-      setIssueSize(data.issueSize || targetIssueSize);
-      setIssueTotalPages(data.issueTotalPages || 0);
-      setIssueHasNext(Boolean(data.issueHasNext));
-      setIssueHasPrevious(Boolean(data.issueHasPrevious));
+      setPatchHistoryPage(data.patchHistoryPage || 0);
+      setPatchHistorySize(data.patchHistorySize || targetPatchHistorySize);
+      setPatchHistoryTotalPages(data.patchHistoryTotalPages || 0);
+      setPatchHistoryHasNext(Boolean(data.patchHistoryHasNext));
+      setPatchHistoryHasPrevious(Boolean(data.patchHistoryHasPrevious));
 
       setKnowledgePage(data.knowledgePage || 0);
       setKnowledgeSize(data.knowledgeSize || targetKnowledgeSize);
@@ -269,12 +269,12 @@ export default function GlobalSearchPage() {
     } catch (e) {
       if (e.name !== 'AbortError') {
         setError(e.message || '통합검색 중 오류가 발생했습니다.');
-        setIssueRows([]);
+        setPatchHistoryRows([]);
         setKnowledgeRows([]);
-        setIssueTotal(0);
+        setPatchHistoryTotal(0);
         setKnowledgeTotal(0);
         setTotalCount(0);
-        setIssueTotalPages(0);
+        setPatchHistoryTotalPages(0);
         setKnowledgeTotalPages(0);
       }
     } finally {
@@ -283,10 +283,10 @@ export default function GlobalSearchPage() {
   };
 
   // 최초 진입 시에도 검색을 실행한다.
-  // 검색어가 비어 있으면 기본 기간/필터 기준으로 이슈와 지식공유 전체 목록을 보여준다.
+  // 검색어가 비어 있으면 기본 기간/필터 기준으로 패치이력과 지식공유 전체 목록을 보여준다.
   useEffect(() => {
     searchAll({
-      targetIssuePage: 0,
+      targetPatchHistoryPage: 0,
       targetKnowledgePage: 0,
     });
 
@@ -300,12 +300,12 @@ export default function GlobalSearchPage() {
   }, []);
 
   const handleSearch = () => {
-    setIssuePage(0);
+    setPatchHistoryPage(0);
     setKnowledgePage(0);
 
     searchAll({
-      targetIssuePage: 0,
-      targetIssueSize: issueSize,
+      targetPatchHistoryPage: 0,
+      targetPatchHistorySize: patchHistorySize,
       targetKnowledgePage: 0,
       targetKnowledgeSize: knowledgeSize,
     });
@@ -318,14 +318,14 @@ export default function GlobalSearchPage() {
     }
   };
 
-  const moveIssuePage = (targetPage) => {
-    if (targetPage < 0 || targetPage >= issueTotalPages || targetPage === issuePage) {
+  const movePatchHistoryPage = (targetPage) => {
+    if (targetPage < 0 || targetPage >= patchHistoryTotalPages || targetPage === patchHistoryPage) {
       return;
     }
 
     searchAll({
-      targetIssuePage: targetPage,
-      targetIssueSize: issueSize,
+      targetPatchHistoryPage: targetPage,
+      targetPatchHistorySize: patchHistorySize,
       targetKnowledgePage: knowledgePage,
       targetKnowledgeSize: knowledgeSize,
     });
@@ -337,19 +337,19 @@ export default function GlobalSearchPage() {
     }
 
     searchAll({
-      targetIssuePage: issuePage,
-      targetIssueSize: issueSize,
+      targetPatchHistoryPage: patchHistoryPage,
+      targetPatchHistorySize: patchHistorySize,
       targetKnowledgePage: targetPage,
       targetKnowledgeSize: knowledgeSize,
     });
   };
 
-  const changeIssueSize = (nextSize) => {
-    setIssueSize(nextSize);
+  const changePatchHistorySize = (nextSize) => {
+    setPatchHistorySize(nextSize);
 
     searchAll({
-      targetIssuePage: 0,
-      targetIssueSize: nextSize,
+      targetPatchHistoryPage: 0,
+      targetPatchHistorySize: nextSize,
       targetKnowledgePage: knowledgePage,
       targetKnowledgeSize: knowledgeSize,
     });
@@ -359,18 +359,18 @@ export default function GlobalSearchPage() {
     setKnowledgeSize(nextSize);
 
     searchAll({
-      targetIssuePage: issuePage,
-      targetIssueSize: issueSize,
+      targetPatchHistoryPage: patchHistoryPage,
+      targetPatchHistorySize: patchHistorySize,
       targetKnowledgePage: 0,
       targetKnowledgeSize: nextSize,
     });
   };
 
-  const openIssueDetailWindow = (id) => {
-    const url = `${window.location.origin}${window.location.pathname}?popup=issue-detail&id=${id}`;
+  const openPatchHistoryDetailWindow = (id) => {
+    const url = `${window.location.origin}${window.location.pathname}?popup=patch-history-detail&id=${id}`;
     const features = 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
 
-    window.open(url, `issue-detail-${id}`, features);
+    window.open(url, `patch-history-detail-${id}`, features);
   };
 
   const openKnowledgeDetailWindow = (id) => {
@@ -475,20 +475,20 @@ export default function GlobalSearchPage() {
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
-            label="이슈관리 시스템"
-            count={issueTotal}
+            label="패치이력"
+            count={patchHistoryTotal}
           />
           <SummaryCard
             label="지식공유 DB"
             count={knowledgeTotal}
           />
           <SummaryCard
-            label="패치이력"
-            count={patchHistoryTotal}
+            label="작업 및 이슈이력"
+            count={workIssueHistoryTotal}
           />
           <SummaryCard
             label="전체 결과"
-            count={totalCount + patchHistoryTotal}
+            count={totalCount + workIssueHistoryTotal}
           />
         </div>
 
@@ -527,7 +527,7 @@ export default function GlobalSearchPage() {
         ) : (
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2 2xl:grid-cols-3">
             <SectionCard
-              title={`이슈 결과 (${(issueTotal || 0).toLocaleString()}건)`}
+              title={`패치이력 결과 (${(patchHistoryTotal || 0).toLocaleString()}건)`}
             >
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
@@ -544,41 +544,41 @@ export default function GlobalSearchPage() {
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {loading ? (
                       <tr>
-                        <td colSpan={3} className="px-4 py-8 text-center text-slate-500">
+                        <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
                           검색 중...
                         </td>
                       </tr>
-                    ) : issueRows.length === 0 ? (
+                    ) : patchHistoryRows.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="px-4 py-8 text-center text-slate-500">
-                          검색된 이슈가 없습니다.
+                        <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                          검색된 패치이력이 없습니다.
                         </td>
                       </tr>
                     ) : (
-                      issueRows.map((issue) => (
+                      patchHistoryRows.map((patchHistory) => (
                         <tr
-                          key={issue.id}
-                          onClick={() => openIssueDetailWindow(issue.id)}
-                          className={`cursor-pointer transition ${rowClass(issue.matchLevel)}`}
+                          key={patchHistory.id}
+                          onClick={() => openPatchHistoryDetailWindow(patchHistory.id)}
+                          className={`cursor-pointer transition ${rowClass(patchHistory.matchLevel)}`}
                         >
                           <td className="min-w-0 px-2 py-3">
-                            <TruncateCell value={issue.title} strong />
+                            <TruncateCell value={patchHistory.title} strong />
                           </td>
 
                           {/*<td className="min-w-0 px-2 py-3 text-slate-700">*/}
-                          {/*  <TruncateCell value={issue.summary} />*/}
+                          {/*  <TruncateCell value={patchHistory.summary} />*/}
                           {/*</td>*/}
 
                           <td className="min-w-0 px-2 py-3">
-                            <TruncateCell value={normalizeList(issue.infraTypes).join(', ')} />
+                            <TruncateCell value={normalizeList(patchHistory.infraTypes).join(', ')} />
                           </td>
 
                           <td className="min-w-0 px-2 py-3">
-                            <TruncateCell value={issue.customerName} />
+                            <TruncateCell value={patchHistory.customerName} />
                           </td>
 
                           <td className="min-w-0 px-2 py-3 text-slate-700">
-                            <TruncateCell value={formatDateTime(issue.createdAt)} />
+                            <TruncateCell value={formatDateTime(patchHistory.createdAt)} />
                           </td>
                         </tr>
                       ))
@@ -588,14 +588,14 @@ export default function GlobalSearchPage() {
               </div>
 
               <PaginationBar
-                page={issuePage}
-                size={issueSize}
-                totalPages={issueTotalPages}
-                totalElements={issueTotal}
-                hasPrevious={issueHasPrevious}
-                hasNext={issueHasNext}
-                onMovePage={moveIssuePage}
-                onChangeSize={changeIssueSize}
+                page={patchHistoryPage}
+                size={patchHistorySize}
+                totalPages={patchHistoryTotalPages}
+                totalElements={patchHistoryTotal}
+                hasPrevious={patchHistoryHasPrevious}
+                hasNext={patchHistoryHasNext}
+                onMovePage={movePatchHistoryPage}
+                onChangeSize={changePatchHistorySize}
               />
             </SectionCard>
 
@@ -678,8 +678,8 @@ export default function GlobalSearchPage() {
             </SectionCard>
 
             <SectionCard
-              title={`패치이력 결과 (${patchHistoryTotal.toLocaleString()}건)`}
-              description="패치이력 기능은 아직 구상 전입니다."
+              title={`작업 및 이슈이력 결과 (${workIssueHistoryTotal.toLocaleString()}건)`}
+              description="작업 및 이슈이력 기능은 아직 구상 전입니다."
             >
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
@@ -694,14 +694,14 @@ export default function GlobalSearchPage() {
                   </thead>
 
                   <tbody className="divide-y divide-slate-100 bg-white">
-                    {patchHistoryRows.length === 0 ? (
+                    {workIssueHistoryRows.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="px-4 py-8 text-center text-slate-500">
-                          패치이력 기능은 아직 준비 중입니다.
+                        <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                          작업 및 이슈이력 기능은 아직 준비 중입니다.
                         </td>
                       </tr>
                     ) : (
-                      patchHistoryRows.map((item) => (
+                      workIssueHistoryRows.map((item) => (
                         <tr
                           key={item.id}
                           className="cursor-pointer bg-white transition hover:bg-slate-50"
