@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import LabeledInput from '../components/common/LabeledInput';
 import SectionCard from '../components/common/SectionCard';
 import CreateKnowledgeModal from '../components/modal/CreateKnowledgeModal';
+import PageTitle from '../components/common/PageTitle';
 
 const API_BASE =
     process.env.NODE_ENV === 'development'
@@ -312,14 +313,10 @@ export default function KnowledgePage() {
 
   return (
       <>
-        <div className="mb-4">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-            지식공유 DB
-          </h1>
-          <p className="mt-2 text-sm text-slate-500">
-            운영 지식, 장애 처리 방법, 점검 절차를 등록하고 검색합니다.
-          </p>
-        </div>
+        <PageTitle
+          title="지식공유 DB"
+          description="운영 지식, 장애 처리 방법, 점검 절차를 등록하고 검색합니다."
+        />
 
         {(message || error) && (
             <div

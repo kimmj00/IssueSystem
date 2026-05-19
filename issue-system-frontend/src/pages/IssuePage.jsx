@@ -5,6 +5,7 @@ import SectionCard from '../components/common/SectionCard';
 import CreateIssueModal from '../components/modal/CreateIssueModal';
 import ExcelUploadModal from '../components/modal/ExcelUploadModal';
 import { API_BASE, emptyForm, infraOptions, statusOptions } from '../constants/issueOptions';
+import PageTitle from '../components/common/PageTitle';
 
 // 페이지 버튼 목록을 만듭니다.
 // 전체 페이지가 많을 때는 첫 페이지, 마지막 페이지, 현재 페이지 주변만 보여주고 중간은 ... 처리합니다.
@@ -283,12 +284,10 @@ export default function IssuePage() {
 
   return (
     <>
-      <div className="mb-4">
-        <h1 className="text-3xl font-bold tracking-tight">이슈관리 시스템</h1>
-        <p className="mt-2 text-sm text-slate-500">
-          고객사별 이슈를 기록하고, 동일 증상 사례를 빠르게 찾는 화면입니다.
-        </p>
-      </div>
+      <PageTitle
+        title="이슈관리 시스템"
+        description="고객사별 이슈를 기록하고, 동일 증상 사례를 빠르게 찾는 화면입니다."
+      />
 
       {(message || error) && (
         <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${

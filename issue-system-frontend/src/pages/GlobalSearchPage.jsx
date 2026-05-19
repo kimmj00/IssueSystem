@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import SectionCard from '../components/common/SectionCard';
 import LabeledInput from '../components/common/LabeledInput';
 import { API_BASE, infraOptions } from '../constants/issueOptions';
+import PageTitle from '../components/common/PageTitle';
 
 const searchInputClass =
   'h-9 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none ring-0 focus:border-slate-500';
@@ -9,9 +10,9 @@ const searchInputClass =
 const toolbarButtonClass =
   'h-9 shrink-0 rounded-lg px-3 text-sm font-semibold shadow-sm transition';
 
-// 통합검색 한 번에 가져올 최대 개수입니다.
-// 검색어가 비어 있어도 최신순 전체 목록을 보여주기 위해 기존 10개보다 넉넉하게 가져옵니다.
-const RESULT_SIZE = 50;
+// 통합검색 목록은 더 이상 최대 50건 고정 표시가 아니라 페이지 단위로 조회한다.
+const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
 
 function toDateInputValue(date) {
   const year = date.getFullYear();
@@ -65,7 +66,52 @@ function rowClass(level) {
   }
 }
 
-function buildSearchParams({ keyword, infraType, customerName, startDate, endDate }) {
+// 페이지 버튼 목록을 만든다.
+// 전체 페이지가 많을 때는 처음/마지막/현재 주변만 보여주고 중간은 ... 처리한다.
+function buildPageItems(currentPage, totalPages) {
+  if (totalPages <= 0) {
+    return [];
+  }
+
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index);
+  }
+
+  const pages = new Set([0, totalPages - 1]);
+
+  for (let page = currentPage - 2; page <= currentPage + 2; page += 1) {
+    if (page >= 0 && page < totalPages) {
+      pages.add(page);
+    }
+  }
+
+  const sortedPages = Array.from(pages).sort((a, b) => a - b);
+  const items = [];
+
+  sortedPages.forEach((page, index) => {
+    const previousPage = sortedPages[index - 1];
+
+    if (index > 0 && page - previousPage > 1) {
+      items.push(`ellipsis-${page}`);
+    }
+
+    items.push(page);
+  });
+
+  return items;
+}
+
+function buildSearchParams({
+  keyword,
+  infraType,
+  customerName,
+  startDate,
+  endDate,
+  issuePage,
+  issueSize,
+  knowledgePage,
+  knowledgeSize,
+}) {
   const params = new URLSearchParams();
 
   if (keyword.trim()) {
@@ -88,7 +134,11 @@ function buildSearchParams({ keyword, infraType, customerName, startDate, endDat
     params.append('endDate', endDate);
   }
 
-  params.append('size', String(RESULT_SIZE));
+  // 이슈와 지식공유를 각각 독립적으로 페이징한다.
+  params.append('issuePage', String(issuePage));
+  params.append('issueSize', String(issueSize));
+  params.append('knowledgePage', String(knowledgePage));
+  params.append('knowledgeSize', String(knowledgeSize));
 
   return params;
 }
@@ -105,8 +155,8 @@ function SummaryCard({ label, count, description }) {
   );
 }
 
-// 한 줄 말줄임 표시용 셀입니다.
-// title 속성을 넣어 마우스오버 시 전체 내용을 브라우저 기본 툴팁으로 확인할 수 있게 합니다.
+// 한 줄 말줄임 표시용 셀이다.
+// title 속성을 넣어 마우스오버 시 전체 내용을 브라우저 기본 툴팁으로 확인할 수 있게 한다.
 function TruncateCell({ value, className = '', strong = false }) {
   const text = value || '-';
 
@@ -116,6 +166,103 @@ function TruncateCell({ value, className = '', strong = false }) {
       className={`min-w-0 truncate ${strong ? 'font-medium text-slate-900' : ''} ${className}`}
     >
       {text}
+    </div>
+  );
+}
+
+function PaginationBar({
+  page,
+  size,
+  totalPages,
+  totalElements,
+  hasPrevious,
+  hasNext,
+  onMovePage,
+  onChangeSize,
+}) {
+  const pageItems = buildPageItems(page, totalPages);
+
+  return (
+    <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+        <span>
+          전체 {totalElements.toLocaleString()}건 / {totalPages === 0 ? 0 : page + 1}페이지 / {totalPages}페이지
+        </span>
+
+        <label className="flex items-center gap-2">
+          <span>표시 개수</span>
+          <select
+            value={size}
+            onChange={(e) => onChangeSize(Number(e.target.value))}
+            className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 outline-none focus:border-slate-500"
+          >
+            {PAGE_SIZE_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}개
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1 lg:justify-end">
+        <button
+          type="button"
+          onClick={() => onMovePage(0)}
+          disabled={!hasPrevious}
+          className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          처음
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onMovePage(page - 1)}
+          disabled={!hasPrevious}
+          className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          이전
+        </button>
+
+        {pageItems.map((item) => (
+          typeof item === 'string' ? (
+            <span key={item} className="px-1 text-xs text-slate-400">
+              ...
+            </span>
+          ) : (
+            <button
+              key={item}
+              type="button"
+              onClick={() => onMovePage(item)}
+              className={`h-8 min-w-8 rounded-lg border px-2 text-xs ${
+                item === page
+                  ? 'border-slate-900 bg-slate-900 text-white'
+                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              {item + 1}
+            </button>
+          )
+        ))}
+
+        <button
+          type="button"
+          onClick={() => onMovePage(page + 1)}
+          disabled={!hasNext}
+          className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          다음
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onMovePage(totalPages - 1)}
+          disabled={!hasNext}
+          className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          마지막
+        </button>
+      </div>
     </div>
   );
 }
@@ -133,13 +280,30 @@ export default function GlobalSearchPage() {
   const [knowledgeTotal, setKnowledgeTotal] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
 
+  const [issuePage, setIssuePage] = useState(0);
+  const [issueSize, setIssueSize] = useState(DEFAULT_PAGE_SIZE);
+  const [issueTotalPages, setIssueTotalPages] = useState(0);
+  const [issueHasNext, setIssueHasNext] = useState(false);
+  const [issueHasPrevious, setIssueHasPrevious] = useState(false);
+
+  const [knowledgePage, setKnowledgePage] = useState(0);
+  const [knowledgeSize, setKnowledgeSize] = useState(DEFAULT_PAGE_SIZE);
+  const [knowledgeTotalPages, setKnowledgeTotalPages] = useState(0);
+  const [knowledgeHasNext, setKnowledgeHasNext] = useState(false);
+  const [knowledgeHasPrevious, setKnowledgeHasPrevious] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState('');
 
   const abortRef = useRef(null);
 
-  const searchAll = async () => {
+  const searchAll = async ({
+    targetIssuePage = issuePage,
+    targetIssueSize = issueSize,
+    targetKnowledgePage = knowledgePage,
+    targetKnowledgeSize = knowledgeSize,
+  } = {}) => {
     if (abortRef.current) {
       abortRef.current.abort();
     }
@@ -158,6 +322,10 @@ export default function GlobalSearchPage() {
         customerName,
         startDate,
         endDate,
+        issuePage: targetIssuePage,
+        issueSize: targetIssueSize,
+        knowledgePage: targetKnowledgePage,
+        knowledgeSize: targetKnowledgeSize,
       });
 
       const res = await fetch(`${API_BASE}/api/global-search?${params.toString()}`, {
@@ -177,6 +345,18 @@ export default function GlobalSearchPage() {
       setIssueTotal(data.issueTotal || 0);
       setKnowledgeTotal(data.knowledgeTotal || 0);
       setTotalCount(data.total || 0);
+
+      setIssuePage(data.issuePage || 0);
+      setIssueSize(data.issueSize || targetIssueSize);
+      setIssueTotalPages(data.issueTotalPages || 0);
+      setIssueHasNext(Boolean(data.issueHasNext));
+      setIssueHasPrevious(Boolean(data.issueHasPrevious));
+
+      setKnowledgePage(data.knowledgePage || 0);
+      setKnowledgeSize(data.knowledgeSize || targetKnowledgeSize);
+      setKnowledgeTotalPages(data.knowledgeTotalPages || 0);
+      setKnowledgeHasNext(Boolean(data.knowledgeHasNext));
+      setKnowledgeHasPrevious(Boolean(data.knowledgeHasPrevious));
     } catch (e) {
       if (e.name !== 'AbortError') {
         setError(e.message || '통합검색 중 오류가 발생했습니다.');
@@ -185,31 +365,96 @@ export default function GlobalSearchPage() {
         setIssueTotal(0);
         setKnowledgeTotal(0);
         setTotalCount(0);
+        setIssueTotalPages(0);
+        setKnowledgeTotalPages(0);
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // 최초 진입 시에도 검색을 실행합니다.
-  // 검색어가 비어 있으면 기본 기간/필터 기준으로 이슈와 지식공유 전체 목록을 보여줍니다.
+  // 최초 진입 시에도 검색을 실행한다.
+  // 검색어가 비어 있으면 기본 기간/필터 기준으로 이슈와 지식공유 전체 목록을 보여준다.
   useEffect(() => {
-    searchAll();
+    searchAll({
+      targetIssuePage: 0,
+      targetKnowledgePage: 0,
+    });
 
     return () => {
       if (abortRef.current) {
         abortRef.current.abort();
       }
     };
-    // 최초 진입 시 1회만 실행합니다.
+    // 최초 진입 시 1회만 실행한다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleSearch = () => {
+    setIssuePage(0);
+    setKnowledgePage(0);
+
+    searchAll({
+      targetIssuePage: 0,
+      targetIssueSize: issueSize,
+      targetKnowledgePage: 0,
+      targetKnowledgeSize: knowledgeSize,
+    });
+  };
 
   const handleEnterSearch = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      searchAll();
+      handleSearch();
     }
+  };
+
+  const moveIssuePage = (targetPage) => {
+    if (targetPage < 0 || targetPage >= issueTotalPages || targetPage === issuePage) {
+      return;
+    }
+
+    searchAll({
+      targetIssuePage: targetPage,
+      targetIssueSize: issueSize,
+      targetKnowledgePage: knowledgePage,
+      targetKnowledgeSize: knowledgeSize,
+    });
+  };
+
+  const moveKnowledgePage = (targetPage) => {
+    if (targetPage < 0 || targetPage >= knowledgeTotalPages || targetPage === knowledgePage) {
+      return;
+    }
+
+    searchAll({
+      targetIssuePage: issuePage,
+      targetIssueSize: issueSize,
+      targetKnowledgePage: targetPage,
+      targetKnowledgeSize: knowledgeSize,
+    });
+  };
+
+  const changeIssueSize = (nextSize) => {
+    setIssueSize(nextSize);
+
+    searchAll({
+      targetIssuePage: 0,
+      targetIssueSize: nextSize,
+      targetKnowledgePage: knowledgePage,
+      targetKnowledgeSize: knowledgeSize,
+    });
+  };
+
+  const changeKnowledgeSize = (nextSize) => {
+    setKnowledgeSize(nextSize);
+
+    searchAll({
+      targetIssuePage: issuePage,
+      targetIssueSize: issueSize,
+      targetKnowledgePage: 0,
+      targetKnowledgeSize: nextSize,
+    });
   };
 
   const openIssueDetailWindow = (id) => {
@@ -226,17 +471,12 @@ export default function GlobalSearchPage() {
     window.open(url, `knowledge-detail-${id}`, features);
   };
 
-  const displayedIssueCount = Math.min(issueRows.length, RESULT_SIZE);
-  const displayedKnowledgeCount = Math.min(knowledgeRows.length, RESULT_SIZE);
-
   return (
     <>
-      <div className="mb-4">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">통합검색</h1>
-        <p className="mt-2 text-sm text-slate-500">
-          이슈관리 시스템과 지식공유 DB를 단일 API로 검색합니다.
-        </p>
-      </div>
+      <PageTitle
+        title="통합검색"
+        description="이슈관리 시스템과 지식공유 DB를 단일 API로 검색합니다."
+      />
 
       <div className="space-y-5">
         <SectionCard className="p-3">
@@ -307,7 +547,7 @@ export default function GlobalSearchPage() {
             <div className="flex w-full items-end sm:w-auto">
               <button
                 type="button"
-                onClick={searchAll}
+                onClick={handleSearch}
                 disabled={loading}
                 className={`${toolbarButtonClass} w-full bg-slate-900 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400 sm:w-[88px]`}
               >
@@ -327,12 +567,12 @@ export default function GlobalSearchPage() {
           <SummaryCard
             label="이슈관리 시스템"
             count={issueTotal}
-            description={`상위 ${displayedIssueCount}건 표시`}
+            description={`현재 페이지 ${issueRows.length}건 표시`}
           />
           <SummaryCard
             label="지식공유 DB"
             count={knowledgeTotal}
-            description={`상위 ${displayedKnowledgeCount}건 표시`}
+            description={`현재 페이지 ${knowledgeRows.length}건 표시`}
           />
           <SummaryCard
             label="전체 결과"
@@ -377,7 +617,7 @@ export default function GlobalSearchPage() {
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             <SectionCard
               title={`이슈 결과 (${(issueTotal || 0).toLocaleString()}건)`}
-              description={`검색 조건과 일치도가 높은 순으로 최대 ${RESULT_SIZE}건을 표시합니다.`}
+              description="검색 조건과 일치도가 높은 순으로 페이지 단위 표시합니다."
             >
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
@@ -441,11 +681,22 @@ export default function GlobalSearchPage() {
                   </tbody>
                 </table>
               </div>
+
+              <PaginationBar
+                page={issuePage}
+                size={issueSize}
+                totalPages={issueTotalPages}
+                totalElements={issueTotal}
+                hasPrevious={issueHasPrevious}
+                hasNext={issueHasNext}
+                onMovePage={moveIssuePage}
+                onChangeSize={changeIssueSize}
+              />
             </SectionCard>
 
             <SectionCard
               title={`지식공유 결과 (${(knowledgeTotal || 0).toLocaleString()}건)`}
-              description={`검색 조건과 일치도가 높은 순으로 최대 ${RESULT_SIZE}건을 표시합니다.`}
+              description="검색 조건과 일치도가 높은 순으로 페이지 단위 표시합니다."
             >
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
@@ -509,6 +760,17 @@ export default function GlobalSearchPage() {
                   </tbody>
                 </table>
               </div>
+
+              <PaginationBar
+                page={knowledgePage}
+                size={knowledgeSize}
+                totalPages={knowledgeTotalPages}
+                totalElements={knowledgeTotal}
+                hasPrevious={knowledgeHasPrevious}
+                hasNext={knowledgeHasNext}
+                onMovePage={moveKnowledgePage}
+                onChangeSize={changeKnowledgeSize}
+              />
             </SectionCard>
           </div>
         )}

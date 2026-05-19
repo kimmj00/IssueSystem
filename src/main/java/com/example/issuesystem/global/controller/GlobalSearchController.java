@@ -24,8 +24,13 @@ public class GlobalSearchController {
     /**
      * 이슈관리 시스템과 지식공유 DB를 같은 조건으로 통합 검색한다.
      *
-     * page는 두 자료원을 한 화면에 요약 표시하는 구조라 우선 0페이지 기준으로 조회한다.
-     * size는 각 자료원별 표시 개수다.
+     * 변경 사항:
+     * - 기존 size 하나로 각 자료원별 상위 N건만 표시하던 구조를 제거한다.
+     * - 이슈 결과와 지식공유 결과를 각각 독립적으로 페이징한다.
+     *
+     * 호환 처리:
+     * - 기존 프론트가 size만 보내도 동작하도록 size를 fallback 값으로 유지한다.
+     * - 신규 프론트는 issuePage/issueSize, knowledgePage/knowledgeSize를 사용한다.
      */
     @GetMapping
     public ApiResponse<GlobalSearchResponse> search(
@@ -34,8 +39,20 @@ public class GlobalSearchController {
             @RequestParam(required = false) String customerName,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(defaultValue = "10") int size
+
+            // 기존 API 호환용. issueSize/knowledgeSize가 없을 때만 사용한다.
+            @RequestParam(required = false) Integer size,
+
+            // 이슈 결과 페이징 파라미터
+            @RequestParam(required = false) Integer issuePage,
+            @RequestParam(required = false) Integer issueSize,
+
+            // 지식공유 결과 페이징 파라미터
+            @RequestParam(required = false) Integer knowledgePage,
+            @RequestParam(required = false) Integer knowledgeSize
     ) {
+        int fallbackSize = size == null ? 10 : size;
+
         return ApiResponse.ok(
                 globalSearchService.search(
                         keyword,
@@ -43,7 +60,10 @@ public class GlobalSearchController {
                         customerName,
                         startDate,
                         endDate,
-                        size
+                        issuePage == null ? 0 : issuePage,
+                        issueSize == null ? fallbackSize : issueSize,
+                        knowledgePage == null ? 0 : knowledgePage,
+                        knowledgeSize == null ? fallbackSize : knowledgeSize
                 )
         );
     }
