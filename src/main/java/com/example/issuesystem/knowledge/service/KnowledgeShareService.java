@@ -104,7 +104,11 @@ public class KnowledgeShareService {
         Page<KnowledgeShare> pageResult = knowledgeShareRepository.search(
                 keyword,
                 customerName,
-                infraType,
+
+                // KnowledgeShareRepository가 nativeQuery로 변경되었기 때문에
+                // Enum 객체가 아니라 DB에 저장된 문자열 값을 전달한다.
+                infraType != null ? infraType.name() : null,
+
                 startDateTime,
                 endDateTime,
                 PageRequest.of(safePage, safeSize)
