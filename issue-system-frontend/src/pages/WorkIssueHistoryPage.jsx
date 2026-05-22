@@ -15,6 +15,12 @@ const INNER_TABS = [
 
 const INFRA_TYPES = ['SMS', 'NMS', 'DBMS', 'APM'];
 
+// 한 화면에 너무 많은 행을 렌더링하면 행 클릭 시 브라우저 리플로우가 커집니다.
+// 기본 50건 단위로 끊어서 클릭/펼침 반응 속도를 안정화합니다.
+const DEFAULT_PAGE_SIZE = 50;
+const PAGE_SIZE_OPTIONS = [20, 50, 100];
+const MAX_DETAIL_LINES = 80;
+
 function SearchIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -321,8 +327,170 @@ function WorkIssueFilterBar({
   );
 }
 
+function TablePagination({ page, pageSize, totalCount, onPageChange, onPageSizeChange }) {
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const startNo = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endNo = Math.min(totalCount, page * pageSize);
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+      <div>
+        총 <b className="text-slate-700">{totalCount}</b>건 중 <b className="text-slate-700">{startNo}</b>-<b className="text-slate-700">{endNo}</b> 표시
+      </div>
+
+      <div className="flex items-center gap-2">
+        <select
+          value={pageSize}
+          onChange={(event) => onPageSizeChange(Number(event.target.value))}
+          className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          title="페이지당 표시 건수"
+        >
+          {PAGE_SIZE_OPTIONS.map((size) => (
+            <option key={size} value={size}>{size}건</option>
+          ))}
+        </select>
+
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => onPageChange(1)}
+          className="h-8 rounded-lg border border-slate-300 bg-white px-2 font-bold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          &lt;&lt;
+        </button>
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          className="h-8 rounded-lg border border-slate-300 bg-white px-2 font-bold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          &lt;
+        </button>
+        <span className="min-w-[72px] text-center font-semibold text-slate-600">
+          {page} / {totalPages}
+        </span>
+        <button
+          type="button"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          className="h-8 rounded-lg border border-slate-300 bg-white px-2 font-bold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          &gt;
+        </button>
+        <button
+          type="button"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(totalPages)}
+          className="h-8 rounded-lg border border-slate-300 bg-white px-2 font-bold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          &gt;&gt;
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function usePaginatedRows(rows) {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+
+  useEffect(() => {
+    // 검색/필터 변경으로 목록이 바뀌면 첫 페이지부터 다시 보여줍니다.
+    setPage(1);
+  }, [rows]);
+
+  const pagedRows = useMemo(() => {
+    const startIndex = (safePage - 1) * pageSize;
+    return rows.slice(startIndex, startIndex + pageSize);
+  }, [rows, safePage, pageSize]);
+
+  const changePage = (nextPage) => {
+    const next = Math.min(Math.max(nextPage, 1), totalPages);
+    setPage(next);
+  };
+
+  const changePageSize = (nextPageSize) => {
+    setPageSize(nextPageSize);
+    setPage(1);
+  };
+
+  return {
+    page: safePage,
+    pageSize,
+    pagedRows,
+    totalCount: rows.length,
+    changePage,
+    changePageSize,
+  };
+}
+
+function DetailPanel({ rowId, detail, colSpan }) {
+  const visibleDetail = detail.slice(0, MAX_DETAIL_LINES);
+  const hiddenCount = Math.max(0, detail.length - MAX_DETAIL_LINES);
+
+  return (
+    <tr className="bg-slate-50">
+      <td colSpan={colSpan} className="px-4 py-4">
+        <div className="max-h-[320px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4">
+          <div className="mb-2 text-xs font-bold text-slate-500">상세 진행 내용</div>
+          <ul className="space-y-1 text-sm text-slate-700">
+            {visibleDetail.map((item, index) => (
+              <li key={`${rowId}-${index}`} className="flex gap-2">
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+          {hiddenCount > 0 ? (
+            <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
+              상세 내용이 길어 처음 {MAX_DETAIL_LINES}줄만 표시했습니다. 남은 {hiddenCount}줄은 별도 상세 화면으로 분리하는 편이 안전합니다.
+            </div>
+          ) : null}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+const ProjectTableRow = React.memo(function ProjectTableRow({ row, open, onToggle }) {
+  return (
+    <React.Fragment>
+      <tr
+        className="cursor-pointer transition hover:bg-slate-50"
+        onClick={() => onToggle(row.id)}
+      >
+        <td className="px-4 py-4 font-mono text-slate-500">{row.no}</td>
+        <td className="px-4 py-4">
+          <div className="font-bold text-slate-900">{row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}</div>
+          <div className="mt-0.5 text-xs text-slate-500">{row.projectType || '-'}</div>
+        </td>
+        <td className="px-4 py-4 text-slate-700">{row.executors.join(', ') || '-'}</td>
+        <td className="px-4 py-4 font-mono text-slate-600">{row.startDate || '-'}</td>
+        <td className="px-4 py-4 text-slate-700">{row.latestIssue}</td>
+        <td className="px-4 py-4 text-slate-400">
+          <ChevronIcon open={open} />
+        </td>
+      </tr>
+
+      {open ? <DetailPanel rowId={row.id} detail={row.detail} colSpan={6} /> : null}
+    </React.Fragment>
+  );
+});
+
 function ProjectTable({ rows }) {
   const [openedId, setOpenedId] = useState('');
+  const { page, pageSize, pagedRows, totalCount, changePage, changePageSize } = usePaginatedRows(rows);
+
+  useEffect(() => {
+    setOpenedId('');
+  }, [rows, page, pageSize]);
+
+  const toggleRow = (rowId) => {
+    setOpenedId((prev) => (prev === rowId ? '' : rowId));
+  };
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200">
@@ -338,48 +506,14 @@ function ProjectTable({ rows }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200 bg-white">
-          {rows.map((row) => {
-            const open = openedId === row.id;
-
-            return (
-              <React.Fragment key={row.id}>
-                <tr
-                  className="cursor-pointer transition hover:bg-slate-50"
-                  onClick={() => setOpenedId(open ? '' : row.id)}
-                >
-                  <td className="px-4 py-4 font-mono text-slate-500">{row.no}</td>
-                  <td className="px-4 py-4">
-                    <div className="font-bold text-slate-900">{row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}</div>
-                    <div className="mt-0.5 text-xs text-slate-500">{row.projectType || '-'}</div>
-                  </td>
-                  <td className="px-4 py-4 text-slate-700">{row.executors.join(', ') || '-'}</td>
-                  <td className="px-4 py-4 font-mono text-slate-600">{row.startDate || '-'}</td>
-                  <td className="px-4 py-4 text-slate-700">{row.latestIssue}</td>
-                  <td className="px-4 py-4 text-slate-400">
-                    <ChevronIcon open={open} />
-                  </td>
-                </tr>
-
-                {open ? (
-                  <tr className="bg-slate-50">
-                    <td colSpan={6} className="px-4 py-4">
-                      <div className="rounded-xl border border-slate-200 bg-white p-4">
-                        <div className="mb-2 text-xs font-bold text-slate-500">상세 진행 내용</div>
-                        <ul className="space-y-1 text-sm text-slate-700">
-                          {row.detail.map((item, index) => (
-                            <li key={`${row.id}-${index}`} className="flex gap-2">
-                              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </td>
-                  </tr>
-                ) : null}
-              </React.Fragment>
-            );
-          })}
+          {pagedRows.map((row) => (
+            <ProjectTableRow
+              key={row.id}
+              row={row}
+              open={openedId === row.id}
+              onToggle={toggleRow}
+            />
+          ))}
 
           {rows.length === 0 ? (
             <tr>
@@ -390,12 +524,57 @@ function ProjectTable({ rows }) {
           ) : null}
         </tbody>
       </table>
+
+      {rows.length > 0 ? (
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          totalCount={totalCount}
+          onPageChange={changePage}
+          onPageSizeChange={changePageSize}
+        />
+      ) : null}
     </div>
   );
 }
 
+const MaintenanceTableRow = React.memo(function MaintenanceTableRow({ row, open, onToggle }) {
+  return (
+    <React.Fragment>
+      <tr
+        className="cursor-pointer transition hover:bg-slate-50"
+        onClick={() => onToggle(row.id)}
+      >
+        <td className="px-4 py-4 font-mono text-slate-500">{row.no}</td>
+        <td className="px-4 py-4">
+          <div className="font-bold text-slate-900">{row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}</div>
+          <div className="mt-0.5 text-xs text-slate-500">{row.projectType || '-'}</div>
+        </td>
+        <td className="px-4 py-4 text-slate-700">{row.executors.join(', ') || '-'}</td>
+        <td className="px-4 py-4 font-mono text-slate-600">{row.contractEnd || '-'}</td>
+        <td className="px-4 py-4 text-slate-700">{row.latestIssue}</td>
+        <td className="px-4 py-4 text-slate-700">{row.inspection}</td>
+        <td className="px-4 py-4 text-slate-400">
+          <ChevronIcon open={open} />
+        </td>
+      </tr>
+
+      {open ? <DetailPanel rowId={row.id} detail={row.detail} colSpan={7} /> : null}
+    </React.Fragment>
+  );
+});
+
 function MaintenanceTable({ rows }) {
   const [openedId, setOpenedId] = useState('');
+  const { page, pageSize, pagedRows, totalCount, changePage, changePageSize } = usePaginatedRows(rows);
+
+  useEffect(() => {
+    setOpenedId('');
+  }, [rows, page, pageSize]);
+
+  const toggleRow = (rowId) => {
+    setOpenedId((prev) => (prev === rowId ? '' : rowId));
+  };
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200">
@@ -412,49 +591,14 @@ function MaintenanceTable({ rows }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200 bg-white">
-          {rows.map((row) => {
-            const open = openedId === row.id;
-
-            return (
-              <React.Fragment key={row.id}>
-                <tr
-                  className="cursor-pointer transition hover:bg-slate-50"
-                  onClick={() => setOpenedId(open ? '' : row.id)}
-                >
-                  <td className="px-4 py-4 font-mono text-slate-500">{row.no}</td>
-                  <td className="px-4 py-4">
-                    <div className="font-bold text-slate-900">{row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}</div>
-                    <div className="mt-0.5 text-xs text-slate-500">{row.projectType || '-'}</div>
-                  </td>
-                  <td className="px-4 py-4 text-slate-700">{row.executors.join(', ') || '-'}</td>
-                  <td className="px-4 py-4 font-mono text-slate-600">{row.contractEnd || '-'}</td>
-                  <td className="px-4 py-4 text-slate-700">{row.latestIssue}</td>
-                  <td className="px-4 py-4 text-slate-700">{row.inspection}</td>
-                  <td className="px-4 py-4 text-slate-400">
-                    <ChevronIcon open={open} />
-                  </td>
-                </tr>
-
-                {open ? (
-                  <tr className="bg-slate-50">
-                    <td colSpan={7} className="px-4 py-4">
-                      <div className="rounded-xl border border-slate-200 bg-white p-4">
-                        <div className="mb-2 text-xs font-bold text-slate-500">상세 진행 내용</div>
-                        <ul className="space-y-1 text-sm text-slate-700">
-                          {row.detail.map((item, index) => (
-                            <li key={`${row.id}-${index}`} className="flex gap-2">
-                              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </td>
-                  </tr>
-                ) : null}
-              </React.Fragment>
-            );
-          })}
+          {pagedRows.map((row) => (
+            <MaintenanceTableRow
+              key={row.id}
+              row={row}
+              open={openedId === row.id}
+              onToggle={toggleRow}
+            />
+          ))}
 
           {rows.length === 0 ? (
             <tr>
@@ -465,6 +609,16 @@ function MaintenanceTable({ rows }) {
           ) : null}
         </tbody>
       </table>
+
+      {rows.length > 0 ? (
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          totalCount={totalCount}
+          onPageChange={changePage}
+          onPageSizeChange={changePageSize}
+        />
+      ) : null}
     </div>
   );
 }
