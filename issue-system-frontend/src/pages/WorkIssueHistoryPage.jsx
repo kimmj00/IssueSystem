@@ -1,86 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import SectionCard from '../components/common/SectionCard';
+import { API_BASE } from '../constants/patchHistoryOptions';
 
-// 작업 및 이슈이력 화면은 기존 상단 메뉴/페이지 껍데기는 유지하고,
-// 이 파일 안쪽 내용 영역만 프로젝트/유지보수 현황 UI로 채웁니다.
+// 작업 및 이슈이력 API 기본 경로입니다.
+// 프론트는 엑셀 파일만 전송하고, 실제 파싱/DB 저장은 Spring Boot에서 처리합니다.
+const WORK_ISSUE_API = `${API_BASE}/api/work-issue-histories`;
+
+// 현재 화면 안쪽에서 사용하는 탭입니다. 기존 상단 메뉴 구조는 건드리지 않습니다.
 const INNER_TABS = [
   { key: 'projects', label: '프로젝트 현황' },
   { key: 'maintenance', label: '유지보수 현황' },
   { key: 'search', label: '통합검색' },
-];
-
-// 현재는 백엔드 API 연결 전 단계라 화면 확인용 임시 데이터만 둡니다.
-// 실제 DB 연동 시 이 배열을 API 조회 결과로 교체하면 됩니다.
-const PROJECT_ROWS = [
-  {
-    id: 'project-2',
-    no: '2',
-    customerName: '법무부',
-    siteCode: 'A23124',
-    projectType: '단순구축',
-    executors: ['최승훈', '전우진'],
-    startDate: '25/7/9',
-    infraTypes: ['SMS', 'NMS'],
-    latestIssue: '담당자 전부 바뀜',
-    detail: [
-      'PM 리스트 및 작업 전 준비사항 전달했으나 준비 미흡',
-      '변경된 담당자 미팅 진행',
-      '현재 상황 및 7.0, 8.0 기준 설명',
-      '필요정보 요청',
-    ],
-  },
-  {
-    id: 'project-3',
-    no: '3',
-    customerName: 'HCT',
-    siteCode: 'C19203',
-    projectType: '단순구축',
-    executors: ['최승훈', '고혁배'],
-    startDate: '25/10/30',
-    infraTypes: ['SMS', 'NMS'],
-    latestIssue: 'NMS 등록 대상 준비상태 확인 요청 > 김영민 부장님',
-    detail: [
-      '에이전트 설치, 삭제, 재설치 매뉴얼 작성 완료',
-      '스위치 장비 입고 이후 추가 진행 예정',
-    ],
-  },
-];
-
-const MAINTENANCE_ROWS = [
-  {
-    id: 'maintenance-9',
-    no: '9',
-    customerName: '전문건설공제조합',
-    siteCode: 'C26020',
-    projectType: 'EMS구축',
-    executors: ['최승훈', '전우진'],
-    contractEnd: '2027/12/31',
-    infraTypes: ['SMS', 'NMS', 'DBMS'],
-    latestIssue: '포트 감지설정 등록 완료',
-    inspection: '2월 2/26, 4월 4/8',
-    detail: [
-      '4/28 방문 작업 진행',
-      'TCP 상태 확인 요청',
-      '대시보드 사용 여부 확인 필요',
-    ],
-  },
-  {
-    id: 'maintenance-11',
-    no: '11',
-    customerName: '에너지기술평가원',
-    siteCode: 'C26195',
-    projectType: '정기 유지보수',
-    executors: ['최승훈', '오보성'],
-    contractEnd: '2026/12/31',
-    infraTypes: ['SMS', 'NMS', 'APM'],
-    latestIssue: '에이전트 재설치 안됨 현상 완료',
-    inspection: '3월 3/17',
-    detail: [
-      '4/7 방문 작업 진행',
-      '대시보드 대상 추가 및 세션 설정',
-      '대시보드 설정 변경 완료',
-    ],
-  },
 ];
 
 const INFRA_TYPES = ['SMS', 'NMS', 'DBMS', 'APM'];
@@ -125,6 +55,124 @@ function ChevronIcon({ open }) {
       <path d="M9 18l6-6-6-6" />
     </svg>
   );
+}
+
+// 백엔드 ApiResponse 형식({ success, data, message })에서 data만 꺼냅니다.
+async function readApiResponse(response, fallbackMessage) {
+  const result = await response.json().catch(() => null);
+
+  if (!response.ok || result?.success === false) {
+    throw new Error(result?.message || fallbackMessage);
+  }
+
+  return result?.data ?? result;
+}
+
+// null/undefined가 화면에 그대로 찍히지 않게 문자열로 보정합니다.
+function text(value) {
+  return value == null ? '' : String(value).trim();
+}
+
+function number(value) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatDateTime(value) {
+  if (!value) return '-';
+  return String(value).replace('T', ' ').slice(0, 16);
+}
+
+// 수행인원 문자열을 화면 필터에서 쓰기 좋은 배열로 변환합니다.
+function splitPeople(value) {
+  return text(value)
+    .split(/[,/·\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function firstMeaningfulLine(value) {
+  return text(value)
+    .split('\n')
+    .map((line) => line.replace(/^[\s\-–·>▶:]+/, '').trim())
+    .find((line) => line.length > 0) || '';
+}
+
+function splitDetailLines(...values) {
+  return values
+    .flatMap((value) => text(value).split('\n'))
+    .map((line) => line.replace(/^[\s\-–·>▶:]+/, '').trim())
+    .filter(Boolean);
+}
+
+// 프로젝트 행에서 인프라 유형을 추정합니다. DB에는 원문을 보존하고, 화면 필터용으로만 계산합니다.
+function inferProjectInfraTypes(project) {
+  const target = [project.scope, project.apm, project.dashboard, project.oz, project.progressLogs, project.remainingIssues]
+    .join(' ')
+    .toLowerCase();
+
+  return INFRA_TYPES.filter((infra) => {
+    const key = infra.toLowerCase();
+    if (infra === 'APM') return target.includes('apm') || text(project.apm).toUpperCase() === 'O';
+    if (infra === 'DBMS') return target.includes('db') || target.includes('pg') || target.includes('postgres');
+    return target.includes(key);
+  });
+}
+
+// 유지보수 행에서 인프라 유형을 추정합니다. SMS/NMS는 사용/전체 값이 있으면 선택 대상으로 봅니다.
+function inferMaintenanceInfraTypes(item) {
+  const result = [];
+  if (text(item.smsStatus) && text(item.smsStatus).toUpperCase() !== 'X') result.push('SMS');
+  if (text(item.nmsStatus) && text(item.nmsStatus).toUpperCase() !== 'X') result.push('NMS');
+  if (text(item.pgVersion) && text(item.pgVersion).toUpperCase() !== 'X') result.push('DBMS');
+  if (text(item.apm).toUpperCase() === 'O') result.push('APM');
+  return result;
+}
+
+// DB 프로젝트 응답을 기존 화면 레이아웃이 쓰던 형태로 변환합니다.
+function normalizeProject(project) {
+  const executors = splitPeople(project.executors || project.salesRep);
+  const detail = splitDetailLines(project.progressLogs, project.remainingIssues);
+
+  return {
+    ...project,
+    id: `project-${project.id || project.rowNo}`,
+    no: text(project.no || project.rowNo),
+    customerName: text(project.clientName),
+    siteCode: text(project.siteCode),
+    projectType: text(project.projectScale || project.scope),
+    executors,
+    startDate: text(project.startDate),
+    infraTypes: inferProjectInfraTypes(project),
+    latestIssue: firstMeaningfulLine(project.progressLogs) || firstMeaningfulLine(project.remainingIssues) || '-',
+    detail: detail.length ? detail : ['상세 진행 내용이 없습니다.'],
+    updatedAt: formatDateTime(project.createdAt),
+  };
+}
+
+// DB 유지보수 응답을 기존 화면 레이아웃이 쓰던 형태로 변환합니다.
+function normalizeMaintenance(item) {
+  const executors = splitPeople([item.mainDev, item.subDev].filter(Boolean).join(','));
+  const inspection = Object.entries(item.inspectionDates || {})
+    .map(([month, date]) => `${month} ${date}`)
+    .join(', ');
+  const detail = splitDetailLines(item.progressIssues, item.remarks);
+
+  return {
+    ...item,
+    id: `maintenance-${item.id || item.rowNo}`,
+    no: text(item.no || item.rowNo),
+    customerName: text(item.maintenanceName),
+    siteCode: text(item.siteCode),
+    projectType: text(item.contractType || item.visitType || item.method),
+    executors,
+    contractEnd: text(item.contractEnd),
+    infraTypes: inferMaintenanceInfraTypes(item),
+    latestIssue: firstMeaningfulLine(item.progressIssues) || firstMeaningfulLine(item.remarks) || '-',
+    inspection: inspection || '-',
+    detail: detail.length ? detail : ['상세 진행 내용이 없습니다.'],
+    updatedAt: formatDateTime(item.createdAt),
+  };
 }
 
 // 공백 기준으로 입력한 검색어가 모두 포함될 때만 통과시키는 AND 검색입니다.
@@ -301,11 +349,11 @@ function ProjectTable({ rows }) {
                 >
                   <td className="px-4 py-4 font-mono text-slate-500">{row.no}</td>
                   <td className="px-4 py-4">
-                    <div className="font-bold text-slate-900">{row.customerName}({row.siteCode})</div>
-                    <div className="mt-0.5 text-xs text-slate-500">{row.projectType}</div>
+                    <div className="font-bold text-slate-900">{row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}</div>
+                    <div className="mt-0.5 text-xs text-slate-500">{row.projectType || '-'}</div>
                   </td>
-                  <td className="px-4 py-4 text-slate-700">{row.executors.join(', ')}</td>
-                  <td className="px-4 py-4 font-mono text-slate-600">{row.startDate}</td>
+                  <td className="px-4 py-4 text-slate-700">{row.executors.join(', ') || '-'}</td>
+                  <td className="px-4 py-4 font-mono text-slate-600">{row.startDate || '-'}</td>
                   <td className="px-4 py-4 text-slate-700">{row.latestIssue}</td>
                   <td className="px-4 py-4 text-slate-400">
                     <ChevronIcon open={open} />
@@ -318,8 +366,8 @@ function ProjectTable({ rows }) {
                       <div className="rounded-xl border border-slate-200 bg-white p-4">
                         <div className="mb-2 text-xs font-bold text-slate-500">상세 진행 내용</div>
                         <ul className="space-y-1 text-sm text-slate-700">
-                          {row.detail.map((item) => (
-                            <li key={item} className="flex gap-2">
+                          {row.detail.map((item, index) => (
+                            <li key={`${row.id}-${index}`} className="flex gap-2">
                               <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
                               <span>{item}</span>
                             </li>
@@ -375,11 +423,11 @@ function MaintenanceTable({ rows }) {
                 >
                   <td className="px-4 py-4 font-mono text-slate-500">{row.no}</td>
                   <td className="px-4 py-4">
-                    <div className="font-bold text-slate-900">{row.customerName}({row.siteCode})</div>
-                    <div className="mt-0.5 text-xs text-slate-500">{row.projectType}</div>
+                    <div className="font-bold text-slate-900">{row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}</div>
+                    <div className="mt-0.5 text-xs text-slate-500">{row.projectType || '-'}</div>
                   </td>
-                  <td className="px-4 py-4 text-slate-700">{row.executors.join(', ')}</td>
-                  <td className="px-4 py-4 font-mono text-slate-600">{row.contractEnd}</td>
+                  <td className="px-4 py-4 text-slate-700">{row.executors.join(', ') || '-'}</td>
+                  <td className="px-4 py-4 font-mono text-slate-600">{row.contractEnd || '-'}</td>
                   <td className="px-4 py-4 text-slate-700">{row.latestIssue}</td>
                   <td className="px-4 py-4 text-slate-700">{row.inspection}</td>
                   <td className="px-4 py-4 text-slate-400">
@@ -393,8 +441,8 @@ function MaintenanceTable({ rows }) {
                       <div className="rounded-xl border border-slate-200 bg-white p-4">
                         <div className="mb-2 text-xs font-bold text-slate-500">상세 진행 내용</div>
                         <ul className="space-y-1 text-sm text-slate-700">
-                          {row.detail.map((item) => (
-                            <li key={item} className="flex gap-2">
+                          {row.detail.map((item, index) => (
+                            <li key={`${row.id}-${index}`} className="flex gap-2">
                               <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
                               <span>{item}</span>
                             </li>
@@ -447,10 +495,10 @@ function SearchResultList({ projectRows, maintenanceRows, keyword }) {
         <div key={`${row.category}-${row.id}`} className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-2 flex items-center gap-2">
             <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-600">{row.category}</span>
-            <span className="text-sm font-bold text-slate-900">{row.customerName}({row.siteCode})</span>
+            <span className="text-sm font-bold text-slate-900">{row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}</span>
           </div>
           <p className="text-sm text-slate-700">{row.latestIssue}</p>
-          <p className="mt-2 text-xs text-slate-500">수행인원: {row.executors.join(', ')}</p>
+          <p className="mt-2 text-xs text-slate-500">수행인원: {row.executors.join(', ') || '-'}</p>
         </div>
       ))}
 
@@ -464,36 +512,113 @@ function SearchResultList({ projectRows, maintenanceRows, keyword }) {
 }
 
 export default function WorkIssueHistoryPage() {
+  const fileInputRef = useRef(null);
+
   const [activeInnerTab, setActiveInnerTab] = useState('projects');
+  const [uploads, setUploads] = useState([]);
+  const [selectedUploadId, setSelectedUploadId] = useState('');
+  const [summary, setSummary] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [maintenanceRows, setMaintenanceRows] = useState([]);
+
   const [keyword, setKeyword] = useState('');
   const [executor, setExecutor] = useState('');
   const [customer, setCustomer] = useState('');
   const [selectedInfraTypes, setSelectedInfraTypes] = useState([]);
 
-  const allRows = useMemo(() => [...PROJECT_ROWS, ...MAINTENANCE_ROWS], []);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  async function fetchWorkIssueData(uploadId = '') {
+    setLoading(true);
+    setError('');
+
+    try {
+      const uploadList = await fetch(`${WORK_ISSUE_API}/uploads`)
+        .then((response) => readApiResponse(response, '업로드 이력 조회에 실패했습니다.'));
+
+      const resolvedUploadId = uploadId || (uploadList?.[0]?.uploadId ? String(uploadList[0].uploadId) : '');
+      const query = resolvedUploadId ? `?uploadId=${resolvedUploadId}` : '';
+
+      const [summaryData, projectData, maintenanceData] = await Promise.all([
+        fetch(`${WORK_ISSUE_API}/summary${query}`).then((response) => readApiResponse(response, '요약 조회에 실패했습니다.')),
+        fetch(`${WORK_ISSUE_API}/projects${query}`).then((response) => readApiResponse(response, '프로젝트 조회에 실패했습니다.')),
+        fetch(`${WORK_ISSUE_API}/maintenance${query}`).then((response) => readApiResponse(response, '유지보수 조회에 실패했습니다.')),
+      ]);
+
+      setUploads(uploadList || []);
+      setSelectedUploadId(resolvedUploadId);
+      setSummary(summaryData);
+      setProjects((projectData || []).map(normalizeProject));
+      setMaintenanceRows((maintenanceData || []).map(normalizeMaintenance));
+    } catch (e) {
+      setError(e.message || '작업 및 이슈이력 조회 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchWorkIssueData('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleFileUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setUploading(true);
+    setMessage('');
+    setError('');
+
+    try {
+      const uploaded = await fetch(`${WORK_ISSUE_API}/upload`, {
+        method: 'POST',
+        body: formData,
+      }).then((response) => readApiResponse(response, '엑셀 업로드에 실패했습니다.'));
+
+      const uploadedId = uploaded?.uploadId ? String(uploaded.uploadId) : '';
+      setMessage(`엑셀 업로드 완료: 프로젝트 ${uploaded?.projectCount || 0}건, 유지보수 ${uploaded?.maintenanceCount || 0}건 저장`);
+      await fetchWorkIssueData(uploadedId);
+    } catch (e) {
+      setError(e.message || '엑셀 업로드 중 오류가 발생했습니다.');
+    } finally {
+      setUploading(false);
+      event.target.value = '';
+    }
+  }
+
+  const allRows = useMemo(() => [...projects, ...maintenanceRows], [projects, maintenanceRows]);
 
   const executorOptions = useMemo(() => {
     return [...new Set(allRows.flatMap((row) => row.executors))].sort();
   }, [allRows]);
 
   const customerOptions = useMemo(() => {
-    return [...new Set(PROJECT_ROWS.map((row) => row.customerName))].sort();
-  }, []);
+    return [...new Set(projects.map((row) => row.customerName).filter(Boolean))].sort();
+  }, [projects]);
 
   const filterState = { keyword, executor, customer, infraTypes: selectedInfraTypes };
 
   const filteredProjects = useMemo(() => {
-    return getFilteredRows(PROJECT_ROWS, filterState);
-  }, [keyword, executor, customer, selectedInfraTypes]);
+    return getFilteredRows(projects, filterState);
+  }, [projects, keyword, executor, customer, selectedInfraTypes]);
 
   const filteredMaintenance = useMemo(() => {
-    return getFilteredRows(MAINTENANCE_ROWS, {
+    return getFilteredRows(maintenanceRows, {
       keyword,
       executor,
       customer: '',
       infraTypes: selectedInfraTypes,
     });
-  }, [keyword, executor, selectedInfraTypes]);
+  }, [maintenanceRows, keyword, executor, selectedInfraTypes]);
+
+  const totalMd = number(summary?.projectMdTotal) + number(summary?.maintenanceMdTotal);
 
   const resetFilters = () => {
     setKeyword('');
@@ -535,15 +660,53 @@ export default function WorkIssueHistoryPage() {
               );
             })}
 
-            <button
-              type="button"
-              className="ml-auto inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-600 transition hover:bg-blue-100"
-              title="현재 단계에서는 화면 버튼만 배치했습니다. 실제 엑셀 업로드 기능은 추후 API/파싱 로직 연결 시 추가합니다."
-            >
-              <UploadIcon />
-              Excel Import
-            </button>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {uploads.length > 0 ? (
+                <select
+                  value={selectedUploadId}
+                  onChange={(event) => fetchWorkIssueData(event.target.value)}
+                  className="h-10 max-w-[280px] rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-600 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  title="업로드 이력 선택"
+                >
+                  {uploads.map((upload) => (
+                    <option key={upload.uploadId} value={String(upload.uploadId)}>
+                      {upload.reportWeek || formatDateTime(upload.createdAt)} · {upload.originalFileName}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-600 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <UploadIcon />
+                {uploading ? 'Uploading...' : 'Excel Import'}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
+            </div>
           </div>
+
+          {(message || error || loading || summary) ? (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+              {error ? <span className="font-semibold text-red-600">{error}</span> : null}
+              {!error && message ? <span className="font-semibold text-blue-600">{message}</span> : null}
+              {!error && !message && loading ? <span className="font-semibold text-slate-500">데이터를 조회 중입니다.</span> : null}
+              {!error && !message && !loading && summary ? (
+                <span>
+                  기준 파일: <b>{summary.originalFileName || '-'}</b> · 프로젝트 <b>{summary.projectCount || 0}</b>건 · 유지보수 <b>{summary.maintenanceCount || 0}</b>건 · 공수 <b>{totalMd.toFixed(1)}</b>M/D
+                </span>
+              ) : null}
+            </div>
+          ) : null}
 
           <WorkIssueFilterBar
             keyword={keyword}

@@ -9,7 +9,7 @@ export default function Sidebar({ activeMenu, setActiveMenu }) {
     { key: 'PATCH_HISTORY', label: '패치이력', description: '패치리스트 조회' },
     { key: 'KNOWLEDGE', label: '지식공유', description: '운영 지식' },
     // 기존 패치이력 빈 페이지는 작업 및 이슈이력 메뉴로 표시합니다.
-    { key: 'WORK_ISSUE_HISTORY', label: '작업 및 이슈이력', description: '준비 중' },
+    { key: 'WORK_ISSUE_HISTORY', label: '작업 및 이슈이력', description: '프로젝트 · 유지보수' },
   ];
 
   return (
