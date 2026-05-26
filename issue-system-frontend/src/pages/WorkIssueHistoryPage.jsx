@@ -467,8 +467,8 @@ const ProjectTableRow = React.memo(function ProjectTableRow({ row, open, onToggl
           <div className="font-bold text-slate-900">{row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}</div>
           <div className="mt-0.5 text-xs text-slate-500">{row.projectType || '-'}</div>
         </td>
-        <td className="px-4 py-4 text-slate-700">{row.executors.join(', ') || '-'}</td>
-        <td className="px-4 py-4 font-mono text-slate-600">{row.startDate || '-'}</td>
+        <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.executors.join(', ')}>{row.executors.join(', ') || '-'}</td>
+        <td className="px-4 py-4 whitespace-nowrap font-mono text-slate-600">{row.startDate || '-'}</td>
         <td className="px-4 py-4 text-slate-700">{row.latestIssue}</td>
         <td className="px-4 py-4 text-slate-400">
           <ChevronIcon open={open} />
@@ -494,15 +494,24 @@ function ProjectTable({ rows }) {
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200">
-      <table className="w-full border-collapse text-left text-sm">
+      <table className="w-full table-fixed border-collapse text-left text-sm">
+        {/* 수행인원 컬럼이 줄바꿈되지 않도록 고객사/진행사항 폭을 일부 줄이고 수행인원 폭을 확보합니다. */}
+        <colgroup>
+          <col className="w-[5%]" />
+          <col className="w-[43%]" />
+          <col className="w-[16%]" />
+          <col className="w-[11%]" />
+          <col className="w-[22%]" />
+          <col className="w-[3%]" />
+        </colgroup>
         <thead className="bg-slate-100 text-xs font-bold uppercase tracking-wide text-slate-500">
           <tr>
-            <th className="w-20 px-4 py-3">NO</th>
+            <th className="px-4 py-3 whitespace-nowrap">NO</th>
             <th className="px-4 py-3">고객사(사업명)</th>
-            <th className="px-4 py-3">수행인원</th>
-            <th className="px-4 py-3">시작일</th>
+            <th className="px-4 py-3 whitespace-nowrap">수행인원</th>
+            <th className="px-4 py-3 whitespace-nowrap">시작일</th>
             <th className="px-4 py-3">금주 진행사항 (최신)</th>
-            <th className="w-14 px-4 py-3" />
+            <th className="px-4 py-3" />
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200 bg-white">
@@ -550,8 +559,8 @@ const MaintenanceTableRow = React.memo(function MaintenanceTableRow({ row, open,
           <div className="font-bold text-slate-900">{row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}</div>
           <div className="mt-0.5 text-xs text-slate-500">{row.projectType || '-'}</div>
         </td>
-        <td className="px-4 py-4 text-slate-700">{row.executors.join(', ') || '-'}</td>
-        <td className="px-4 py-4 font-mono text-slate-600">{row.contractEnd || '-'}</td>
+        <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.executors.join(', ')}>{row.executors.join(', ') || '-'}</td>
+        <td className="px-4 py-4 whitespace-nowrap font-mono text-slate-600">{row.contractEnd || '-'}</td>
         <td className="px-4 py-4 text-slate-700">{row.latestIssue}</td>
         <td className="px-4 py-4 text-slate-700">{row.inspection}</td>
         <td className="px-4 py-4 text-slate-400">
@@ -578,16 +587,26 @@ function MaintenanceTable({ rows }) {
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200">
-      <table className="w-full border-collapse text-left text-sm">
+      <table className="w-full table-fixed border-collapse text-left text-sm">
+        {/* 계약종료 컬럼 날짜가 2026-12-31처럼 한 줄로 보이도록 폭을 고정합니다. */}
+        <colgroup>
+          <col className="w-[5%]" />
+          <col className="w-[31%]" />
+          <col className="w-[12%]" />
+          <col className="w-[12%]" />
+          <col className="w-[18%]" />
+          <col className="w-[19%]" />
+          <col className="w-[3%]" />
+        </colgroup>
         <thead className="bg-slate-100 text-xs font-bold uppercase tracking-wide text-slate-500">
           <tr>
-            <th className="w-20 px-4 py-3">NO</th>
+            <th className="px-4 py-3 whitespace-nowrap">NO</th>
             <th className="px-4 py-3">유지보수명</th>
-            <th className="px-4 py-3">수행인원</th>
-            <th className="px-4 py-3">계약종료</th>
+            <th className="px-4 py-3 whitespace-nowrap">수행인원</th>
+            <th className="px-4 py-3 whitespace-nowrap">계약종료</th>
             <th className="px-4 py-3">진행내역 / 이슈</th>
             <th className="px-4 py-3">정기점검 현황</th>
-            <th className="w-14 px-4 py-3" />
+            <th className="px-4 py-3" />
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200 bg-white">

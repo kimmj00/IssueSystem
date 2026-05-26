@@ -12,6 +12,7 @@ import KnowledgeDetailWindow from './pages/KnowledgeDetailWindow';
 // 기존 PATCH_HISTORY 빈 페이지는 작업 및 이슈이력 메뉴로 변경했습니다.
 const menuKeys = ['GLOBAL_SEARCH', 'PATCH_HISTORY', 'KNOWLEDGE', 'WORK_ISSUE_HISTORY'];
 
+const DEFAULT_MENU = 'GLOBAL_SEARCH'
 // 현재 URL 또는 localStorage에서 마지막 메뉴를 읽어온다.
 function getInitialMenu() {
   const params = new URLSearchParams(window.location.search);
@@ -21,14 +22,8 @@ function getInitialMenu() {
     return menuFromUrl;
   }
 
-  const menuFromStorage = localStorage.getItem('activeMenu');
-
-  if (menuKeys.includes(menuFromStorage)) {
-    return menuFromStorage;
-  }
-
   // 기본 진입 화면은 실제 데이터 기능이 있는 패치이력으로 둡니다.
-  return 'PATCH_HISTORY';
+  return DEFAULT_MENU;
 }
 
 // 앱 최상위 컴포넌트
