@@ -99,6 +99,8 @@ function buildSearchParams({
   patchHistorySize,
   knowledgePage,
   knowledgeSize,
+  workIssuePage,
+  workIssueSize,
   workIssueType,
 }) {
   const params = new URLSearchParams();
@@ -126,6 +128,8 @@ function buildSearchParams({
   params.append('patchHistorySize', String(patchHistorySize));
   params.append('knowledgePage', String(knowledgePage));
   params.append('knowledgeSize', String(knowledgeSize));
+  params.append('workIssuePage', String(workIssuePage));
+  params.append('workIssueSize', String(workIssueSize));
 
   return params;
 }
@@ -167,6 +171,8 @@ export default function GlobalSearchPage() {
   const [patchHistoryTotal, setPatchHistoryTotal] = useState(0);
   const [knowledgeTotal, setKnowledgeTotal] = useState(0);
   const [workIssueHistoryTotal, setWorkIssueHistoryTotal] = useState(0);
+  const [workProjectTotal, setWorkProjectTotal] = useState(0);
+  const [workMaintenanceTotal, setWorkMaintenanceTotal] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
 
   const [patchHistoryPage, setPatchHistoryPage] = useState(0);
@@ -181,6 +187,12 @@ export default function GlobalSearchPage() {
   const [knowledgeHasNext, setKnowledgeHasNext] = useState(false);
   const [knowledgeHasPrevious, setKnowledgeHasPrevious] = useState(false);
 
+  const [workIssuePage, setWorkIssuePage] = useState(0);
+  const [workIssueSize, setWorkIssueSize] = useState(DEFAULT_PAGE_SIZE);
+  const [workIssueTotalPages, setWorkIssueTotalPages] = useState(0);
+  const [workIssueHasNext, setWorkIssueHasNext] = useState(false);
+  const [workIssueHasPrevious, setWorkIssueHasPrevious] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState('');
@@ -192,6 +204,8 @@ export default function GlobalSearchPage() {
     targetPatchHistorySize = patchHistorySize,
     targetKnowledgePage = knowledgePage,
     targetKnowledgeSize = knowledgeSize,
+    targetWorkIssuePage = workIssuePage,
+    targetWorkIssueSize = workIssueSize,
     targetWorkIssueType = workIssueType,
   } = {}) => {
     if (abortRef.current) {
@@ -216,6 +230,8 @@ export default function GlobalSearchPage() {
         patchHistorySize: targetPatchHistorySize,
         knowledgePage: targetKnowledgePage,
         knowledgeSize: targetKnowledgeSize,
+        workIssuePage: targetWorkIssuePage,
+        workIssueSize: targetWorkIssueSize,
         workIssueType: targetWorkIssueType,
       });
 
@@ -236,6 +252,8 @@ export default function GlobalSearchPage() {
       setPatchHistoryTotal(data.patchHistoryTotal || 0);
       setKnowledgeTotal(data.knowledgeTotal || 0);
       setWorkIssueHistoryTotal(data.workIssueHistoryTotal || 0);
+      setWorkProjectTotal(data.workProjectTotal || 0);
+      setWorkMaintenanceTotal(data.workMaintenanceTotal || 0);
       setTotalCount(data.total || 0);
 
       setPatchHistoryPage(
@@ -253,6 +271,12 @@ export default function GlobalSearchPage() {
       setKnowledgeTotalPages(data.knowledgeTotalPages || 0);
       setKnowledgeHasNext(Boolean(data.knowledgeHasNext));
       setKnowledgeHasPrevious(Boolean(data.knowledgeHasPrevious));
+
+      setWorkIssuePage(Number.isInteger(data.workIssuePage) ? data.workIssuePage : targetWorkIssuePage);
+      setWorkIssueSize(data.workIssueSize || targetWorkIssueSize);
+      setWorkIssueTotalPages(data.workIssueTotalPages || 0);
+      setWorkIssueHasNext(Boolean(data.workIssueHasNext));
+      setWorkIssueHasPrevious(Boolean(data.workIssueHasPrevious));
     } catch (e) {
       if (e.name !== 'AbortError') {
         setError(e.message || '통합검색 중 오류가 발생했습니다.');
@@ -262,13 +286,18 @@ export default function GlobalSearchPage() {
         setPatchHistoryTotal(0);
         setKnowledgeTotal(0);
         setWorkIssueHistoryTotal(0);
+        setWorkProjectTotal(0);
+        setWorkMaintenanceTotal(0);
         setTotalCount(0);
         setPatchHistoryTotalPages(0);
         setKnowledgeTotalPages(0);
+        setWorkIssueTotalPages(0);
         setPatchHistoryHasNext(false);
         setPatchHistoryHasPrevious(false);
         setKnowledgeHasNext(false);
         setKnowledgeHasPrevious(false);
+        setWorkIssueHasNext(false);
+        setWorkIssueHasPrevious(false);
       }
     } finally {
       setLoading(false);
@@ -279,6 +308,7 @@ export default function GlobalSearchPage() {
     searchAll({
       targetPatchHistoryPage: 0,
       targetKnowledgePage: 0,
+      targetWorkIssuePage: 0,
     });
 
     return () => {
@@ -292,11 +322,14 @@ export default function GlobalSearchPage() {
   const handleSearch = () => {
     setPatchHistoryPage(0);
     setKnowledgePage(0);
+    setWorkIssuePage(0);
     searchAll({
       targetPatchHistoryPage: 0,
       targetPatchHistorySize: patchHistorySize,
       targetKnowledgePage: 0,
       targetKnowledgeSize: knowledgeSize,
+      targetWorkIssuePage: 0,
+      targetWorkIssueSize: workIssueSize,
       targetWorkIssueType: workIssueType,
     });
   };
@@ -318,6 +351,8 @@ export default function GlobalSearchPage() {
       targetPatchHistorySize: patchHistorySize,
       targetKnowledgePage: knowledgePage,
       targetKnowledgeSize: knowledgeSize,
+      targetWorkIssuePage: workIssuePage,
+      targetWorkIssueSize: workIssueSize,
       targetWorkIssueType: workIssueType,
     });
   };
@@ -332,6 +367,8 @@ export default function GlobalSearchPage() {
       targetPatchHistorySize: patchHistorySize,
       targetKnowledgePage: targetPage,
       targetKnowledgeSize: knowledgeSize,
+      targetWorkIssuePage: workIssuePage,
+      targetWorkIssueSize: workIssueSize,
       targetWorkIssueType: workIssueType,
     });
   };
@@ -343,6 +380,8 @@ export default function GlobalSearchPage() {
       targetPatchHistorySize: nextSize,
       targetKnowledgePage: knowledgePage,
       targetKnowledgeSize: knowledgeSize,
+      targetWorkIssuePage: workIssuePage,
+      targetWorkIssueSize: workIssueSize,
       targetWorkIssueType: workIssueType,
     });
   };
@@ -354,6 +393,38 @@ export default function GlobalSearchPage() {
       targetPatchHistorySize: patchHistorySize,
       targetKnowledgePage: 0,
       targetKnowledgeSize: nextSize,
+      targetWorkIssuePage: workIssuePage,
+      targetWorkIssueSize: workIssueSize,
+      targetWorkIssueType: workIssueType,
+    });
+  };
+
+  const moveWorkIssuePage = (targetPage) => {
+    if (targetPage < 0 || targetPage >= workIssueTotalPages || targetPage === workIssuePage) {
+      return;
+    }
+
+    searchAll({
+      targetPatchHistoryPage: patchHistoryPage,
+      targetPatchHistorySize: patchHistorySize,
+      targetKnowledgePage: knowledgePage,
+      targetKnowledgeSize: knowledgeSize,
+      targetWorkIssuePage: targetPage,
+      targetWorkIssueSize: workIssueSize,
+      targetWorkIssueType: workIssueType,
+    });
+  };
+
+  const changeWorkIssueSize = (nextSize) => {
+    setWorkIssueSize(nextSize);
+    setWorkIssuePage(0);
+    searchAll({
+      targetPatchHistoryPage: patchHistoryPage,
+      targetPatchHistorySize: patchHistorySize,
+      targetKnowledgePage: knowledgePage,
+      targetKnowledgeSize: knowledgeSize,
+      targetWorkIssuePage: 0,
+      targetWorkIssueSize: nextSize,
       targetWorkIssueType: workIssueType,
     });
   };
@@ -364,11 +435,14 @@ export default function GlobalSearchPage() {
     }
 
     setWorkIssueType(nextType);
+    setWorkIssuePage(0);
     searchAll({
       targetPatchHistoryPage: patchHistoryPage,
       targetPatchHistorySize: patchHistorySize,
       targetKnowledgePage: knowledgePage,
       targetKnowledgeSize: knowledgeSize,
+      targetWorkIssuePage: 0,
+      targetWorkIssueSize: workIssueSize,
       targetWorkIssueType: nextType,
     });
   };
@@ -384,6 +458,13 @@ export default function GlobalSearchPage() {
     const features = 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
     window.open(url, `knowledge-detail-${id}`, features);
   };
+
+  const currentWorkIssueTotal =
+    workIssueType === 'PROJECT'
+      ? workProjectTotal
+      : workIssueType === 'MAINTENANCE'
+      ? workMaintenanceTotal
+      : workIssueHistoryTotal;
 
   return (
     <>
@@ -735,13 +816,16 @@ export default function GlobalSearchPage() {
                 </table>
               </div>
 
-              <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-500">
-                <span className="truncate">
-                  전체 {workIssueHistoryTotal.toLocaleString()}건
-                  {workIssueType !== 'ALL' ? ` · ${workIssueType === 'PROJECT' ? '프로젝트' : '유지보수'} 탭` : ''}
-                </span>
-                <span className="shrink-0">표시 {workIssueHistoryRows.length}개</span>
-              </div>
+              <PaginationBar
+                page={workIssuePage}
+                size={workIssueSize}
+                totalPages={workIssueTotalPages}
+                totalElements={currentWorkIssueTotal}
+                hasPrevious={workIssueHasPrevious}
+                hasNext={workIssueHasNext}
+                onMovePage={moveWorkIssuePage}
+                onChangeSize={changeWorkIssueSize}
+              />
             </SectionCard>
           </div>
         )}

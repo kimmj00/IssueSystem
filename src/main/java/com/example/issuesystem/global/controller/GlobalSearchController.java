@@ -55,12 +55,19 @@ public class GlobalSearchController {
             @RequestParam(required = false) Integer knowledgePage,
             @RequestParam(required = false) Integer knowledgeSize,
 
+            // 작업/이슈이력 결과 페이지 파라미터
+            @RequestParam(required = false) Integer workIssuePage,
+            @RequestParam(required = false) Integer workIssueSize,
+
             // 작업/이슈이력 유형 필터 (PROJECT | MAINTENANCE)
             @RequestParam(required = false) String workIssueType
     ) {
         int fallbackSize = size == null ? 10 : size;
+        int workIssueFallbackSize = size == null ? 7 : size;
         int resolvedPatchHistoryPage = patchHistoryPage != null ? patchHistoryPage : (issuePage == null ? 0 : issuePage);
         int resolvedPatchHistorySize = patchHistorySize != null ? patchHistorySize : (issueSize == null ? fallbackSize : issueSize);
+        int resolvedWorkIssuePage = workIssuePage == null ? 0 : workIssuePage;
+        int resolvedWorkIssueSize = workIssueSize == null ? workIssueFallbackSize : workIssueSize;
 
         return ApiResponse.ok(
                 globalSearchService.search(
@@ -73,6 +80,8 @@ public class GlobalSearchController {
                         resolvedPatchHistorySize,
                         knowledgePage == null ? 0 : knowledgePage,
                         knowledgeSize == null ? fallbackSize : knowledgeSize,
+                        resolvedWorkIssuePage,
+                        resolvedWorkIssueSize,
                         workIssueType
                 )
         );

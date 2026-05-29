@@ -36,7 +36,7 @@ public interface WorkMaintenanceHistoryRepository extends JpaRepository<WorkMain
                       coalesce(m.region, '')
                   )) like lower(concat('%', :keyword, '%'))
               )
-            order by m.createdAt desc, m.id desc
+            order by m.createdAt asc, m.id asc
             """)
     Page<WorkMaintenanceHistory> searchForGlobal(
             @Param("keyword") String keyword,

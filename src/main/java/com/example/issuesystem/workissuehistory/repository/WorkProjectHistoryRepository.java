@@ -36,7 +36,7 @@ public interface WorkProjectHistoryRepository extends JpaRepository<WorkProjectH
                       coalesce(p.projectScale, '')
                   )) like lower(concat('%', :keyword, '%'))
               )
-            order by p.createdAt desc, p.id desc
+            order by p.createdAt asc, p.id asc
             """)
     Page<WorkProjectHistory> searchForGlobal(
             @Param("keyword") String keyword,
