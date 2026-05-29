@@ -31,6 +31,16 @@ public class GlobalSearchResponse {
     /** 현재 페이지에 표시할 지식공유 결과 목록 */
     private List<GlobalSearchItemResponse> knowledgeShares;
 
+    /** 작업/이슈이력 전체 검색 결과 수 */
+    private long workIssueHistoryTotal;
+
+    /** 현재 페이지에 표시할 작업/이슈이력 결과 목록 */
+    private List<GlobalSearchItemResponse> workIssueHistories;
+
+    /** 작업/이슈이력 유형별 집계 */
+    private long workProjectTotal;
+    private long workMaintenanceTotal;
+
     /** 패치이력 결과 현재 페이지 번호. 0부터 시작한다. */
     private int patchHistoryPage;
 

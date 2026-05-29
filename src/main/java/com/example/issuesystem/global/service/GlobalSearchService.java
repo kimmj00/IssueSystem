@@ -8,12 +8,20 @@ import com.example.issuesystem.patchhistory.dto.PatchHistoryResponse;
 import com.example.issuesystem.patchhistory.service.PatchHistoryService;
 import com.example.issuesystem.knowledge.dto.KnowledgeShareResponse;
 import com.example.issuesystem.knowledge.service.KnowledgeShareService;
+import com.example.issuesystem.workissuehistory.domain.WorkMaintenanceHistory;
+import com.example.issuesystem.workissuehistory.domain.WorkProjectHistory;
+import com.example.issuesystem.workissuehistory.repository.WorkMaintenanceHistoryRepository;
+import com.example.issuesystem.workissuehistory.repository.WorkProjectHistoryRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -30,6 +38,8 @@ public class GlobalSearchService {
 
     private final PatchHistoryService patchHistoryService;
     private final KnowledgeShareService knowledgeShareService;
+    private final WorkProjectHistoryRepository workProjectHistoryRepository;
+    private final WorkMaintenanceHistoryRepository workMaintenanceHistoryRepository;
 
     @Transactional
     public GlobalSearchResponse search(
@@ -41,7 +51,8 @@ public class GlobalSearchService {
             int patchHistoryPage,
             int patchHistorySize,
             int knowledgePage,
-            int knowledgeSize
+            int knowledgeSize,
+            String workIssueType
     ) {
         int safePatchHistoryPage = Math.max(patchHistoryPage, 0);
         int safeKnowledgePage = Math.max(knowledgePage, 0);
@@ -81,15 +92,69 @@ public class GlobalSearchService {
                 .map(item -> toKnowledgeItem(item, keyword, infraType, customerName))
                 .toList();
 
+        int workIssueFetchSize = 50;
+        LocalDateTime startDateTime = startDate != null
+                ? startDate.atStartOfDay()
+                : LocalDateTime.of(1970, 1, 1, 0, 0);
+        LocalDateTime endDateTime = endDate != null
+                ? endDate.plusDays(1).atStartOfDay()
+                : LocalDateTime.of(9999, 12, 31, 0, 0);
+
+        Page<WorkProjectHistory> projectPage = workProjectHistoryRepository.searchForGlobal(
+                keyword,
+                customerName,
+                startDateTime,
+                endDateTime,
+                PageRequest.of(0, workIssueFetchSize)
+        );
+        Page<WorkMaintenanceHistory> maintenancePage = workMaintenanceHistoryRepository.searchForGlobal(
+                keyword,
+                customerName,
+                startDateTime,
+                endDateTime,
+                PageRequest.of(0, workIssueFetchSize)
+        );
+
+        List<GlobalSearchItemResponse> projectRows = projectPage.getContent().stream()
+                .map(item -> toWorkProjectItem(item, keyword, customerName))
+                .toList();
+        List<GlobalSearchItemResponse> maintenanceRows = maintenancePage.getContent().stream()
+                .map(item -> toWorkMaintenanceItem(item, keyword, customerName))
+                .toList();
+
+        String resolvedWorkIssueType = normalize(workIssueType).toUpperCase();
+        List<GlobalSearchItemResponse> workIssueRows = new java.util.ArrayList<>();
+        if ("PROJECT".equals(resolvedWorkIssueType)) {
+            workIssueRows.addAll(projectRows);
+        } else if ("MAINTENANCE".equals(resolvedWorkIssueType)) {
+            workIssueRows.addAll(maintenanceRows);
+        } else {
+            workIssueRows.addAll(projectRows);
+            workIssueRows.addAll(maintenanceRows);
+        }
+
+        List<GlobalSearchItemResponse> sortedWorkIssueRows = workIssueRows.stream()
+                .sorted(Comparator.comparingInt(GlobalSearchItemResponse::getMatchScore).reversed()
+                        .thenComparing(GlobalSearchItemResponse::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .limit(workIssueFetchSize)
+                .toList();
+
         long patchHistoryTotal = patchHistoryPageResult.getTotalElements();
         long knowledgeTotal = knowledgePageResult.getTotalElements();
+        long workProjectTotal = projectPage.getTotalElements();
+        long workMaintenanceTotal = maintenancePage.getTotalElements();
+        long workIssueHistoryTotal = workProjectTotal + workMaintenanceTotal;
 
         return GlobalSearchResponse.builder()
                 .patchHistoryTotal(patchHistoryTotal)
                 .knowledgeTotal(knowledgeTotal)
-                .total(patchHistoryTotal + knowledgeTotal)
+                .workIssueHistoryTotal(workIssueHistoryTotal)
+                .workProjectTotal(workProjectTotal)
+                .workMaintenanceTotal(workMaintenanceTotal)
+                .total(patchHistoryTotal + knowledgeTotal + workIssueHistoryTotal)
                 .patchHistories(patchHistories)
                 .knowledgeShares(knowledgeShares)
+                .workIssueHistories(sortedWorkIssueRows)
                 .patchHistoryPage(patchHistoryPageResult.getPage())
                 .patchHistorySize(patchHistoryPageResult.getSize())
                 .patchHistoryTotalPages(patchHistoryPageResult.getTotalPages())
@@ -100,6 +165,54 @@ public class GlobalSearchService {
                 .knowledgeTotalPages(knowledgePageResult.getTotalPages())
                 .knowledgeHasNext(knowledgePageResult.isHasNext())
                 .knowledgeHasPrevious(knowledgePageResult.isHasPrevious())
+                .build();
+    }
+
+    private GlobalSearchItemResponse toWorkProjectItem(
+            WorkProjectHistory project,
+            String keyword,
+            String customerName
+    ) {
+        int score = calculateWorkProjectScore(project, keyword, customerName);
+
+        return GlobalSearchItemResponse.builder()
+                .sourceType("WORK_ISSUE_HISTORY")
+                .sourceLabel("작업/이슈이력")
+                .workHistoryType("PROJECT")
+                .id(project.getId())
+                .title(project.getClientName())
+                .summary(project.getScope())
+                .detail(project.getProgressLogs())
+                .infraTypes(List.of())
+                .customerName(project.getClientName())
+                .authorName(project.getExecutors())
+                .createdAt(project.getCreatedAt())
+                .matchScore(score)
+                .matchLevel(toMatchLevel(score))
+                .build();
+    }
+
+    private GlobalSearchItemResponse toWorkMaintenanceItem(
+            WorkMaintenanceHistory maintenance,
+            String keyword,
+            String customerName
+    ) {
+        int score = calculateWorkMaintenanceScore(maintenance, keyword, customerName);
+
+        return GlobalSearchItemResponse.builder()
+                .sourceType("WORK_ISSUE_HISTORY")
+                .sourceLabel("작업/이슈이력")
+                .workHistoryType("MAINTENANCE")
+                .id(maintenance.getId())
+                .title(maintenance.getMaintenanceName())
+                .summary(maintenance.getProgressIssues())
+                .detail(maintenance.getRemarks())
+                .infraTypes(List.of())
+                .customerName(maintenance.getMaintenanceName())
+                .authorName(maintenance.getMainDev())
+                .createdAt(maintenance.getCreatedAt())
+                .matchScore(score)
+                .matchLevel(toMatchLevel(score))
                 .build();
     }
 
@@ -243,6 +356,69 @@ public class GlobalSearchService {
         }
 
         if (!normalize(customerName).isBlank() && contains(item.getCustomerName(), normalize(customerName))) {
+            score += 20;
+        }
+
+        return score;
+    }
+
+    private int calculateWorkProjectScore(
+            WorkProjectHistory project,
+            String keyword,
+            String customerName
+    ) {
+        String normalizedKeyword = normalize(keyword);
+        List<String> tokens = tokenize(normalizedKeyword);
+        int score = 0;
+
+        if (!normalizedKeyword.isBlank()) {
+            if (contains(project.getClientName(), normalizedKeyword)) score += 80;
+            if (contains(project.getScope(), normalizedKeyword)) score += 60;
+            if (contains(project.getProgressLogs(), normalizedKeyword)) score += 50;
+            if (contains(project.getRemainingIssues(), normalizedKeyword)) score += 40;
+
+            for (String token : tokens) {
+                if (contains(project.getClientName(), token)) score += 24;
+                if (contains(project.getScope(), token)) score += 16;
+                if (contains(project.getProgressLogs(), token)) score += 12;
+                if (contains(project.getRemainingIssues(), token)) score += 10;
+                if (contains(project.getExecutors(), token)) score += 8;
+                if (contains(project.getSalesRep(), token)) score += 6;
+            }
+        }
+
+        if (!normalize(customerName).isBlank() && contains(project.getClientName(), normalize(customerName))) {
+            score += 20;
+        }
+
+        return score;
+    }
+
+    private int calculateWorkMaintenanceScore(
+            WorkMaintenanceHistory maintenance,
+            String keyword,
+            String customerName
+    ) {
+        String normalizedKeyword = normalize(keyword);
+        List<String> tokens = tokenize(normalizedKeyword);
+        int score = 0;
+
+        if (!normalizedKeyword.isBlank()) {
+            if (contains(maintenance.getMaintenanceName(), normalizedKeyword)) score += 80;
+            if (contains(maintenance.getProgressIssues(), normalizedKeyword)) score += 60;
+            if (contains(maintenance.getRemarks(), normalizedKeyword)) score += 40;
+
+            for (String token : tokens) {
+                if (contains(maintenance.getMaintenanceName(), token)) score += 24;
+                if (contains(maintenance.getProgressIssues(), token)) score += 16;
+                if (contains(maintenance.getRemarks(), token)) score += 12;
+                if (contains(maintenance.getMainDev(), token)) score += 8;
+                if (contains(maintenance.getSubDev(), token)) score += 8;
+                if (contains(maintenance.getSalesRep(), token)) score += 6;
+            }
+        }
+
+        if (!normalize(customerName).isBlank() && contains(maintenance.getMaintenanceName(), normalize(customerName))) {
             score += 20;
         }
 
