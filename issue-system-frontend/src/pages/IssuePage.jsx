@@ -432,8 +432,21 @@ export default function IssuePage() {
               <button
                 type="button"
                 onClick={() => setIsUploadModalOpen(true)}
-                className={`${toolbarButtonClass} w-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:w-[120px]`}
+                className={`${toolbarButtonClass} inline-flex w-full items-center justify-center gap-2 whitespace-nowrap border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:w-[132px]`}
               >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  className="h-5 w-5 text-emerald-600"
+                  aria-hidden="true"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 3v5h5" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m9 11 6 6m0-6-6 6" />
+                </svg>
                 엑셀 업로드
               </button>
 
