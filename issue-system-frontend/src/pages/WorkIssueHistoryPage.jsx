@@ -243,10 +243,10 @@ function WorkIssueFilterBar({
   };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <div className="flex flex-wrap items-end gap-4">
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[220px] flex-1">
-          <label className="mb-1.5 block text-xs font-semibold text-slate-500">검색어 (AND 조건)</label>
+          <label className="mb-1 block text-xs font-medium text-slate-700">검색어 (AND 조건)</label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
               <SearchIcon />
@@ -255,17 +255,17 @@ function WorkIssueFilterBar({
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
               placeholder="검색어 입력..."
-              className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm outline-none ring-0 transition focus:border-slate-500"
             />
           </div>
         </div>
 
         <div className="w-[180px]">
-          <label className="mb-1.5 block text-xs font-semibold text-slate-500">수행인원</label>
+          <label className="mb-1 block text-xs font-medium text-slate-700">수행인원</label>
           <select
             value={executor}
             onChange={(event) => setExecutor(event.target.value)}
-            className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none ring-0 transition focus:border-slate-500"
           >
             <option value="">전체 수행인원</option>
             {executorOptions.map((name) => (
@@ -276,11 +276,11 @@ function WorkIssueFilterBar({
 
         {showCustomerFilter ? (
           <div className="w-[180px]">
-            <label className="mb-1.5 block text-xs font-semibold text-slate-500">고객사</label>
+            <label className="mb-1 block text-xs font-medium text-slate-700">고객사</label>
             <select
               value={customer}
               onChange={(event) => setCustomer(event.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none ring-0 transition focus:border-slate-500"
             >
               <option value="">전체 고객사</option>
               {customerOptions.map((name) => (
@@ -291,7 +291,7 @@ function WorkIssueFilterBar({
         ) : null}
 
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-500">인프라 필터</label>
+          <label className="mb-1 block text-xs font-medium text-slate-700">인프라 필터</label>
           <div className="flex flex-wrap gap-2">
             {INFRA_TYPES.map((infra) => {
               const selected = selectedInfraTypes.includes(infra);
@@ -301,10 +301,10 @@ function WorkIssueFilterBar({
                   key={infra}
                   type="button"
                   onClick={() => toggleInfra(infra)}
-                  className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${
+                  className={`h-9 rounded-lg border px-3 text-sm font-semibold transition ${
                     selected
-                      ? 'border-blue-600 bg-blue-600 text-white'
-                      : 'border-slate-300 bg-white text-slate-500 hover:border-blue-400 hover:text-blue-600'
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
                   }`}
                 >
                   {infra}
@@ -317,10 +317,10 @@ function WorkIssueFilterBar({
         <button
           type="button"
           onClick={onReset}
-          className="ml-auto inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
+          className="ml-auto inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
         >
           <FilterIcon />
-          Reset
+          초기화
         </button>
       </div>
     </div>
@@ -838,7 +838,7 @@ export default function WorkIssueHistoryPage() {
                 <select
                   value={selectedUploadId}
                   onChange={(event) => fetchWorkIssueData(event.target.value)}
-                  className="h-10 max-w-[280px] rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-600 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  className="h-10 max-w-[300px] rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-600 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   title="업로드 이력 선택"
                 >
                   {uploads.map((upload) => (
@@ -853,10 +853,22 @@ export default function WorkIssueHistoryPage() {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-600 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-9 w-[132px] items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <UploadIcon />
-                {uploading ? 'Uploading...' : 'Excel Import'}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  className="h-5 w-5 text-emerald-600"
+                  aria-hidden="true"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 3v5h5" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m9 11 6 6m0-6-6 6" />
+                </svg>
+                {uploading ? '업로드 중...' : '엑셀 업로드'}
               </button>
               <input
                 ref={fileInputRef}
