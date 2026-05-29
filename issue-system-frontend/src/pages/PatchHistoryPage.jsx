@@ -451,13 +451,12 @@ export default function PatchHistoryPage() {
         <SectionCard title="패치이력 목록" description="목록 행을 클릭하면 상세보기가 새 창으로 열립니다.">
           <div className="overflow-hidden rounded-2xl border border-slate-200">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1300px] divide-y divide-slate-200 text-sm">
+              <table className="w-full min-w-[1180px] divide-y divide-slate-200 text-sm">
                 <thead className="bg-slate-100">
                   <tr>
                     {/* ID 컬럼 제거 */}
-                    <th className="w-[14%] px-4 py-3 text-left font-semibold">제목</th>
-                    <th className="w-[18%] px-4 py-3 text-left font-semibold">증상 요약</th>
-                    <th className="w-[26%] px-4 py-3 text-left font-semibold">증상 상세</th>
+                    <th className="w-[18%] px-4 py-3 text-left font-semibold">제목</th>
+                    <th className="w-[34%] px-4 py-3 text-left font-semibold">증상 상세</th>
                     <th className="w-[8%] px-4 py-3 text-left font-semibold">인프라</th>
                     <th className="w-[9%] px-4 py-3 text-left font-semibold">고객사</th>
                     <th className="w-[8%] px-4 py-3 text-left font-semibold">상태</th>
@@ -469,15 +468,15 @@ export default function PatchHistoryPage() {
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {loadingList ? (
                     <tr>
-                      {/* 컬럼이 8개이므로 colSpan도 8 */}
-                      <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                      {/* 컬럼이 7개이므로 colSpan도 7 */}
+                      <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                         불러오는 중...
                       </td>
                     </tr>
                   ) : patchHistories.length === 0 ? (
                     <tr>
-                      {/* 컬럼이 8개이므로 colSpan도 8 */}
-                      <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                      {/* 컬럼이 7개이므로 colSpan도 7 */}
+                      <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                         등록된 패치이력이 없습니다.
                       </td>
                     </tr>
@@ -491,12 +490,6 @@ export default function PatchHistoryPage() {
                         <td className="px-4 py-3">
                           <div className="max-w-[220px] truncate font-medium text-slate-900">
                             {patchHistory.title || '-'}
-                          </div>
-                        </td>
-
-                        <td className="px-4 py-3 text-slate-700">
-                          <div className="max-w-[280px] truncate">
-                            {patchHistory.symptomSummary || '-'}
                           </div>
                         </td>
 
