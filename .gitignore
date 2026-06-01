@@ -43,8 +43,8 @@ out/
 *.log
 
 # Node
-#issue-system-frontend/node_modules/
-#issue-system-frontend/build/
+issue-system-frontend/node_modules/
+issue-system-frontend/build/
 
 # OS
 .DS_Store
