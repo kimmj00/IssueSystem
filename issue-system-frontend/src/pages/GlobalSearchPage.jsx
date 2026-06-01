@@ -608,7 +608,7 @@ export default function GlobalSearchPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
-                    {loading ? (
+                    {loading && patchHistoryRows.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
                           검색 중...
@@ -672,7 +672,7 @@ export default function GlobalSearchPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
-                    {loading ? (
+                    {loading && knowledgeRows.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
                           검색 중...
@@ -779,7 +779,7 @@ export default function GlobalSearchPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
-                    {loading ? (
+                    {loading && workIssueHistoryRows.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
                           검색 중...
