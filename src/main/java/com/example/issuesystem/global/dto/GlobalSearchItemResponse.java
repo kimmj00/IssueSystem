@@ -25,6 +25,7 @@ public class GlobalSearchItemResponse {
     private List<String> infraTypes;
     private String customerName;
     private String authorName;
+    private String workHistoryType;
     private LocalDateTime createdAt;
     private int matchScore;
     private String matchLevel;

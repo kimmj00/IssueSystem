@@ -9,7 +9,6 @@ const searchInputClass =
 const toolbarButtonClass =
   'h-9 shrink-0 rounded-lg px-3 text-sm font-semibold shadow-sm transition';
 
-// 통합검색 목록은 더 이상 최대 50건 고정 표시가 아니라 페이지 단위로 조회한다.
 const DEFAULT_PAGE_SIZE = 7;
 const PAGE_SIZE_OPTIONS = [7, 10, 20, 50];
 
@@ -17,14 +16,12 @@ function toDateInputValue(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
-
   return `${year}-${month}-${day}`;
 }
 
 function getDefaultStartDate() {
   const date = new Date();
   date.setMonth(date.getMonth() - 1);
-
   return toDateInputValue(date);
 }
 
@@ -36,8 +33,6 @@ function formatDateTime(value) {
   if (!value) {
     return '-';
   }
-
-  // 통합검색 목록에서는 시간까지 보여주면 컬럼이 좁아지므로 년-월-일만 표시한다.
   return String(value).replace('T', ' ').slice(0, 10);
 }
 
@@ -45,11 +40,9 @@ function normalizeList(value) {
   if (!value) {
     return [];
   }
-
   if (Array.isArray(value)) {
     return value;
   }
-
   return [value];
 }
 
@@ -66,8 +59,6 @@ function rowClass(level) {
   }
 }
 
-// 페이지 버튼 목록을 만든다.
-// 전체 페이지가 많을 때는 처음/마지막/현재 주변만 보여주고 중간은 ... 처리한다.
 function buildPageItems(currentPage, totalPages) {
   if (totalPages <= 0) {
     return [];
@@ -78,7 +69,6 @@ function buildPageItems(currentPage, totalPages) {
   }
 
   const pages = new Set([0, totalPages - 1]);
-
   for (let page = currentPage - 2; page <= currentPage + 2; page += 1) {
     if (page >= 0 && page < totalPages) {
       pages.add(page);
@@ -90,11 +80,9 @@ function buildPageItems(currentPage, totalPages) {
 
   sortedPages.forEach((page, index) => {
     const previousPage = sortedPages[index - 1];
-
     if (index > 0 && page - previousPage > 1) {
       items.push(`ellipsis-${page}`);
     }
-
     items.push(page);
   });
 
@@ -111,34 +99,37 @@ function buildSearchParams({
   patchHistorySize,
   knowledgePage,
   knowledgeSize,
+  workIssuePage,
+  workIssueSize,
+  workIssueType,
 }) {
   const params = new URLSearchParams();
 
   if (keyword.trim()) {
     params.append('keyword', keyword.trim());
   }
-
   if (customerName.trim()) {
     params.append('customerName', customerName.trim());
   }
-
   if (infraType !== 'ALL') {
     params.append('infraType', infraType);
   }
-
   if (startDate) {
     params.append('startDate', startDate);
   }
-
   if (endDate) {
     params.append('endDate', endDate);
   }
+  if (workIssueType !== 'ALL') {
+    params.append('workIssueType', workIssueType);
+  }
 
-  // 패치이력과 지식공유를 각각 독립적으로 페이징한다.
   params.append('patchHistoryPage', String(patchHistoryPage));
   params.append('patchHistorySize', String(patchHistorySize));
   params.append('knowledgePage', String(knowledgePage));
   params.append('knowledgeSize', String(knowledgeSize));
+  params.append('workIssuePage', String(workIssuePage));
+  params.append('workIssueSize', String(workIssueSize));
 
   return params;
 }
@@ -147,19 +138,14 @@ function SummaryCard({ label, count, description }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
       <div className="text-sm text-slate-500">{label}</div>
-      <div className="mt-1 text-2xl font-bold text-slate-900">
-        {(count || 0).toLocaleString()}건
-      </div>
+      <div className="mt-1 text-2xl font-bold text-slate-900">{(count || 0).toLocaleString()}건</div>
       <div className="mt-1 text-xs text-slate-500">{description}</div>
     </div>
   );
 }
 
-// 한 줄 말줄임 표시용 셀이다.
-// title 속성을 넣어 마우스오버 시 전체 내용을 브라우저 기본 툴팁으로 확인할 수 있게 한다.
 function TruncateCell({ value, className = '', strong = false }) {
   const text = value || '-';
-
   return (
     <div
       title={String(text)}
@@ -170,24 +156,24 @@ function TruncateCell({ value, className = '', strong = false }) {
   );
 }
 
-
 export default function GlobalSearchPage() {
   const [keyword, setKeyword] = useState('');
   const [infraType, setInfraType] = useState('ALL');
   const [customerName, setCustomerName] = useState('');
+  const [workIssueType, setWorkIssueType] = useState('ALL');
   const [startDate, setStartDate] = useState(getDefaultStartDate);
   const [endDate, setEndDate] = useState(getDefaultEndDate);
 
   const [patchHistoryRows, setPatchHistoryRows] = useState([]);
   const [knowledgeRows, setKnowledgeRows] = useState([]);
+  const [workIssueHistoryRows, setWorkIssueHistoryRows] = useState([]);
+
   const [patchHistoryTotal, setPatchHistoryTotal] = useState(0);
   const [knowledgeTotal, setKnowledgeTotal] = useState(0);
+  const [workIssueHistoryTotal, setWorkIssueHistoryTotal] = useState(0);
+  const [workProjectTotal, setWorkProjectTotal] = useState(0);
+  const [workMaintenanceTotal, setWorkMaintenanceTotal] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
-
-  // 작업 및 이슈이력은 아직 백엔드/API가 없으므로 통합검색 화면에는 0건 placeholder로만 표시한다.
-  // 추후 작업 및 이슈이력 API가 생기면 이 값을 실제 응답값으로 교체하면 된다.
-  const workIssueHistoryTotal = 0;
-  const workIssueHistoryRows = [];
 
   const [patchHistoryPage, setPatchHistoryPage] = useState(0);
   const [patchHistorySize, setPatchHistorySize] = useState(DEFAULT_PAGE_SIZE);
@@ -201,6 +187,12 @@ export default function GlobalSearchPage() {
   const [knowledgeHasNext, setKnowledgeHasNext] = useState(false);
   const [knowledgeHasPrevious, setKnowledgeHasPrevious] = useState(false);
 
+  const [workIssuePage, setWorkIssuePage] = useState(0);
+  const [workIssueSize, setWorkIssueSize] = useState(DEFAULT_PAGE_SIZE);
+  const [workIssueTotalPages, setWorkIssueTotalPages] = useState(0);
+  const [workIssueHasNext, setWorkIssueHasNext] = useState(false);
+  const [workIssueHasPrevious, setWorkIssueHasPrevious] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState('');
@@ -212,6 +204,9 @@ export default function GlobalSearchPage() {
     targetPatchHistorySize = patchHistorySize,
     targetKnowledgePage = knowledgePage,
     targetKnowledgeSize = knowledgeSize,
+    targetWorkIssuePage = workIssuePage,
+    targetWorkIssueSize = workIssueSize,
+    targetWorkIssueType = workIssueType,
   } = {}) => {
     if (abortRef.current) {
       abortRef.current.abort();
@@ -235,12 +230,14 @@ export default function GlobalSearchPage() {
         patchHistorySize: targetPatchHistorySize,
         knowledgePage: targetKnowledgePage,
         knowledgeSize: targetKnowledgeSize,
+        workIssuePage: targetWorkIssuePage,
+        workIssueSize: targetWorkIssueSize,
+        workIssueType: targetWorkIssueType,
       });
 
       const res = await fetch(`${API_BASE}/api/global-search?${params.toString()}`, {
         signal: controller.signal,
       });
-
       const body = await res.json();
 
       if (!res.ok || !body.success) {
@@ -248,46 +245,70 @@ export default function GlobalSearchPage() {
       }
 
       const data = body.data || {};
-
       setPatchHistoryRows(data.patchHistories || []);
       setKnowledgeRows(data.knowledgeShares || []);
+      setWorkIssueHistoryRows(data.workIssueHistories || []);
+
       setPatchHistoryTotal(data.patchHistoryTotal || 0);
       setKnowledgeTotal(data.knowledgeTotal || 0);
+      setWorkIssueHistoryTotal(data.workIssueHistoryTotal || 0);
+      setWorkProjectTotal(data.workProjectTotal || 0);
+      setWorkMaintenanceTotal(data.workMaintenanceTotal || 0);
       setTotalCount(data.total || 0);
 
-      setPatchHistoryPage(data.patchHistoryPage || 0);
+      setPatchHistoryPage(
+        Number.isInteger(data.patchHistoryPage) ? data.patchHistoryPage : targetPatchHistoryPage
+      );
       setPatchHistorySize(data.patchHistorySize || targetPatchHistorySize);
       setPatchHistoryTotalPages(data.patchHistoryTotalPages || 0);
       setPatchHistoryHasNext(Boolean(data.patchHistoryHasNext));
       setPatchHistoryHasPrevious(Boolean(data.patchHistoryHasPrevious));
 
-      setKnowledgePage(data.knowledgePage || 0);
+      setKnowledgePage(
+        Number.isInteger(data.knowledgePage) ? data.knowledgePage : targetKnowledgePage
+      );
       setKnowledgeSize(data.knowledgeSize || targetKnowledgeSize);
       setKnowledgeTotalPages(data.knowledgeTotalPages || 0);
       setKnowledgeHasNext(Boolean(data.knowledgeHasNext));
       setKnowledgeHasPrevious(Boolean(data.knowledgeHasPrevious));
+
+      setWorkIssuePage(Number.isInteger(data.workIssuePage) ? data.workIssuePage : targetWorkIssuePage);
+      setWorkIssueSize(data.workIssueSize || targetWorkIssueSize);
+      setWorkIssueTotalPages(data.workIssueTotalPages || 0);
+      setWorkIssueHasNext(Boolean(data.workIssueHasNext));
+      setWorkIssueHasPrevious(Boolean(data.workIssueHasPrevious));
     } catch (e) {
       if (e.name !== 'AbortError') {
         setError(e.message || '통합검색 중 오류가 발생했습니다.');
         setPatchHistoryRows([]);
         setKnowledgeRows([]);
+        setWorkIssueHistoryRows([]);
         setPatchHistoryTotal(0);
         setKnowledgeTotal(0);
+        setWorkIssueHistoryTotal(0);
+        setWorkProjectTotal(0);
+        setWorkMaintenanceTotal(0);
         setTotalCount(0);
         setPatchHistoryTotalPages(0);
         setKnowledgeTotalPages(0);
+        setWorkIssueTotalPages(0);
+        setPatchHistoryHasNext(false);
+        setPatchHistoryHasPrevious(false);
+        setKnowledgeHasNext(false);
+        setKnowledgeHasPrevious(false);
+        setWorkIssueHasNext(false);
+        setWorkIssueHasPrevious(false);
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // 최초 진입 시에도 검색을 실행한다.
-  // 검색어가 비어 있으면 기본 기간/필터 기준으로 패치이력과 지식공유 전체 목록을 보여준다.
   useEffect(() => {
     searchAll({
       targetPatchHistoryPage: 0,
       targetKnowledgePage: 0,
+      targetWorkIssuePage: 0,
     });
 
     return () => {
@@ -295,19 +316,21 @@ export default function GlobalSearchPage() {
         abortRef.current.abort();
       }
     };
-    // 최초 진입 시 1회만 실행한다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSearch = () => {
     setPatchHistoryPage(0);
     setKnowledgePage(0);
-
+    setWorkIssuePage(0);
     searchAll({
       targetPatchHistoryPage: 0,
       targetPatchHistorySize: patchHistorySize,
       targetKnowledgePage: 0,
       targetKnowledgeSize: knowledgeSize,
+      targetWorkIssuePage: 0,
+      targetWorkIssueSize: workIssueSize,
+      targetWorkIssueType: workIssueType,
     });
   };
 
@@ -328,6 +351,9 @@ export default function GlobalSearchPage() {
       targetPatchHistorySize: patchHistorySize,
       targetKnowledgePage: knowledgePage,
       targetKnowledgeSize: knowledgeSize,
+      targetWorkIssuePage: workIssuePage,
+      targetWorkIssueSize: workIssueSize,
+      targetWorkIssueType: workIssueType,
     });
   };
 
@@ -341,51 +367,110 @@ export default function GlobalSearchPage() {
       targetPatchHistorySize: patchHistorySize,
       targetKnowledgePage: targetPage,
       targetKnowledgeSize: knowledgeSize,
+      targetWorkIssuePage: workIssuePage,
+      targetWorkIssueSize: workIssueSize,
+      targetWorkIssueType: workIssueType,
     });
   };
 
   const changePatchHistorySize = (nextSize) => {
     setPatchHistorySize(nextSize);
-
     searchAll({
       targetPatchHistoryPage: 0,
       targetPatchHistorySize: nextSize,
       targetKnowledgePage: knowledgePage,
       targetKnowledgeSize: knowledgeSize,
+      targetWorkIssuePage: workIssuePage,
+      targetWorkIssueSize: workIssueSize,
+      targetWorkIssueType: workIssueType,
     });
   };
 
   const changeKnowledgeSize = (nextSize) => {
     setKnowledgeSize(nextSize);
-
     searchAll({
       targetPatchHistoryPage: patchHistoryPage,
       targetPatchHistorySize: patchHistorySize,
       targetKnowledgePage: 0,
       targetKnowledgeSize: nextSize,
+      targetWorkIssuePage: workIssuePage,
+      targetWorkIssueSize: workIssueSize,
+      targetWorkIssueType: workIssueType,
+    });
+  };
+
+  const moveWorkIssuePage = (targetPage) => {
+    if (targetPage < 0 || targetPage >= workIssueTotalPages || targetPage === workIssuePage) {
+      return;
+    }
+
+    searchAll({
+      targetPatchHistoryPage: patchHistoryPage,
+      targetPatchHistorySize: patchHistorySize,
+      targetKnowledgePage: knowledgePage,
+      targetKnowledgeSize: knowledgeSize,
+      targetWorkIssuePage: targetPage,
+      targetWorkIssueSize: workIssueSize,
+      targetWorkIssueType: workIssueType,
+    });
+  };
+
+  const changeWorkIssueSize = (nextSize) => {
+    setWorkIssueSize(nextSize);
+    setWorkIssuePage(0);
+    searchAll({
+      targetPatchHistoryPage: patchHistoryPage,
+      targetPatchHistorySize: patchHistorySize,
+      targetKnowledgePage: knowledgePage,
+      targetKnowledgeSize: knowledgeSize,
+      targetWorkIssuePage: 0,
+      targetWorkIssueSize: nextSize,
+      targetWorkIssueType: workIssueType,
+    });
+  };
+
+  const changeWorkIssueType = (nextType) => {
+    if (nextType === workIssueType) {
+      return;
+    }
+
+    setWorkIssueType(nextType);
+    setWorkIssuePage(0);
+    searchAll({
+      targetPatchHistoryPage: patchHistoryPage,
+      targetPatchHistorySize: patchHistorySize,
+      targetKnowledgePage: knowledgePage,
+      targetKnowledgeSize: knowledgeSize,
+      targetWorkIssuePage: 0,
+      targetWorkIssueSize: workIssueSize,
+      targetWorkIssueType: nextType,
     });
   };
 
   const openPatchHistoryDetailWindow = (id) => {
     const url = `${window.location.origin}${window.location.pathname}?popup=patch-history-detail&id=${id}`;
     const features = 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
-
     window.open(url, `patch-history-detail-${id}`, features);
   };
 
   const openKnowledgeDetailWindow = (id) => {
     const url = `${window.location.origin}${window.location.pathname}?popup=knowledge-detail&id=${id}`;
     const features = 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
-
     window.open(url, `knowledge-detail-${id}`, features);
   };
+
+  const currentWorkIssueTotal =
+    workIssueType === 'PROJECT'
+      ? workProjectTotal
+      : workIssueType === 'MAINTENANCE'
+      ? workMaintenanceTotal
+      : workIssueHistoryTotal;
 
   return (
     <>
       <div className="mb-4 flex items-center gap-8">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">통합검색</h1>
-        <p className="border-l border-slate-300 pl-6 text-sm text-slate-500">
-        </p>
+        <p className="border-l border-slate-300 pl-6 text-sm text-slate-500" />
       </div>
 
       <div className="space-y-5">
@@ -398,7 +483,7 @@ export default function GlobalSearchPage() {
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
                   onKeyDown={handleEnterSearch}
-                  placeholder="제목, 증상, 내용, 태그"
+                  placeholder="제목, 내용, 담당자, 태그"
                 />
               </LabeledInput>
             </div>
@@ -474,22 +559,10 @@ export default function GlobalSearchPage() {
         )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard
-            label="패치이력"
-            count={patchHistoryTotal}
-          />
-          <SummaryCard
-            label="지식공유 DB"
-            count={knowledgeTotal}
-          />
-          <SummaryCard
-            label="작업 및 이슈이력"
-            count={workIssueHistoryTotal}
-          />
-          <SummaryCard
-            label="전체 결과"
-            count={totalCount + workIssueHistoryTotal}
-          />
+          <SummaryCard label="패치이력" count={patchHistoryTotal} />
+          <SummaryCard label="지식공유 DB" count={knowledgeTotal} />
+          <SummaryCard label="작업 및 이슈이력" count={workIssueHistoryTotal} />
+          <SummaryCard label="전체 결과" count={totalCount} />
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
@@ -500,17 +573,14 @@ export default function GlobalSearchPage() {
               <span className="h-3 w-6 rounded bg-emerald-100 ring-1 ring-emerald-200" />
               매우 높음
             </span>
-
             <span className="inline-flex items-center gap-2">
               <span className="h-3 w-6 rounded bg-green-50 ring-1 ring-green-200" />
               높음
             </span>
-
             <span className="inline-flex items-center gap-2">
               <span className="h-3 w-6 rounded bg-yellow-50 ring-1 ring-yellow-200" />
               보통
             </span>
-
             <span className="inline-flex items-center gap-2">
               <span className="h-3 w-6 rounded bg-white ring-1 ring-slate-200" />
               낮음
@@ -526,21 +596,17 @@ export default function GlobalSearchPage() {
           </SectionCard>
         ) : (
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2 2xl:grid-cols-3">
-            <SectionCard
-              title={`패치이력 결과 (${(patchHistoryTotal || 0).toLocaleString()}건)`}
-            >
+            <SectionCard title={`패치이력 결과 (${(patchHistoryTotal || 0).toLocaleString()}건)`}>
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
                   <thead className="bg-slate-100">
                     <tr>
                       <th className="w-[24%] whitespace-nowrap px-2 py-3 text-left font-semibold">제목</th>
-                      {/*<th className="w-[38%] whitespace-nowrap px-2 py-3 text-left font-semibold">증상 요약</th>*/}
                       <th className="w-[10%] whitespace-nowrap px-2 py-3 text-left font-semibold">인프라</th>
                       <th className="w-[14%] whitespace-nowrap px-2 py-3 text-left font-semibold">고객사</th>
                       <th className="w-[14%] whitespace-nowrap px-2 py-3 text-left font-semibold">등록일</th>
                     </tr>
                   </thead>
-
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {loading ? (
                       <tr>
@@ -564,19 +630,12 @@ export default function GlobalSearchPage() {
                           <td className="min-w-0 px-2 py-3">
                             <TruncateCell value={patchHistory.title} strong />
                           </td>
-
-                          {/*<td className="min-w-0 px-2 py-3 text-slate-700">*/}
-                          {/*  <TruncateCell value={patchHistory.summary} />*/}
-                          {/*</td>*/}
-
                           <td className="min-w-0 px-2 py-3">
                             <TruncateCell value={normalizeList(patchHistory.infraTypes).join(', ')} />
                           </td>
-
                           <td className="min-w-0 px-2 py-3">
                             <TruncateCell value={patchHistory.customerName} />
                           </td>
-
                           <td className="min-w-0 px-2 py-3 text-slate-700">
                             <TruncateCell value={formatDateTime(patchHistory.createdAt)} />
                           </td>
@@ -599,9 +658,7 @@ export default function GlobalSearchPage() {
               />
             </SectionCard>
 
-            <SectionCard
-              title={`지식공유 결과 (${(knowledgeTotal || 0).toLocaleString()}건)`}
-            >
+            <SectionCard title={`지식공유 결과 (${(knowledgeTotal || 0).toLocaleString()}건)`}>
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
                   <thead className="bg-slate-100">
@@ -614,7 +671,6 @@ export default function GlobalSearchPage() {
                       <th className="w-[18%] whitespace-nowrap px-2 py-3 text-left font-semibold">등록일</th>
                     </tr>
                   </thead>
-
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {loading ? (
                       <tr>
@@ -638,23 +694,18 @@ export default function GlobalSearchPage() {
                           <td className="min-w-0 px-2 py-3">
                             <TruncateCell value={item.title} strong />
                           </td>
-
                           <td className="min-w-0 px-2 py-3 text-slate-700">
                             <TruncateCell value={item.summary || item.detail} />
                           </td>
-
                           <td className="min-w-0 px-2 py-3 text-slate-700">
                             <TruncateCell value={normalizeList(item.infraTypes).join(', ')} />
                           </td>
-
                           <td className="min-w-0 px-2 py-3">
                             <TruncateCell value={item.customerName} />
                           </td>
-
                           <td className="min-w-0 px-2 py-3">
                             <TruncateCell value={item.authorName} />
                           </td>
-
                           <td className="min-w-0 px-2 py-3 text-slate-700">
                             <TruncateCell value={formatDateTime(item.createdAt)} />
                           </td>
@@ -677,51 +728,84 @@ export default function GlobalSearchPage() {
               />
             </SectionCard>
 
-            <SectionCard
-              title={`작업 및 이슈이력 결과 (${workIssueHistoryTotal.toLocaleString()}건)`}
-              description="작업 및 이슈이력 기능은 아직 구상 전입니다."
-            >
+            <SectionCard>
+              <div className="mb-3 flex items-center gap-1.5 overflow-x-auto whitespace-nowrap">
+                <h2 className="shrink-0 text-lg font-semibold text-slate-900">
+                  작업 및 이슈이력 결과 ({workIssueHistoryTotal.toLocaleString()}건)
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => changeWorkIssueType('ALL')}
+                  className={`h-7 rounded-md border px-2 text-[15px] font-semibold leading-none whitespace-nowrap transition ${
+                    workIssueType === 'ALL'
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  전체
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeWorkIssueType('PROJECT')}
+                  className={`h-7 rounded-md border px-2 text-[15px] font-semibold leading-none whitespace-nowrap transition ${
+                    workIssueType === 'PROJECT'
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  프로젝트
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeWorkIssueType('MAINTENANCE')}
+                  className={`h-7 rounded-md border px-2 text-[15px] font-semibold leading-none whitespace-nowrap transition ${
+                    workIssueType === 'MAINTENANCE'
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  유지보수
+                </button>
+              </div>
+
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
                   <thead className="bg-slate-100">
                     <tr>
-                      <th className="w-[22%] whitespace-nowrap px-2 py-3 text-left font-semibold">제목</th>
-                      <th className="w-[30%] whitespace-nowrap px-2 py-3 text-left font-semibold">내용</th>
-                      <th className="w-[12%] whitespace-nowrap px-2 py-3 text-left font-semibold">인프라</th>
-                      <th className="w-[16%] whitespace-nowrap px-2 py-3 text-left font-semibold">고객사</th>
+                      <th className="w-[24%] whitespace-nowrap px-2 py-3 text-left font-semibold">제목</th>
+                      <th className="w-[42%] whitespace-nowrap px-2 py-3 text-left font-semibold">내용</th>
+                      <th className="w-[14%] whitespace-nowrap px-2 py-3 text-left font-semibold">담당</th>
                       <th className="w-[20%] whitespace-nowrap px-2 py-3 text-left font-semibold">등록일</th>
                     </tr>
                   </thead>
-
                   <tbody className="divide-y divide-slate-100 bg-white">
-                    {workIssueHistoryRows.length === 0 ? (
+                    {loading ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
-                          작업 및 이슈이력 기능은 아직 준비 중입니다.
+                        <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                          검색 중...
+                        </td>
+                      </tr>
+                    ) : workIssueHistoryRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                          검색된 작업 및 이슈이력이 없습니다.
                         </td>
                       </tr>
                     ) : (
                       workIssueHistoryRows.map((item) => (
                         <tr
-                          key={item.id}
+                          key={`${item.workHistoryType}-${item.id}`}
                           className="cursor-pointer bg-white transition hover:bg-slate-50"
                         >
                           <td className="min-w-0 px-2 py-3">
                             <TruncateCell value={item.title} strong />
                           </td>
-
                           <td className="min-w-0 px-2 py-3 text-slate-700">
                             <TruncateCell value={item.summary || item.detail} />
                           </td>
-
-                          <td className="min-w-0 px-2 py-3 text-slate-700">
-                            <TruncateCell value={normalizeList(item.infraTypes).join(', ')} />
-                          </td>
-
                           <td className="min-w-0 px-2 py-3">
-                            <TruncateCell value={item.customerName} />
+                            <TruncateCell value={item.authorName} />
                           </td>
-
                           <td className="min-w-0 px-2 py-3 text-slate-700">
                             <TruncateCell value={formatDateTime(item.createdAt)} />
                           </td>
@@ -732,10 +816,16 @@ export default function GlobalSearchPage() {
                 </table>
               </div>
 
-              <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-500">
-                <span className="truncate">전체 0건 · 0/0페이지</span>
-                <span className="shrink-0">표시 {DEFAULT_PAGE_SIZE}개</span>
-              </div>
+              <PaginationBar
+                page={workIssuePage}
+                size={workIssueSize}
+                totalPages={workIssueTotalPages}
+                totalElements={currentWorkIssueTotal}
+                hasPrevious={workIssueHasPrevious}
+                hasNext={workIssueHasNext}
+                onMovePage={moveWorkIssuePage}
+                onChangeSize={changeWorkIssueSize}
+              />
             </SectionCard>
           </div>
         )}
@@ -744,30 +834,88 @@ export default function GlobalSearchPage() {
   );
 }
 
-
-function PaginationBar({ page, size, totalPages, totalElements, onMovePage, onChangeSize }) {
-  const pages = [];
-  const maxVisible = 5; // 앞뒤 보여줄 숫자
-  const startPage = Math.max(0, page - Math.floor(maxVisible/2));
-  const endPage = Math.min(totalPages, startPage + maxVisible);
-
-  for (let i = startPage; i < endPage; i++) {
-    pages.push(i);
-  }
+function PaginationBar({
+  page,
+  size,
+  totalPages,
+  totalElements,
+  hasPrevious,
+  hasNext,
+  onMovePage,
+  onChangeSize,
+}) {
+  const safeTotalPages = Math.max(totalPages || 0, 1);
+  const pageItems = buildPageItems(page, safeTotalPages);
 
   return (
-    <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
-      <button onClick={() => onMovePage(0)} disabled={page===0} className="px-2 py-1 border rounded disabled:opacity-40">&lt;&lt;</button>
-      <button onClick={() => onMovePage(page-1)} disabled={page===0} className="px-2 py-1 border rounded disabled:opacity-40">&lt;</button>
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+      <div className="flex items-center gap-2">
+        <span className="truncate">전체 {totalElements.toLocaleString()}건</span>
+        <label className="flex items-center gap-1">
+          <span>표시</span>
+          <select
+            value={size}
+            onChange={(e) => onChangeSize(Number(e.target.value))}
+            className="h-7 rounded border border-slate-300 bg-white px-2 text-xs"
+          >
+            {PAGE_SIZE_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
-      {pages[0] > 0 && <span>...</span>}
-      {pages.map(i => (
-        <button key={i} onClick={() => onMovePage(i)} className={`px-2 py-1 border rounded ${i===page ? 'bg-slate-900 text-white' : ''}`}>{i+1}</button>
-      ))}
-      {pages[pages.length-1] < totalPages-1 && <span>...</span>}
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onMovePage(0)}
+          disabled={!hasPrevious}
+          className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40"
+        >
+          &lt;&lt;
+        </button>
+        <button
+          onClick={() => onMovePage(page - 1)}
+          disabled={!hasPrevious}
+          className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40"
+        >
+          &lt;
+        </button>
 
-      <button onClick={() => onMovePage(page+1)} disabled={page===totalPages-1} className="px-2 py-1 border rounded disabled:opacity-40">&gt;</button>
-      <button onClick={() => onMovePage(totalPages-1)} disabled={page===totalPages-1} className="px-2 py-1 border rounded disabled:opacity-40">&gt;&gt;</button>
+        {pageItems[0] > 0 && <span>...</span>}
+        {pageItems.map((item) =>
+          typeof item === 'string' ? (
+            <span key={item}>...</span>
+          ) : (
+            <button
+              key={item}
+              onClick={() => onMovePage(item)}
+              className={`rounded border px-2 py-1 ${
+                item === page ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300'
+              }`}
+            >
+              {item + 1}
+            </button>
+          )
+        )}
+        {pageItems[pageItems.length - 1] < safeTotalPages - 1 && <span>...</span>}
+
+        <button
+          onClick={() => onMovePage(page + 1)}
+          disabled={!hasNext}
+          className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40"
+        >
+          &gt;
+        </button>
+        <button
+          onClick={() => onMovePage(safeTotalPages - 1)}
+          disabled={!hasNext}
+          className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40"
+        >
+          &gt;&gt;
+        </button>
+      </div>
     </div>
   );
 }

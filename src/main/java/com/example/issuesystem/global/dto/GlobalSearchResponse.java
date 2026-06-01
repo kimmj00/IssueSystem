@@ -31,6 +31,31 @@ public class GlobalSearchResponse {
     /** 현재 페이지에 표시할 지식공유 결과 목록 */
     private List<GlobalSearchItemResponse> knowledgeShares;
 
+    /** 작업/이슈이력 전체 검색 결과 수 */
+    private long workIssueHistoryTotal;
+
+    /** 현재 페이지에 표시할 작업/이슈이력 결과 목록 */
+    private List<GlobalSearchItemResponse> workIssueHistories;
+
+    /** 작업/이슈이력 유형별 집계 */
+    private long workProjectTotal;
+    private long workMaintenanceTotal;
+
+    /** 작업/이슈이력 결과 현재 페이지 번호. 0부터 시작한다. */
+    private int workIssuePage;
+
+    /** 작업/이슈이력 결과 페이지당 표시 개수 */
+    private int workIssueSize;
+
+    /** 작업/이슈이력 결과 전체 페이지 수 */
+    private int workIssueTotalPages;
+
+    /** 작업/이슈이력 결과 다음 페이지 존재 여부 */
+    private boolean workIssueHasNext;
+
+    /** 작업/이슈이력 결과 이전 페이지 존재 여부 */
+    private boolean workIssueHasPrevious;
+
     /** 패치이력 결과 현재 페이지 번호. 0부터 시작한다. */
     private int patchHistoryPage;
 

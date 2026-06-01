@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 
-/** 통합검색 API */
+/** ?듯빀寃??API */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/global-search")
@@ -22,15 +22,15 @@ public class GlobalSearchController {
     private final GlobalSearchService globalSearchService;
 
     /**
-     * 패치이력과 지식공유 DB를 같은 조건으로 통합 검색한다.
+     * ?⑥튂?대젰怨?吏?앷났??DB瑜?媛숈? 議곌굔?쇰줈 ?듯빀 寃?됲븳??
      *
-     * 변경 사항:
-     * - 기존 size 하나로 각 자료원별 상위 N건만 표시하던 구조를 제거한다.
-     * - 패치이력 결과와 지식공유 결과를 각각 독립적으로 페이징한다.
+     * 蹂寃??ы빆:
+     * - 湲곗〈 size ?섎굹濡?媛??먮즺?먮퀎 ?곸쐞 N嫄대쭔 ?쒖떆?섎뜕 援ъ“瑜??쒓굅?쒕떎.
+     * - ?⑥튂?대젰 寃곌낵? 吏?앷났??寃곌낵瑜?媛곴컖 ?낅┰?곸쑝濡??섏씠吏뺥븳??
      *
-     * 호환 처리:
-     * - 기존 프론트가 size만 보내도 동작하도록 size를 fallback 값으로 유지한다.
-     * - 신규 프론트는 patchHistoryPage/patchHistorySize, knowledgePage/knowledgeSize를 사용한다.
+     * ?명솚 泥섎━:
+     * - 湲곗〈 ?꾨줎?멸? size留?蹂대궡???숈옉?섎룄濡?size瑜?fallback 媛믪쑝濡??좎??쒕떎.
+     * - ?좉퇋 ?꾨줎?몃뒗 patchHistoryPage/patchHistorySize, knowledgePage/knowledgeSize瑜??ъ슜?쒕떎.
      */
     @GetMapping
     public ApiResponse<GlobalSearchResponse> search(
@@ -40,24 +40,34 @@ public class GlobalSearchController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
 
-            // 기존 API 호환용. patchHistorySize/knowledgeSize가 없을 때만 사용한다.
+            // 湲곗〈 API ?명솚?? patchHistorySize/knowledgeSize媛 ?놁쓣 ?뚮쭔 ?ъ슜?쒕떎.
             @RequestParam(required = false) Integer size,
 
-            // 패치이력 결과 페이징 파라미터
+            // ?⑥튂?대젰 寃곌낵 ?섏씠吏??뚮씪誘명꽣
             @RequestParam(required = false) Integer patchHistoryPage,
             @RequestParam(required = false) Integer patchHistorySize,
 
-            // 기존 프론트 호환용 파라미터입니다. 새 프론트는 patchHistoryPage/patchHistorySize를 사용합니다.
+            // 湲곗〈 ?꾨줎???명솚???뚮씪誘명꽣?낅땲?? ???꾨줎?몃뒗 patchHistoryPage/patchHistorySize瑜??ъ슜?⑸땲??
             @RequestParam(required = false) Integer issuePage,
             @RequestParam(required = false) Integer issueSize,
 
-            // 지식공유 결과 페이징 파라미터
+            // 吏?앷났??寃곌낵 ?섏씠吏??뚮씪誘명꽣
             @RequestParam(required = false) Integer knowledgePage,
-            @RequestParam(required = false) Integer knowledgeSize
+            @RequestParam(required = false) Integer knowledgeSize,
+
+            // 작업/이슈이력 결과 페이지 파라미터
+            @RequestParam(required = false) Integer workIssuePage,
+            @RequestParam(required = false) Integer workIssueSize,
+
+            // 작업/이슈이력 유형 필터 (PROJECT | MAINTENANCE)
+            @RequestParam(required = false) String workIssueType
     ) {
         int fallbackSize = size == null ? 10 : size;
+        int workIssueFallbackSize = size == null ? 7 : size;
         int resolvedPatchHistoryPage = patchHistoryPage != null ? patchHistoryPage : (issuePage == null ? 0 : issuePage);
         int resolvedPatchHistorySize = patchHistorySize != null ? patchHistorySize : (issueSize == null ? fallbackSize : issueSize);
+        int resolvedWorkIssuePage = workIssuePage == null ? 0 : workIssuePage;
+        int resolvedWorkIssueSize = workIssueSize == null ? workIssueFallbackSize : workIssueSize;
 
         return ApiResponse.ok(
                 globalSearchService.search(
@@ -69,8 +79,12 @@ public class GlobalSearchController {
                         resolvedPatchHistoryPage,
                         resolvedPatchHistorySize,
                         knowledgePage == null ? 0 : knowledgePage,
-                        knowledgeSize == null ? fallbackSize : knowledgeSize
+                        knowledgeSize == null ? fallbackSize : knowledgeSize,
+                        resolvedWorkIssuePage,
+                        resolvedWorkIssueSize,
+                        workIssueType
                 )
         );
     }
 }
+
