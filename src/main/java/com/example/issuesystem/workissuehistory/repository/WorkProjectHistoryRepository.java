@@ -45,4 +45,31 @@ public interface WorkProjectHistoryRepository extends JpaRepository<WorkProjectH
             @Param("endDate") LocalDateTime endDate,
             Pageable pageable
     );
+
+    @Query("""
+            select p
+            from WorkProjectHistory p
+            where p.createdAt >= :startDate
+              and p.createdAt < :endDate
+              and (:customerName is null or :customerName = '' or lower(coalesce(p.clientName, '')) like lower(concat('%', :customerName, '%')))
+              and (
+                  :keyword is null or :keyword = ''
+                  or lower(concat(' ',
+                      coalesce(p.clientName, ''),
+                      coalesce(p.scope, ''),
+                      coalesce(p.executors, ''),
+                      coalesce(p.progressLogs, ''),
+                      coalesce(p.remainingIssues, ''),
+                      coalesce(p.salesRep, ''),
+                      coalesce(p.siteCode, ''),
+                      coalesce(p.projectScale, '')
+                  )) like lower(concat('%', :keyword, '%'))
+              )
+            """)
+    List<WorkProjectHistory> searchForGlobal(
+            @Param("keyword") String keyword,
+            @Param("customerName") String customerName,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
 }

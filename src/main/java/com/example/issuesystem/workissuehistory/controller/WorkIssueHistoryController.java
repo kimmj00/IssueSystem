@@ -9,6 +9,7 @@ import com.example.issuesystem.workissuehistory.dto.WorkReportUploadResponse;
 import com.example.issuesystem.workissuehistory.service.WorkIssueHistoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -55,9 +56,19 @@ public class WorkIssueHistoryController {
         return ApiResponse.ok(workIssueHistoryService.getProjects(uploadId));
     }
 
+    @GetMapping("/projects/{id}")
+    public ApiResponse<WorkProjectHistoryResponse> getProject(@PathVariable Long id) {
+        return ApiResponse.ok(workIssueHistoryService.getProject(id));
+    }
+
     /** 유지보수 현황 목록입니다. uploadId가 없으면 최신 업로드 건 기준입니다. */
     @GetMapping("/maintenance")
     public ApiResponse<List<WorkMaintenanceHistoryResponse>> getMaintenance(@RequestParam(required = false) Long uploadId) {
         return ApiResponse.ok(workIssueHistoryService.getMaintenance(uploadId));
+    }
+
+    @GetMapping("/maintenance/{id}")
+    public ApiResponse<WorkMaintenanceHistoryResponse> getMaintenanceItem(@PathVariable Long id) {
+        return ApiResponse.ok(workIssueHistoryService.getMaintenanceItem(id));
     }
 }

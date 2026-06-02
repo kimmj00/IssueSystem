@@ -14,8 +14,6 @@ import com.example.issuesystem.workissuehistory.repository.WorkMaintenanceHistor
 import com.example.issuesystem.workissuehistory.repository.WorkProjectHistoryRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -157,121 +155,89 @@ public class GlobalSearchService {
     ) {
         String resolvedWorkIssueType = normalize(workIssueType).toUpperCase();
 
-        if ("PROJECT".equals(resolvedWorkIssueType)) {
-            Page<WorkProjectHistory> projectPage = workProjectHistoryRepository.searchForGlobal(
-                    keyword,
-                    customerName,
-                    startDateTime,
-                    endDateTime,
-                    PageRequest.of(page, size)
-            );
-            long maintenanceTotal = workMaintenanceHistoryRepository.searchForGlobal(
-                    keyword,
-                    customerName,
-                    startDateTime,
-                    endDateTime,
-                    PageRequest.of(0, 1)
-            ).getTotalElements();
+        List<GlobalSearchItemResponse> projectRows = workProjectHistoryRepository.searchForGlobal(
+                        keyword,
+                        customerName,
+                        startDateTime,
+                        endDateTime
+                )
+                .stream()
+                .map(item -> toWorkProjectItem(item, keyword, customerName))
+                .toList();
 
-            return new WorkIssueSearchResult(
-                    projectPage.getContent().stream()
-                            .map(item -> toWorkProjectItem(item, keyword, customerName))
-                            .toList(),
-                    projectPage.getNumber(),
-                    projectPage.getSize(),
-                    projectPage.getTotalPages(),
-                    projectPage.hasNext(),
-                    projectPage.hasPrevious(),
-                    projectPage.getTotalElements(),
-                    maintenanceTotal
+        List<GlobalSearchItemResponse> maintenanceRows = workMaintenanceHistoryRepository.searchForGlobal(
+                        keyword,
+                        customerName,
+                        startDateTime,
+                        endDateTime
+                )
+                .stream()
+                .map(item -> toWorkMaintenanceItem(item, keyword, customerName))
+                .toList();
+
+        if ("PROJECT".equals(resolvedWorkIssueType)) {
+            return buildWorkIssueSearchResult(
+                    projectRows,
+                    page,
+                    size,
+                    projectRows.size(),
+                    projectRows.size(),
+                    maintenanceRows.size()
             );
         }
 
         if ("MAINTENANCE".equals(resolvedWorkIssueType)) {
-            Page<WorkMaintenanceHistory> maintenancePage = workMaintenanceHistoryRepository.searchForGlobal(
-                    keyword,
-                    customerName,
-                    startDateTime,
-                    endDateTime,
-                    PageRequest.of(page, size)
-            );
-            long projectTotal = workProjectHistoryRepository.searchForGlobal(
-                    keyword,
-                    customerName,
-                    startDateTime,
-                    endDateTime,
-                    PageRequest.of(0, 1)
-            ).getTotalElements();
-
-            return new WorkIssueSearchResult(
-                    maintenancePage.getContent().stream()
-                            .map(item -> toWorkMaintenanceItem(item, keyword, customerName))
-                            .toList(),
-                    maintenancePage.getNumber(),
-                    maintenancePage.getSize(),
-                    maintenancePage.getTotalPages(),
-                    maintenancePage.hasNext(),
-                    maintenancePage.hasPrevious(),
-                    projectTotal,
-                    maintenancePage.getTotalElements()
+            return buildWorkIssueSearchResult(
+                    maintenanceRows,
+                    page,
+                    size,
+                    maintenanceRows.size(),
+                    projectRows.size(),
+                    maintenanceRows.size()
             );
         }
 
-        int fetchSize = getCombinedFetchSize(page, size);
-        Page<WorkProjectHistory> projectPage = workProjectHistoryRepository.searchForGlobal(
-                keyword,
-                customerName,
-                startDateTime,
-                endDateTime,
-                PageRequest.of(0, fetchSize)
-        );
-        Page<WorkMaintenanceHistory> maintenancePage = workMaintenanceHistoryRepository.searchForGlobal(
-                keyword,
-                customerName,
-                startDateTime,
-                endDateTime,
-                PageRequest.of(0, fetchSize)
-        );
-
-        long workProjectTotal = projectPage.getTotalElements();
-        long workMaintenanceTotal = maintenancePage.getTotalElements();
-        long filteredTotal = workProjectTotal + workMaintenanceTotal;
-
         List<GlobalSearchItemResponse> mergedRows = new java.util.ArrayList<>();
-        mergedRows.addAll(projectPage.getContent().stream()
-                .map(item -> toWorkProjectItem(item, keyword, customerName))
-                .toList());
-        mergedRows.addAll(maintenancePage.getContent().stream()
-                .map(item -> toWorkMaintenanceItem(item, keyword, customerName))
-                .toList());
+        mergedRows.addAll(projectRows);
+        mergedRows.addAll(maintenanceRows);
 
-        List<GlobalSearchItemResponse> sortedRows = mergedRows.stream()
+        return buildWorkIssueSearchResult(
+                mergedRows,
+                page,
+                size,
+                mergedRows.size(),
+                projectRows.size(),
+                maintenanceRows.size()
+        );
+    }
+
+    private WorkIssueSearchResult buildWorkIssueSearchResult(
+            List<GlobalSearchItemResponse> rows,
+            int page,
+            int size,
+            long totalElements,
+            long workProjectTotal,
+            long workMaintenanceTotal
+    ) {
+        List<GlobalSearchItemResponse> sortedRows = rows.stream()
                 .sorted(workIssueSortComparator())
                 .toList();
 
         long startOffset = (long) page * size;
         int startIndex = startOffset >= sortedRows.size() ? sortedRows.size() : (int) startOffset;
         int endIndex = Math.min(startIndex + size, sortedRows.size());
-        int totalPages = calculateTotalPages(filteredTotal, size);
+        int totalPages = calculateTotalPages(totalElements, size);
 
         return new WorkIssueSearchResult(
                 sortedRows.subList(startIndex, endIndex),
                 page,
                 size,
                 totalPages,
-                (((long) page + 1L) * size) < filteredTotal,
-                page > 0 && filteredTotal > 0,
+                (((long) page + 1L) * size) < totalElements,
+                page > 0 && totalElements > 0,
                 workProjectTotal,
                 workMaintenanceTotal
         );
-    }
-
-    private int getCombinedFetchSize(int page, int size) {
-        long expectedRows = ((long) page + 1L) * size;
-        if (expectedRows > Integer.MAX_VALUE) {
-            return Integer.MAX_VALUE;
-        }
-        return (int) expectedRows;
     }
 
     private int calculateTotalPages(long totalElements, int size) {
@@ -283,10 +249,8 @@ public class GlobalSearchService {
     }
 
     private Comparator<GlobalSearchItemResponse> workIssueSortComparator() {
-        return Comparator.comparing(
-                        GlobalSearchItemResponse::getCreatedAt,
-                        Comparator.nullsLast(Comparator.naturalOrder())
-                )
+        return Comparator.comparingInt(GlobalSearchItemResponse::getMatchScore)
+                .reversed()
                 .thenComparing(
                         GlobalSearchItemResponse::getId,
                         Comparator.nullsLast(Comparator.naturalOrder())

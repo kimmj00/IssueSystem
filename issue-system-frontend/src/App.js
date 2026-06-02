@@ -6,6 +6,7 @@ import KnowledgePage from './pages/KnowledgePage';
 import WorkIssueHistoryPage from './pages/WorkIssueHistoryPage';
 import PatchHistoryDetailWindow from './pages/PatchHistoryDetailWindow';
 import KnowledgeDetailWindow from './pages/KnowledgeDetailWindow';
+import WorkIssueHistoryDetailWindow from './pages/WorkIssueHistoryDetailWindow';
 
 // 메뉴 키는 화면 의미에 맞게 정리했습니다.
 // 기존 ISSUE 메뉴는 실제 패치리스트 기능이므로 PATCH_HISTORY로 변경했습니다.
@@ -67,6 +68,10 @@ export default function App() {
 
   if (popupType === 'knowledge-detail') {
     return <KnowledgeDetailWindow />;
+  }
+
+  if (popupType === 'work-issue-history-detail') {
+    return <WorkIssueHistoryDetailWindow />;
   }
 
   return (

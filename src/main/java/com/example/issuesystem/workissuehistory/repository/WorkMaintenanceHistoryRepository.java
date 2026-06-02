@@ -45,4 +45,31 @@ public interface WorkMaintenanceHistoryRepository extends JpaRepository<WorkMain
             @Param("endDate") LocalDateTime endDate,
             Pageable pageable
     );
+
+    @Query("""
+            select m
+            from WorkMaintenanceHistory m
+            where m.createdAt >= :startDate
+              and m.createdAt < :endDate
+              and (:customerName is null or :customerName = '' or lower(coalesce(m.maintenanceName, '')) like lower(concat('%', :customerName, '%')))
+              and (
+                  :keyword is null or :keyword = ''
+                  or lower(concat(' ',
+                      coalesce(m.maintenanceName, ''),
+                      coalesce(m.progressIssues, ''),
+                      coalesce(m.remarks, ''),
+                      coalesce(m.mainDev, ''),
+                      coalesce(m.subDev, ''),
+                      coalesce(m.salesRep, ''),
+                      coalesce(m.siteCode, ''),
+                      coalesce(m.region, '')
+                  )) like lower(concat('%', :keyword, '%'))
+              )
+            """)
+    List<WorkMaintenanceHistory> searchForGlobal(
+            @Param("keyword") String keyword,
+            @Param("customerName") String customerName,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
 }

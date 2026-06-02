@@ -459,6 +459,13 @@ export default function GlobalSearchPage() {
     window.open(url, `knowledge-detail-${id}`, features);
   };
 
+  const openWorkIssueHistoryDetailWindow = (item) => {
+    const type = item.workHistoryType === 'MAINTENANCE' ? 'MAINTENANCE' : 'PROJECT';
+    const url = `${window.location.origin}${window.location.pathname}?popup=work-issue-history-detail&type=${type}&id=${item.id}`;
+    const features = 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
+    window.open(url, `work-issue-history-detail-${type}-${item.id}`, features);
+  };
+
   const currentWorkIssueTotal =
     workIssueType === 'PROJECT'
       ? workProjectTotal
@@ -795,7 +802,8 @@ export default function GlobalSearchPage() {
                       workIssueHistoryRows.map((item) => (
                         <tr
                           key={`${item.workHistoryType}-${item.id}`}
-                          className="cursor-pointer bg-white transition hover:bg-slate-50"
+                          onClick={() => openWorkIssueHistoryDetailWindow(item)}
+                          className={`cursor-pointer transition ${rowClass(item.matchLevel)}`}
                         >
                           <td className="min-w-0 px-2 py-3">
                             <TruncateCell value={item.title} strong />

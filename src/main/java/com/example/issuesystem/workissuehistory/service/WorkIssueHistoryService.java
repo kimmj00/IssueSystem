@@ -104,6 +104,20 @@ public class WorkIssueHistoryService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public WorkProjectHistoryResponse getProject(Long id) {
+        return projectRepository.findById(id)
+                .map(WorkProjectHistoryResponse::from)
+                .orElseThrow(() -> new IllegalArgumentException("프로젝트 이력을 찾을 수 없습니다."));
+    }
+
+    @Transactional(readOnly = true)
+    public WorkMaintenanceHistoryResponse getMaintenanceItem(Long id) {
+        return maintenanceRepository.findById(id)
+                .map(WorkMaintenanceHistoryResponse::from)
+                .orElseThrow(() -> new IllegalArgumentException("유지보수 이력을 찾을 수 없습니다."));
+    }
+
     /**
      * 화면 상단 요약 카드에 필요한 값을 계산합니다.
      *
