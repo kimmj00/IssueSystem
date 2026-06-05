@@ -135,6 +135,7 @@ function normalizeProject(project) {
     no: text(project.no || project.rowNo),
     customerName: text(project.clientName),
     siteCode: text(project.siteCode),
+    salesRep: text(project.salesRep),
     projectType: text(project.projectScale || project.scope),
     executors,
     startDate: text(project.startDate),
@@ -159,6 +160,7 @@ function normalizeMaintenance(item) {
     no: text(item.no || item.rowNo),
     customerName: text(item.maintenanceName),
     siteCode: text(item.siteCode),
+    salesRep: text(item.salesRep),
     projectType: text(item.contractType || item.visitType || item.method),
     executors,
     contractEnd: text(item.contractEnd),
@@ -184,6 +186,7 @@ function matchAllKeywords(row, keyword) {
     row.no,
     row.customerName,
     row.siteCode,
+    row.salesRep,
     row.projectType,
     row.executors.join(' '),
     row.startDate,
@@ -200,26 +203,30 @@ function matchAllKeywords(row, keyword) {
   return words.every((word) => target.includes(word));
 }
 
-function getFilteredRows(rows, { keyword, executor, customer, infraTypes }) {
+function getFilteredRows(rows, { keyword, salesRep, executor, customer, infraTypes }) {
   return rows.filter((row) => {
     const keywordMatched = matchAllKeywords(row, keyword);
+    const salesRepMatched = !salesRep || row.salesRep === salesRep;
     const executorMatched = !executor || row.executors.includes(executor);
     const customerMatched = !customer || row.customerName === customer;
     const infraMatched = infraTypes.length === 0 || infraTypes.every((infra) => row.infraTypes.includes(infra));
 
-    return keywordMatched && executorMatched && customerMatched && infraMatched;
+    return keywordMatched && salesRepMatched && executorMatched && customerMatched && infraMatched;
   });
 }
 
 function WorkIssueFilterBar({
   keyword,
   setKeyword,
+  salesRep,
+  setSalesRep,
   executor,
   setExecutor,
   customer,
   setCustomer,
   selectedInfraTypes,
   setSelectedInfraTypes,
+  salesRepOptions,
   executorOptions,
   customerOptions,
   showCustomerFilter,
@@ -247,6 +254,20 @@ function WorkIssueFilterBar({
               className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm outline-none ring-0 transition focus:border-slate-500"
             />
           </div>
+        </div>
+
+        <div className="w-[180px]">
+          <label className="mb-1 block text-xs font-medium text-slate-700">영업대표</label>
+          <select
+            value={salesRep}
+            onChange={(event) => setSalesRep(event.target.value)}
+            className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none ring-0 transition focus:border-slate-500"
+          >
+            <option value="">전체 영업대표</option>
+            {salesRepOptions.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
         </div>
 
         <div className="w-[180px]">
@@ -456,6 +477,7 @@ const ProjectTableRow = React.memo(function ProjectTableRow({ row, open, onToggl
           <div className="font-bold text-slate-900">{row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}</div>
           <div className="mt-0.5 text-xs text-slate-500">{row.projectType || '-'}</div>
         </td>
+        <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.salesRep}>{row.salesRep || '-'}</td>
         <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.executors.join(', ')}>{row.executors.join(', ') || '-'}</td>
         <td className="px-4 py-4 whitespace-nowrap font-mono text-slate-600">{row.startDate || '-'}</td>
         <td className="px-4 py-4 text-slate-700">{row.latestIssue}</td>
@@ -464,7 +486,7 @@ const ProjectTableRow = React.memo(function ProjectTableRow({ row, open, onToggl
         </td>
       </tr>
 
-      {open ? <DetailPanel rowId={row.id} detail={row.detail} colSpan={6} /> : null}
+      {open ? <DetailPanel rowId={row.id} detail={row.detail} colSpan={7} /> : null}
     </React.Fragment>
   );
 });
@@ -487,16 +509,18 @@ function ProjectTable({ rows }) {
         {/* 수행인원 컬럼이 줄바꿈되지 않도록 고객사/진행사항 폭을 일부 줄이고 수행인원 폭을 확보합니다. */}
         <colgroup>
           <col className="w-[5%]" />
-          <col className="w-[43%]" />
-          <col className="w-[16%]" />
+          <col className="w-[34%]" />
           <col className="w-[11%]" />
-          <col className="w-[22%]" />
+          <col className="w-[15%]" />
+          <col className="w-[11%]" />
+          <col className="w-[21%]" />
           <col className="w-[3%]" />
         </colgroup>
         <thead className="bg-slate-100 text-xs font-bold uppercase tracking-wide text-slate-500">
           <tr>
             <th className="px-4 py-3 whitespace-nowrap">NO</th>
             <th className="px-4 py-3">고객사(사업명)</th>
+            <th className="px-4 py-3 whitespace-nowrap">영업대표</th>
             <th className="px-4 py-3 whitespace-nowrap">수행인원</th>
             <th className="px-4 py-3 whitespace-nowrap">시작일</th>
             <th className="px-4 py-3">금주 진행사항 (최신)</th>
@@ -515,7 +539,7 @@ function ProjectTable({ rows }) {
 
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={6} className="px-4 py-16 text-center text-sm text-slate-500">
+              <td colSpan={7} className="px-4 py-16 text-center text-sm text-slate-500">
                 조회된 프로젝트가 없습니다.
               </td>
             </tr>
@@ -548,6 +572,7 @@ const MaintenanceTableRow = React.memo(function MaintenanceTableRow({ row, open,
           <div className="font-bold text-slate-900">{row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}</div>
           <div className="mt-0.5 text-xs text-slate-500">{row.projectType || '-'}</div>
         </td>
+        <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.salesRep}>{row.salesRep || '-'}</td>
         <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.executors.join(', ')}>{row.executors.join(', ') || '-'}</td>
         <td className="px-4 py-4 whitespace-nowrap font-mono text-slate-600">{row.contractEnd || '-'}</td>
         <td className="px-4 py-4 text-slate-700">{row.latestIssue}</td>
@@ -557,7 +582,7 @@ const MaintenanceTableRow = React.memo(function MaintenanceTableRow({ row, open,
         </td>
       </tr>
 
-      {open ? <DetailPanel rowId={row.id} detail={row.detail} colSpan={7} /> : null}
+      {open ? <DetailPanel rowId={row.id} detail={row.detail} colSpan={8} /> : null}
     </React.Fragment>
   );
 });
@@ -580,10 +605,11 @@ function MaintenanceTable({ rows }) {
         {/* 계약종료 컬럼 날짜가 2026-12-31처럼 한 줄로 보이도록 폭을 고정합니다. */}
         <colgroup>
           <col className="w-[5%]" />
-          <col className="w-[31%]" />
+          <col className="w-[24%]" />
+          <col className="w-[11%]" />
           <col className="w-[12%]" />
           <col className="w-[12%]" />
-          <col className="w-[18%]" />
+          <col className="w-[17%]" />
           <col className="w-[19%]" />
           <col className="w-[3%]" />
         </colgroup>
@@ -591,6 +617,7 @@ function MaintenanceTable({ rows }) {
           <tr>
             <th className="px-4 py-3 whitespace-nowrap">NO</th>
             <th className="px-4 py-3">유지보수명</th>
+            <th className="px-4 py-3 whitespace-nowrap">영업대표</th>
             <th className="px-4 py-3 whitespace-nowrap">수행인원</th>
             <th className="px-4 py-3 whitespace-nowrap">계약종료</th>
             <th className="px-4 py-3">진행내역 / 이슈</th>
@@ -610,7 +637,7 @@ function MaintenanceTable({ rows }) {
 
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={7} className="px-4 py-16 text-center text-sm text-slate-500">
+              <td colSpan={8} className="px-4 py-16 text-center text-sm text-slate-500">
                 조회된 유지보수 대상이 없습니다.
               </td>
             </tr>
@@ -660,6 +687,7 @@ function SearchResultList({ projectRows, maintenanceRows, keyword }) {
             <span className="text-sm font-bold text-slate-900">{row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}</span>
           </div>
           <p className="text-sm text-slate-700">{row.latestIssue}</p>
+          <p className="mt-2 text-xs text-slate-500">영업대표: {row.salesRep || '-'}</p>
           <p className="mt-2 text-xs text-slate-500">수행인원: {row.executors.join(', ') || '-'}</p>
         </div>
       ))}
@@ -684,6 +712,7 @@ export default function WorkIssueHistoryPage() {
   const [maintenanceRows, setMaintenanceRows] = useState([]);
 
   const [keyword, setKeyword] = useState('');
+  const [salesRep, setSalesRep] = useState('');
   const [executor, setExecutor] = useState('');
   const [customer, setCustomer] = useState('');
   const [selectedInfraTypes, setSelectedInfraTypes] = useState([]);
@@ -761,29 +790,39 @@ export default function WorkIssueHistoryPage() {
     return [...new Set(allRows.flatMap((row) => row.executors))].sort();
   }, [allRows]);
 
+  const salesRepOptions = useMemo(() => {
+    return [...new Set(allRows.map((row) => row.salesRep).filter(Boolean))].sort();
+  }, [allRows]);
+
   const customerOptions = useMemo(() => {
     return [...new Set(projects.map((row) => row.customerName).filter(Boolean))].sort();
   }, [projects]);
 
-  const filterState = { keyword, executor, customer, infraTypes: selectedInfraTypes };
-
   const filteredProjects = useMemo(() => {
-    return getFilteredRows(projects, filterState);
-  }, [projects, keyword, executor, customer, selectedInfraTypes]);
+    return getFilteredRows(projects, {
+      keyword,
+      salesRep,
+      executor,
+      customer,
+      infraTypes: selectedInfraTypes,
+    });
+  }, [projects, keyword, salesRep, executor, customer, selectedInfraTypes]);
 
   const filteredMaintenance = useMemo(() => {
     return getFilteredRows(maintenanceRows, {
       keyword,
+      salesRep,
       executor,
       customer: '',
       infraTypes: selectedInfraTypes,
     });
-  }, [maintenanceRows, keyword, executor, selectedInfraTypes]);
+  }, [maintenanceRows, keyword, salesRep, executor, selectedInfraTypes]);
 
   const totalMd = number(summary?.projectMdTotal) + number(summary?.maintenanceMdTotal);
 
   const resetFilters = () => {
     setKeyword('');
+    setSalesRep('');
     setExecutor('');
     setCustomer('');
     setSelectedInfraTypes([]);
@@ -885,12 +924,15 @@ export default function WorkIssueHistoryPage() {
           <WorkIssueFilterBar
             keyword={keyword}
             setKeyword={setKeyword}
+            salesRep={salesRep}
+            setSalesRep={setSalesRep}
             executor={executor}
             setExecutor={setExecutor}
             customer={customer}
             setCustomer={setCustomer}
             selectedInfraTypes={selectedInfraTypes}
             setSelectedInfraTypes={setSelectedInfraTypes}
+            salesRepOptions={salesRepOptions}
             executorOptions={executorOptions}
             customerOptions={customerOptions}
             showCustomerFilter={activeInnerTab === 'projects'}
