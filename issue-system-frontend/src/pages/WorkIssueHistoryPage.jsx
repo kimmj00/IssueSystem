@@ -52,6 +52,52 @@ function ChevronIcon({ open }) {
   );
 }
 
+function PopupIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M14 3h7v7" />
+      <path d="M10 14 21 3" />
+      <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
+    </svg>
+  );
+}
+
+function DetailPopupButton({ disabled, onOpen }) {
+  const handleClick = (event) => {
+    event.stopPropagation();
+
+    if (!disabled) {
+      onOpen();
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={disabled}
+      title="상세 팝업 열기"
+      aria-label="상세 팝업 열기"
+      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      <PopupIcon />
+    </button>
+  );
+}
+
+function openWorkIssueHistoryDetailWindow(type, id) {
+  if (!id) {
+    return;
+  }
+
+  const resolvedType = type === 'MAINTENANCE' ? 'MAINTENANCE' : 'PROJECT';
+  const encodedId = encodeURIComponent(id);
+  const url = `${window.location.origin}${window.location.pathname}?popup=work-issue-history-detail&type=${resolvedType}&id=${encodedId}`;
+  const features = 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
+
+  window.open(url, `work-issue-history-detail-${resolvedType}-${encodedId}`, features);
+}
+
 // 백엔드 ApiResponse 형식({ success, data, message })에서 data만 꺼냅니다.
 async function readApiResponse(response, fallbackMessage) {
   const result = await response.json().catch(() => null);
@@ -132,6 +178,8 @@ function normalizeProject(project) {
   return {
     ...project,
     id: `project-${project.id || project.rowNo}`,
+    detailId: project.id,
+    workHistoryType: 'PROJECT',
     no: text(project.no || project.rowNo),
     customerName: text(project.clientName),
     siteCode: text(project.siteCode),
@@ -157,6 +205,8 @@ function normalizeMaintenance(item) {
   return {
     ...item,
     id: `maintenance-${item.id || item.rowNo}`,
+    detailId: item.id,
+    workHistoryType: 'MAINTENANCE',
     no: text(item.no || item.rowNo),
     customerName: text(item.maintenanceName),
     siteCode: text(item.siteCode),
@@ -474,7 +524,18 @@ const ProjectTableRow = React.memo(function ProjectTableRow({ row, open, onToggl
       >
         <td className="px-4 py-4 font-mono text-slate-500">{row.no}</td>
         <td className="px-4 py-4">
-          <div className="font-bold text-slate-900">{row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}</div>
+          <div className="flex min-w-0 items-center gap-2">
+            <div
+              className="min-w-0 truncate font-bold text-slate-900"
+              title={`${row.customerName}${row.siteCode ? `(${row.siteCode})` : ''}`}
+            >
+              {row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}
+            </div>
+            <DetailPopupButton
+              disabled={!row.detailId}
+              onOpen={() => openWorkIssueHistoryDetailWindow('PROJECT', row.detailId)}
+            />
+          </div>
           <div className="mt-0.5 text-xs text-slate-500">{row.projectType || '-'}</div>
         </td>
         <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.salesRep}>{row.salesRep || '-'}</td>
@@ -569,7 +630,18 @@ const MaintenanceTableRow = React.memo(function MaintenanceTableRow({ row, open,
       >
         <td className="px-4 py-4 font-mono text-slate-500">{row.no}</td>
         <td className="px-4 py-4">
-          <div className="font-bold text-slate-900">{row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}</div>
+          <div className="flex min-w-0 items-center gap-2">
+            <div
+              className="min-w-0 truncate font-bold text-slate-900"
+              title={`${row.customerName}${row.siteCode ? `(${row.siteCode})` : ''}`}
+            >
+              {row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}
+            </div>
+            <DetailPopupButton
+              disabled={!row.detailId}
+              onOpen={() => openWorkIssueHistoryDetailWindow('MAINTENANCE', row.detailId)}
+            />
+          </div>
           <div className="mt-0.5 text-xs text-slate-500">{row.projectType || '-'}</div>
         </td>
         <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.salesRep}>{row.salesRep || '-'}</td>
@@ -674,8 +746,8 @@ function SearchResultList({ projectRows, maintenanceRows, keyword }) {
   }
 
   const results = [
-    ...projectRows.map((row) => ({ ...row, category: '프로젝트' })),
-    ...maintenanceRows.map((row) => ({ ...row, category: '유지보수' })),
+    ...projectRows.map((row) => ({ ...row, category: '프로젝트', workHistoryType: 'PROJECT' })),
+    ...maintenanceRows.map((row) => ({ ...row, category: '유지보수', workHistoryType: 'MAINTENANCE' })),
   ];
 
   return (
@@ -684,7 +756,16 @@ function SearchResultList({ projectRows, maintenanceRows, keyword }) {
         <div key={`${row.category}-${row.id}`} className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-2 flex items-center gap-2">
             <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-600">{row.category}</span>
-            <span className="text-sm font-bold text-slate-900">{row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}</span>
+            <span
+              className="min-w-0 truncate text-sm font-bold text-slate-900"
+              title={`${row.customerName}${row.siteCode ? `(${row.siteCode})` : ''}`}
+            >
+              {row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}
+            </span>
+            <DetailPopupButton
+              disabled={!row.detailId}
+              onOpen={() => openWorkIssueHistoryDetailWindow(row.workHistoryType, row.detailId)}
+            />
           </div>
           <p className="text-sm text-slate-700">{row.latestIssue}</p>
           <p className="mt-2 text-xs text-slate-500">영업대표: {row.salesRep || '-'}</p>
