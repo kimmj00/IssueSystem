@@ -146,6 +146,41 @@ function splitDetailLines(...values) {
     .filter(Boolean);
 }
 
+function groupProgressLines(value) {
+  const lines = text(value)
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^[\s\-–·>▶:]+/, '').trim())
+    .filter(Boolean);
+  const groups = [];
+
+  lines.forEach((line) => {
+    const isHeading = /^\d{1,2}[./-]\d{1,2}(?:\s|\(|$)/.test(line) || /^\d+주차(?:\s|$)/.test(line);
+
+    if (isHeading) {
+      groups.push({ title: line, items: [] });
+      return;
+    }
+
+    if (groups.length === 0) {
+      groups.push({ title: '진행 내용', items: [] });
+    }
+
+    groups[groups.length - 1].items.push(line);
+  });
+
+  return groups.length > 0 ? groups : [{ title: '진행 내용', items: ['등록된 진행 내용이 없습니다.'] }];
+}
+
+function formatMetric(value, suffix) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    return `0${suffix}`;
+  }
+
+  return `${Number.isInteger(parsed) ? parsed : parsed.toFixed(1)}${suffix}`;
+}
+
 // 프로젝트 행에서 인프라 유형을 추정합니다. DB에는 원문을 보존하고, 화면 필터용으로만 계산합니다.
 function inferProjectInfraTypes(project) {
   const target = [project.scope, project.apm, project.dashboard, project.oz, project.progressLogs, project.remainingIssues]
@@ -190,6 +225,9 @@ function normalizeProject(project) {
     infraTypes: inferProjectInfraTypes(project),
     latestIssue: firstMeaningfulLine(project.progressLogs) || firstMeaningfulLine(project.remainingIssues) || '-',
     detail: detail.length ? detail : ['상세 진행 내용이 없습니다.'],
+    progressGroups: groupProgressLines(project.progressLogs),
+    remainingIssueLines: splitDetailLines(project.remainingIssues),
+    scopeLines: splitDetailLines(project.scope),
     updatedAt: formatDateTime(project.createdAt),
   };
 }
@@ -218,6 +256,14 @@ function normalizeMaintenance(item) {
     latestIssue: firstMeaningfulLine(item.progressIssues) || firstMeaningfulLine(item.remarks) || '-',
     inspection: inspection || '-',
     detail: detail.length ? detail : ['상세 진행 내용이 없습니다.'],
+    progressGroups: groupProgressLines(item.progressIssues),
+    remainingIssueLines: splitDetailLines(item.remarks),
+    scopeLines: [
+      item.version ? `버전 ${item.version}` : '',
+      item.region ? `지역 ${item.region}` : '',
+      item.contractType ? `계약 ${item.contractType}` : '',
+      item.visitType ? `방문 ${item.visitType}` : '',
+    ].filter(Boolean),
     updatedAt: formatDateTime(item.createdAt),
   };
 }
@@ -487,28 +533,118 @@ function usePaginatedRows(rows) {
   };
 }
 
-function DetailPanel({ rowId, detail, colSpan }) {
-  const visibleDetail = detail.slice(0, MAX_DETAIL_LINES);
-  const hiddenCount = Math.max(0, detail.length - MAX_DETAIL_LINES);
+function DetailSectionTitle({ children }) {
+  return (
+    <div className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-700">
+      <span className="h-2 w-2 rounded-full bg-blue-500" />
+      {children}
+    </div>
+  );
+}
+
+function DetailLineList({ rowId, lines, emptyMessage }) {
+  const visibleLines = lines.slice(0, MAX_DETAIL_LINES);
+
+  return (
+    <ul className="space-y-2 text-sm leading-6 text-slate-700">
+      {(visibleLines.length > 0 ? visibleLines : [emptyMessage]).map((item, index) => (
+        <li key={`${rowId}-${index}`} className="flex gap-2">
+          <span className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+          <span className="break-words">{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function DetailInfoCard({ title, children }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="mb-3 text-xs font-bold text-slate-500">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function DetailPanel({ row, colSpan }) {
+  const supportPeople = row.executors.length > 0 ? row.executors.join(', ') : '-';
+  const periodLabel = row.workHistoryType === 'PROJECT'
+    ? `Start ${row.startDate || '-'}`
+    : `${row.contractStart || '-'} ~ ${row.contractEnd || '-'}`;
 
   return (
     <tr className="bg-slate-50">
-      <td colSpan={colSpan} className="px-4 py-4">
-        <div className="max-h-[320px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4">
-          <div className="mb-2 text-xs font-bold text-slate-500">상세 진행 내용</div>
-          <ul className="space-y-1 text-sm text-slate-700">
-            {visibleDetail.map((item, index) => (
-              <li key={`${rowId}-${index}`} className="flex gap-2">
-                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-          {hiddenCount > 0 ? (
-            <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
-              상세 내용이 길어 처음 {MAX_DETAIL_LINES}줄만 표시했습니다. 남은 {hiddenCount}줄은 별도 상세 화면으로 분리하는 편이 안전합니다.
+      <td colSpan={colSpan} className="px-6 py-6">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <section className="min-w-0">
+            <DetailSectionTitle>
+              {row.workHistoryType === 'PROJECT' ? '금주 실적 및 진행 내역 (누적)' : '진행 내역 및 이슈 (누적)'}
+            </DetailSectionTitle>
+
+            <div className="max-h-[420px] overflow-y-auto rounded-xl border border-slate-200 bg-white">
+              {row.progressGroups.map((group, groupIndex) => (
+                <div
+                  key={`${row.id}-progress-${groupIndex}`}
+                  className="border-b border-slate-200 last:border-b-0"
+                >
+                  <div className="flex items-center gap-3 bg-slate-50 px-4 py-3">
+                    <span className="font-mono text-xs font-bold text-slate-700">{group.title}</span>
+                    {groupIndex === 0 && row.executors.length > 0 ? (
+                      <span className="text-xs text-slate-500">{supportPeople}</span>
+                    ) : null}
+                  </div>
+                  <div className="px-4 py-3">
+                    <DetailLineList
+                      rowId={`${row.id}-progress-${groupIndex}`}
+                      lines={group.items}
+                      emptyMessage="등록된 세부 진행 내용이 없습니다."
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
-          ) : null}
+
+            <span className="mt-4 inline-flex rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+              {periodLabel}
+            </span>
+          </section>
+
+          <section className="min-w-0 space-y-5">
+            <div>
+              <DetailSectionTitle>
+                {row.workHistoryType === 'PROJECT' ? '잔여 사항 및 이슈 (주의요망)' : '비고 및 잔여 사항'}
+              </DetailSectionTitle>
+              <div className="min-h-[120px] max-h-[220px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4">
+                <DetailLineList
+                  rowId={`${row.id}-remaining`}
+                  lines={row.remainingIssueLines}
+                  emptyMessage="등록된 잔여 사항 및 이슈가 없습니다."
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <DetailInfoCard title={row.workHistoryType === 'PROJECT' ? '구축 범위' : '유지보수 범위'}>
+                <DetailLineList
+                  rowId={`${row.id}-scope`}
+                  lines={row.scopeLines}
+                  emptyMessage="등록된 범위 정보가 없습니다."
+                />
+              </DetailInfoCard>
+
+              <DetailInfoCard title="인원별 지원 횟수 / MD">
+                <div className="space-y-2 text-sm text-slate-700">
+                  <div className="font-semibold text-slate-900">{supportPeople}</div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-slate-500">지원 합계</span>
+                    <span className="font-mono font-semibold text-slate-900">
+                      {formatMetric(row.visits, '회')} / {formatMetric(row.md, 'MD')}
+                    </span>
+                  </div>
+                </div>
+              </DetailInfoCard>
+            </div>
+          </section>
         </div>
       </td>
     </tr>
@@ -547,7 +683,7 @@ const ProjectTableRow = React.memo(function ProjectTableRow({ row, open, onToggl
         </td>
       </tr>
 
-      {open ? <DetailPanel rowId={row.id} detail={row.detail} colSpan={7} /> : null}
+      {open ? <DetailPanel row={row} colSpan={7} /> : null}
     </React.Fragment>
   );
 });
@@ -654,7 +790,7 @@ const MaintenanceTableRow = React.memo(function MaintenanceTableRow({ row, open,
         </td>
       </tr>
 
-      {open ? <DetailPanel rowId={row.id} detail={row.detail} colSpan={8} /> : null}
+      {open ? <DetailPanel row={row} colSpan={8} /> : null}
     </React.Fragment>
   );
 });
