@@ -5,6 +5,11 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Getter
 @Builder
@@ -46,7 +51,7 @@ public class WorkProjectHistoryResponse {
                 .location(item.getLocation())
                 .startDate(item.getStartDate())
                 .projectScale(item.getProjectScale())
-                .executors(item.getExecutors())
+                .executors(deduplicateExecutors(item.getExecutors()))
                 .visits(item.getVisits())
                 .md(item.getMd())
                 .progressLogs(item.getProgressLogs())
@@ -54,5 +59,51 @@ public class WorkProjectHistoryResponse {
                 .siteCode(item.getSiteCode())
                 .createdAt(item.getCreatedAt())
                 .build();
+    }
+
+    private static String deduplicateExecutors(String executors) {
+        if (executors == null || executors.isBlank()) {
+            return executors;
+        }
+
+        String delimiter = resolveDelimiter(executors);
+        Set<String> names = Arrays.stream(executors.split(Pattern.quote(delimiter)))
+                .map(String::trim)
+                .filter(name -> !name.isEmpty())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        if (names.isEmpty()) {
+            return "";
+        }
+
+        return String.join(resolveOutputDelimiter(delimiter), names);
+    }
+
+    private static String resolveDelimiter(String value) {
+        if (value.contains(",")) {
+            return ",";
+        }
+
+        if (value.contains("/")) {
+            return "/";
+        }
+
+        if (value.contains("\n")) {
+            return "\n";
+        }
+
+        return " ";
+    }
+
+    private static String resolveOutputDelimiter(String delimiter) {
+        if ("\n".equals(delimiter)) {
+            return "\n";
+        }
+
+        if (" ".equals(delimiter)) {
+            return " ";
+        }
+
+        return delimiter + " ";
     }
 }

@@ -13,7 +13,29 @@ const INNER_TABS = [
   { key: 'search', label: '통합검색' },
 ];
 
-const INFRA_TYPES = ['SMS', 'NMS', 'DBMS', 'APM'];
+const INFRA_TYPES = [
+  'ERMS',
+  'SMS',
+  'NMS',
+  'DBMS',
+  'FMS',
+  'IMS',
+  'SYSLOG',
+  'TRAP',
+  'TMS',
+  'APM',
+  'BMS',
+  'STMS',
+  'RTMS',
+  'VMS',
+  'OAM',
+  'WNMS',
+  'CMS',
+  'K8s',
+  'TRMS',
+  'NPM',
+  'BRMS',
+];
 
 // 한 화면에 너무 많은 행을 렌더링하면 행 클릭 시 브라우저 리플로우가 커집니다.
 // 기본 50건 단위로 끊어서 클릭/펼침 반응 속도를 안정화합니다.
@@ -114,6 +136,44 @@ function text(value) {
   return value == null ? '' : String(value).trim();
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getKeywordTerms(keyword) {
+  return text(keyword)
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean);
+}
+
+function highlightText(value, keyword) {
+  const source = text(value);
+  const terms = getKeywordTerms(keyword);
+
+  if (!source || terms.length === 0) {
+    return source;
+  }
+
+  const pattern = new RegExp(`(${terms.map(escapeRegExp).join('|')})`, 'gi');
+  return source.split(pattern).map((part, index) => {
+    const matched = terms.some((term) => part.toLowerCase() === term.toLowerCase());
+
+    if (!matched) {
+      return part;
+    }
+
+    return (
+      <mark
+        key={`${part}-${index}`}
+        className="rounded bg-yellow-100 px-0.5 text-yellow-900 ring-1 ring-yellow-200"
+      >
+        {part}
+      </mark>
+    );
+  });
+}
+
 function number(value) {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -125,11 +185,13 @@ function formatDateTime(value) {
 }
 
 // 수행인원 문자열을 화면 필터에서 쓰기 좋은 배열로 변환합니다.
+const EXCLUDED_EXECUTOR_NAMES = new Set(['박천웅', '박신후', '배동훈', '안형락', '베동훈']);
+
 function splitPeople(value) {
   return text(value)
     .split(/[,/·\n]/)
     .map((item) => item.trim())
-    .filter(Boolean);
+    .filter((item) => item && !EXCLUDED_EXECUTOR_NAMES.has(item));
 }
 
 function firstMeaningfulLine(value) {
@@ -156,6 +218,7 @@ function inferProjectInfraTypes(project) {
     const key = infra.toLowerCase();
     if (infra === 'APM') return target.includes('apm') || text(project.apm).toUpperCase() === 'O';
     if (infra === 'DBMS') return target.includes('db') || target.includes('pg') || target.includes('postgres');
+    if (infra === 'K8s') return target.includes('k8s') || target.includes('kubernetes');
     return target.includes(key);
   });
 }
@@ -167,6 +230,31 @@ function inferMaintenanceInfraTypes(item) {
   if (text(item.nmsStatus) && text(item.nmsStatus).toUpperCase() !== 'X') result.push('NMS');
   if (text(item.pgVersion) && text(item.pgVersion).toUpperCase() !== 'X') result.push('DBMS');
   if (text(item.apm).toUpperCase() === 'O') result.push('APM');
+
+  const target = [
+    item.maintenanceName,
+    item.progressIssues,
+    item.remarks,
+    item.smsStatus,
+    item.nmsStatus,
+    item.pgVersion,
+    item.webVersion,
+    item.region,
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  INFRA_TYPES.forEach((infra) => {
+    const key = infra.toLowerCase();
+    const matched = infra === 'K8s'
+      ? target.includes('k8s') || target.includes('kubernetes')
+      : target.includes(key);
+
+    if (matched && !result.includes(infra)) {
+      result.push(infra);
+    }
+  });
+
   return result;
 }
 
@@ -191,15 +279,110 @@ function normalizeProject(project) {
     latestIssue: firstMeaningfulLine(project.progressLogs) || firstMeaningfulLine(project.remainingIssues) || '-',
     detail: detail.length ? detail : ['상세 진행 내용이 없습니다.'],
     updatedAt: formatDateTime(project.createdAt),
+    projectLogSources: [
+      {
+        executor: executors.join(', '),
+        progressLogs: text(project.progressLogs),
+        md: number(project.md),
+      },
+    ],
   };
 }
 
 // DB 유지보수 응답을 기존 화면 레이아웃이 쓰던 형태로 변환합니다.
+function mergeTextLines(...values) {
+  return [
+    ...new Set(
+      values
+        .flatMap((value) => text(value).split('\n'))
+        .map((line) => line.trim())
+        .filter(Boolean),
+    ),
+  ].join('\n');
+}
+
+function mergeUniqueList(...lists) {
+  return [
+    ...new Set(
+      lists
+        .flatMap((list) => (Array.isArray(list) ? list : splitPeople(list)))
+        .map((item) => text(item))
+        .filter(Boolean),
+    ),
+  ];
+}
+
+function projectGroupKey(row) {
+  const siteKey = row.siteCode || row.customerName;
+  return [row.customerName, siteKey].map((value) => text(value).toLowerCase()).join('|');
+}
+
+function groupProjectRows(rows) {
+  const grouped = new Map();
+
+  rows.forEach((row) => {
+    const key = projectGroupKey(row);
+    const existing = grouped.get(key);
+
+    if (!existing) {
+      grouped.set(key, {
+        ...row,
+        id: `project-group-${key}`,
+        sourceIds: [row.detailId].filter(Boolean),
+        projectLogSources: row.projectLogSources || [],
+      });
+      return;
+    }
+
+    const progressLogs = mergeTextLines(existing.progressLogs, row.progressLogs);
+    const remainingIssues = mergeTextLines(existing.remainingIssues, row.remainingIssues);
+    const detail = splitDetailLines(progressLogs, remainingIssues);
+
+    grouped.set(key, {
+      ...existing,
+      sourceIds: [...(existing.sourceIds || []), row.detailId].filter(Boolean),
+      salesRep: mergeUniqueList(existing.salesRep, row.salesRep).join(', '),
+      executors: mergeUniqueList(existing.executors, row.executors),
+      infraTypes: mergeUniqueList(existing.infraTypes, row.infraTypes),
+      progressLogs,
+      remainingIssues,
+      md: number(existing.md) + number(row.md),
+      latestIssue: firstMeaningfulLine(progressLogs) || firstMeaningfulLine(remainingIssues) || '-',
+      detail: detail.length ? detail : existing.detail,
+      projectLogSources: [
+        ...(existing.projectLogSources || []),
+        ...(row.projectLogSources || []),
+      ],
+    });
+  });
+
+  return [...grouped.values()];
+}
+
+function formatInspectionDates(inspectionDates) {
+  const groupedByYear = new Map();
+
+  Object.values(inspectionDates || {}).forEach((date) => {
+    const matched = text(date).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+    if (!matched) {
+      return;
+    }
+
+    const [, year, month, day] = matched;
+    const dates = groupedByYear.get(year) || [];
+    dates.push(`${month}/${day}`);
+    groupedByYear.set(year, dates);
+  });
+
+  return [...groupedByYear.entries()]
+    .map(([year, dates]) => `${year}년 ${dates.join(', ')}`)
+    .join('\n');
+}
+
 function normalizeMaintenance(item) {
   const executors = splitPeople([item.mainDev, item.subDev].filter(Boolean).join(','));
-  const inspection = Object.entries(item.inspectionDates || {})
-    .map(([month, date]) => `${month} ${date}`)
-    .join(', ');
+  const inspection = formatInspectionDates(item.inspectionDates);
   const detail = splitDetailLines(item.progressIssues, item.remarks);
 
   return {
@@ -251,6 +434,41 @@ function matchAllKeywords(row, keyword) {
     .toLowerCase();
 
   return words.every((word) => target.includes(word));
+}
+
+function includesKeywordTerms(value, terms, requireAll = true) {
+  const target = text(value).toLowerCase();
+
+  if (!target || terms.length === 0) {
+    return false;
+  }
+
+  return requireAll
+    ? terms.every((term) => target.includes(term.toLowerCase()))
+    : terms.some((term) => target.includes(term.toLowerCase()));
+}
+
+function getSearchPreview(row, keyword) {
+  const terms = getKeywordTerms(keyword);
+
+  if (terms.length === 0) {
+    return row.latestIssue;
+  }
+
+  const candidates = [
+    ...row.detail,
+    row.latestIssue,
+    row.customerName,
+    row.siteCode,
+    row.salesRep ? `영업대표: ${row.salesRep}` : '',
+    row.executors.length ? `수행인원: ${row.executors.join(', ')}` : '',
+    row.projectType,
+    row.infraTypes.length ? `인프라: ${row.infraTypes.join(', ')}` : '',
+  ].filter(Boolean);
+
+  return candidates.find((candidate) => includesKeywordTerms(candidate, terms, true))
+    || candidates.find((candidate) => includesKeywordTerms(candidate, terms, false))
+    || row.latestIssue;
 }
 
 function getFilteredRows(rows, { keyword, salesRep, executor, customer, infraTypes }) {
@@ -352,7 +570,7 @@ function WorkIssueFilterBar({
 
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-700">인프라 필터</label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {INFRA_TYPES.map((infra) => {
               const selected = selectedInfraTypes.includes(infra);
 
@@ -361,10 +579,10 @@ function WorkIssueFilterBar({
                   key={infra}
                   type="button"
                   onClick={() => toggleInfra(infra)}
-                  className={`h-9 rounded-lg border px-3 text-sm font-semibold transition ${
+                  className={`inline-flex h-8 min-w-[58px] items-center justify-center rounded-md border px-2 text-xs font-bold transition ${
                     selected
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                      ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
+                      : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-slate-400 hover:bg-white hover:text-slate-900'
                   }`}
                 >
                   {infra}
@@ -487,7 +705,183 @@ function usePaginatedRows(rows) {
   };
 }
 
-function DetailPanel({ rowId, detail, colSpan }) {
+function parseTimelineEntries(value, fallbackExecutor) {
+  const entries = [];
+  let current = null;
+  const toSortKey = (label) => {
+    const matched = text(label).match(/(\d{1,2})\/(\d{1,2})/);
+    if (!matched) return 0;
+    return Number(matched[1]) * 100 + Number(matched[2]);
+  };
+
+  text(value)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const dateMatch = line.match(/^(\d{1,2}\/\d{1,2})(?:\s*[~-]\s*(\d{1,2}(?:\/\d{1,2})?))?\s*(?:\(([^)]+)\))?\s*(.*)$/);
+
+      if (dateMatch) {
+        if (current) entries.push(current);
+
+        current = {
+          label: dateMatch[2] ? `${dateMatch[1]}~${dateMatch[2]}` : dateMatch[1],
+          sortKey: toSortKey(dateMatch[2] || dateMatch[1]),
+          type: dateMatch[3] || '',
+          executor: fallbackExecutor || '',
+          content: [],
+        };
+
+        if (dateMatch[4]) {
+          current.content.push(dateMatch[4].replace(/^[\s\-•·]+/, '').trim());
+        }
+        return;
+      }
+
+      if (!current) {
+        current = {
+          label: '',
+          sortKey: 0,
+          type: '',
+          executor: fallbackExecutor || '',
+          content: [],
+        };
+      }
+
+      current.content.push(line.replace(/^[\s\-•·]+/, '').trim());
+    });
+
+  if (current) entries.push(current);
+
+  return entries
+    .map((entry) => ({
+      ...entry,
+      content: entry.content.filter(Boolean),
+    }))
+    .filter((entry) => entry.label || entry.content.length);
+}
+
+function DetailSectionTitle({ children, color = 'text-blue-400' }) {
+  return (
+    <div className={`mb-4 flex items-center gap-2 text-xs font-black ${color}`}>
+      <span className="text-sm">⌁</span>
+      <span>{children}</span>
+    </div>
+  );
+}
+
+function TimelineBox({ entries, accent = 'blue', keyword = '' }) {
+  const dotClass = accent === 'teal' ? 'bg-teal-500' : 'bg-blue-500';
+  const headerClass = accent === 'teal'
+    ? 'bg-teal-50 text-teal-900'
+    : 'bg-blue-50 text-blue-900';
+  const badgeClass = accent === 'teal'
+    ? 'bg-teal-100 text-teal-700'
+    : 'bg-blue-100 text-blue-700';
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      {entries.length === 0 ? (
+        <div className="px-5 py-5 text-sm text-slate-500">상세 진행 내용이 없습니다.</div>
+      ) : (
+        entries.map((entry, entryIndex) => (
+          <div key={`${entry.label}-${entryIndex}`} className="border-b border-slate-100 last:border-b-0">
+            {(entry.label || entry.executor || entry.type) ? (
+              <div className={`flex items-center gap-3 px-5 py-3 text-xs font-bold ${headerClass}`}>
+                {entry.label ? <span className="font-mono">{highlightText(entry.label, keyword)}</span> : null}
+                {entry.type ? <span className={`rounded-full px-2 py-0.5 text-[10px] ${badgeClass}`}>{highlightText(entry.type, keyword)}</span> : null}
+                {entry.executor ? <span className="border-l border-slate-200 pl-3 text-slate-600">{highlightText(entry.executor, keyword)}</span> : null}
+              </div>
+            ) : null}
+            <ul className="space-y-3 px-5 py-4 text-sm text-slate-700">
+              {entry.content.map((item, itemIndex) => (
+                <li key={`${entry.label}-${itemIndex}`} className="flex gap-3">
+                  <span className={`mt-2 h-2 w-2 shrink-0 rounded-full ${dotClass}`} />
+                  <span>{highlightText(item, keyword)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+function StatBox({ title, children }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-800 shadow-sm">
+      <div className="mb-2 text-[11px] font-bold text-slate-500">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function DetailPanel({ rowId, detail, row, type, colSpan, keyword = '' }) {
+  if (row) {
+    const isProject = type === 'PROJECT';
+    const timelineEntries = (isProject && row.projectLogSources?.length
+      ? row.projectLogSources.flatMap((source) => parseTimelineEntries(source.progressLogs, source.executor))
+      : parseTimelineEntries(row.progressIssues, row.executors?.join(', ')))
+      .sort((a, b) => b.sortKey - a.sortKey);
+    const issueLines = splitDetailLines(isProject ? row.remainingIssues : row.remarks);
+    const totalMd = number(row.md).toFixed(1);
+    const people = row.executors?.length ? row.executors : splitPeople([row.mainDev, row.subDev].filter(Boolean).join(','));
+
+    return (
+      <tr className="bg-slate-50">
+        <td colSpan={colSpan} className="p-0">
+          <div className="grid gap-8 border-y border-slate-200 bg-slate-50 px-6 py-7 text-slate-800 lg:grid-cols-2">
+            <div>
+              <DetailSectionTitle color={isProject ? 'text-blue-700' : 'text-teal-700'}>
+                {isProject ? '금주 실적 및 진행 내역 (누적)' : '유지보수 진행내역 및 이슈'}
+              </DetailSectionTitle>
+              <TimelineBox entries={timelineEntries} accent={isProject ? 'blue' : 'teal'} keyword={keyword} />
+              {isProject && row.startDate ? (
+                <div className="mt-4 inline-flex rounded-md border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                  Start: {row.startDate}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <DetailSectionTitle color="text-amber-700">잔여 사항 및 이슈 (주의요망)</DetailSectionTitle>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-5 text-sm leading-7 text-amber-800 shadow-sm">
+                  {issueLines.length ? (
+                    issueLines.map((item, index) => <div key={`${row.id}-issue-${index}`}>{highlightText(item, keyword)}</div>)
+                  ) : (
+                    <div>잔여 사항 및 이슈가 없습니다.</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <StatBox title={isProject ? '구축 범위' : '지원 범위'}>
+                  <div className="whitespace-pre-wrap font-bold leading-6">
+                    {isProject
+                      ? highlightText(text(row.scope) || row.infraTypes?.join('\n') || '-', keyword)
+                      : highlightText([`SMS(${text(row.smsStatus) || '-'})`, `NMS(${text(row.nmsStatus) || '-'})`].join('\n'), keyword)}
+                  </div>
+                </StatBox>
+                <StatBox title="인원별 지원 횟수 / MD">
+                  <div className="space-y-2">
+                    {people.length ? people.map((person) => (
+                      <div key={person} className="flex items-center justify-between gap-4">
+                        <span className="font-bold text-slate-700">{highlightText(person, keyword)}</span>
+                        <span className="font-mono font-black text-slate-900">1회&nbsp; / &nbsp;{totalMd}MD</span>
+                      </div>
+                    )) : <div className="text-slate-500">-</div>}
+                  </div>
+                </StatBox>
+              </div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
   const visibleDetail = detail.slice(0, MAX_DETAIL_LINES);
   const hiddenCount = Math.max(0, detail.length - MAX_DETAIL_LINES);
 
@@ -500,7 +894,7 @@ function DetailPanel({ rowId, detail, colSpan }) {
             {visibleDetail.map((item, index) => (
               <li key={`${rowId}-${index}`} className="flex gap-2">
                 <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
-                <span>{item}</span>
+                <span>{highlightText(item, keyword)}</span>
               </li>
             ))}
           </ul>
@@ -515,7 +909,7 @@ function DetailPanel({ rowId, detail, colSpan }) {
   );
 }
 
-const ProjectTableRow = React.memo(function ProjectTableRow({ row, open, onToggle }) {
+const ProjectTableRow = React.memo(function ProjectTableRow({ row, open, onToggle, keyword }) {
   return (
     <React.Fragment>
       <tr
@@ -529,30 +923,30 @@ const ProjectTableRow = React.memo(function ProjectTableRow({ row, open, onToggl
               className="min-w-0 truncate font-bold text-slate-900"
               title={`${row.customerName}${row.siteCode ? `(${row.siteCode})` : ''}`}
             >
-              {row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}
+              {highlightText(`${row.customerName}${row.siteCode ? `(${row.siteCode})` : ''}`, keyword)}
             </div>
             <DetailPopupButton
               disabled={!row.detailId}
               onOpen={() => openWorkIssueHistoryDetailWindow('PROJECT', row.detailId)}
             />
           </div>
-          <div className="mt-0.5 text-xs text-slate-500">{row.projectType || '-'}</div>
+          <div className="mt-0.5 text-xs text-slate-500">{highlightText(row.projectType || '-', keyword)}</div>
         </td>
-        <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.salesRep}>{row.salesRep || '-'}</td>
-        <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.executors.join(', ')}>{row.executors.join(', ') || '-'}</td>
-        <td className="px-4 py-4 whitespace-nowrap font-mono text-slate-600">{row.startDate || '-'}</td>
-        <td className="px-4 py-4 text-slate-700">{row.latestIssue}</td>
+        <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.salesRep}>{highlightText(row.salesRep || '-', keyword)}</td>
+        <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.executors.join(', ')}>{highlightText(row.executors.join(', ') || '-', keyword)}</td>
+        <td className="px-4 py-4 whitespace-nowrap font-mono text-slate-600">{highlightText(row.startDate || '-', keyword)}</td>
+        <td className="px-4 py-4 text-slate-700">{highlightText(row.latestIssue, keyword)}</td>
         <td className="px-4 py-4 text-slate-400">
           <ChevronIcon open={open} />
         </td>
       </tr>
 
-      {open ? <DetailPanel rowId={row.id} detail={row.detail} colSpan={7} /> : null}
+      {open ? <DetailPanel rowId={row.id} detail={row.detail} row={row} type="PROJECT" colSpan={7} keyword={keyword} /> : null}
     </React.Fragment>
   );
 });
 
-function ProjectTable({ rows }) {
+function ProjectTable({ rows, keyword }) {
   const [openedId, setOpenedId] = useState('');
   const { page, pageSize, pagedRows, totalCount, changePage, changePageSize } = usePaginatedRows(rows);
 
@@ -595,6 +989,7 @@ function ProjectTable({ rows }) {
               row={row}
               open={openedId === row.id}
               onToggle={toggleRow}
+              keyword={keyword}
             />
           ))}
 
@@ -621,7 +1016,7 @@ function ProjectTable({ rows }) {
   );
 }
 
-const MaintenanceTableRow = React.memo(function MaintenanceTableRow({ row, open, onToggle }) {
+const MaintenanceTableRow = React.memo(function MaintenanceTableRow({ row, open, onToggle, keyword }) {
   return (
     <React.Fragment>
       <tr
@@ -635,31 +1030,31 @@ const MaintenanceTableRow = React.memo(function MaintenanceTableRow({ row, open,
               className="min-w-0 truncate font-bold text-slate-900"
               title={`${row.customerName}${row.siteCode ? `(${row.siteCode})` : ''}`}
             >
-              {row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}
+              {highlightText(`${row.customerName}${row.siteCode ? `(${row.siteCode})` : ''}`, keyword)}
             </div>
             <DetailPopupButton
               disabled={!row.detailId}
               onOpen={() => openWorkIssueHistoryDetailWindow('MAINTENANCE', row.detailId)}
             />
           </div>
-          <div className="mt-0.5 text-xs text-slate-500">{row.projectType || '-'}</div>
+          <div className="mt-0.5 text-xs text-slate-500">{highlightText(row.projectType || '-', keyword)}</div>
         </td>
-        <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.salesRep}>{row.salesRep || '-'}</td>
-        <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.executors.join(', ')}>{row.executors.join(', ') || '-'}</td>
-        <td className="px-4 py-4 whitespace-nowrap font-mono text-slate-600">{row.contractEnd || '-'}</td>
-        <td className="px-4 py-4 text-slate-700">{row.latestIssue}</td>
-        <td className="px-4 py-4 text-slate-700">{row.inspection}</td>
+        <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.salesRep}>{highlightText(row.salesRep || '-', keyword)}</td>
+        <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.executors.join(', ')}>{highlightText(row.executors.join(', ') || '-', keyword)}</td>
+        <td className="px-4 py-4 whitespace-nowrap font-mono text-slate-600">{highlightText(row.contractEnd || '-', keyword)}</td>
+        <td className="px-4 py-4 text-slate-700">{highlightText(row.latestIssue, keyword)}</td>
+        <td className="whitespace-pre-line px-4 py-4 text-slate-700">{highlightText(row.inspection, keyword)}</td>
         <td className="px-4 py-4 text-slate-400">
           <ChevronIcon open={open} />
         </td>
       </tr>
 
-      {open ? <DetailPanel rowId={row.id} detail={row.detail} colSpan={8} /> : null}
+      {open ? <DetailPanel rowId={row.id} detail={row.detail} row={row} type="MAINTENANCE" colSpan={8} keyword={keyword} /> : null}
     </React.Fragment>
   );
 });
 
-function MaintenanceTable({ rows }) {
+function MaintenanceTable({ rows, keyword }) {
   const [openedId, setOpenedId] = useState('');
   const { page, pageSize, pagedRows, totalCount, changePage, changePageSize } = usePaginatedRows(rows);
 
@@ -704,6 +1099,7 @@ function MaintenanceTable({ rows }) {
               row={row}
               open={openedId === row.id}
               onToggle={toggleRow}
+              keyword={keyword}
             />
           ))}
 
@@ -760,16 +1156,16 @@ function SearchResultList({ projectRows, maintenanceRows, keyword }) {
               className="min-w-0 truncate text-sm font-bold text-slate-900"
               title={`${row.customerName}${row.siteCode ? `(${row.siteCode})` : ''}`}
             >
-              {row.customerName}{row.siteCode ? `(${row.siteCode})` : ''}
+              {highlightText(`${row.customerName}${row.siteCode ? `(${row.siteCode})` : ''}`, keyword)}
             </span>
             <DetailPopupButton
               disabled={!row.detailId}
               onOpen={() => openWorkIssueHistoryDetailWindow(row.workHistoryType, row.detailId)}
             />
           </div>
-          <p className="text-sm text-slate-700">{row.latestIssue}</p>
-          <p className="mt-2 text-xs text-slate-500">영업대표: {row.salesRep || '-'}</p>
-          <p className="mt-2 text-xs text-slate-500">수행인원: {row.executors.join(', ') || '-'}</p>
+          <p className="text-sm text-slate-700">{highlightText(getSearchPreview(row, keyword), keyword)}</p>
+          <p className="mt-2 text-xs text-slate-500">영업대표: {highlightText(row.salesRep || '-', keyword)}</p>
+          <p className="mt-2 text-xs text-slate-500">수행인원: {highlightText(row.executors.join(', ') || '-', keyword)}</p>
         </div>
       ))}
 
@@ -823,7 +1219,7 @@ export default function WorkIssueHistoryPage() {
       setUploads(uploadList || []);
       setSelectedUploadId(resolvedUploadId);
       setSummary(summaryData);
-      setProjects((projectData || []).map(normalizeProject));
+      setProjects(groupProjectRows((projectData || []).map(normalizeProject)));
       setMaintenanceRows((maintenanceData || []).map(normalizeMaintenance));
     } catch (e) {
       setError(e.message || '작업 및 이슈이력 조회 중 오류가 발생했습니다.');
@@ -1020,8 +1416,8 @@ export default function WorkIssueHistoryPage() {
             onReset={resetFilters}
           />
 
-          {activeInnerTab === 'projects' ? <ProjectTable rows={filteredProjects} /> : null}
-          {activeInnerTab === 'maintenance' ? <MaintenanceTable rows={filteredMaintenance} /> : null}
+          {activeInnerTab === 'projects' ? <ProjectTable rows={filteredProjects} keyword={keyword} /> : null}
+          {activeInnerTab === 'maintenance' ? <MaintenanceTable rows={filteredMaintenance} keyword={keyword} /> : null}
           {activeInnerTab === 'search' ? (
             <SearchResultList
               projectRows={filteredProjects}
