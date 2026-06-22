@@ -9,6 +9,7 @@ export const API_BASE =
 // 인프라 옵션
 // 백엔드 InfraType enum 값과 동일해야 검색/등록이 정상 동작합니다.
 export const infraOptions = [
+  'GPM', '운영관리',
   'EMS', '예방점검', 'ERMS', 'SMS', 'NMS', 'DBMS', 'FMS', 'IMS',
   'SYSLOG', 'TRAP', 'TMS', 'APM', 'BMS', 'STMS', 'RTMS', 'VMS',
   'OAM', 'WNMS', 'CMS', 'K8S', 'TRMS', 'NPM', 'BRMS'
@@ -33,7 +34,9 @@ export const emptyForm = {
   category: '',
   versionInfo: '',
   deploymentVersion: '',
+  completedDate: '',
   status: 'RESOLVED',
+  content: '',
   symptomSummary: '',
   symptomDetail: '',
   causeDetail: '',

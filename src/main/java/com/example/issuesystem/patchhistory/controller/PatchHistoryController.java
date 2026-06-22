@@ -81,6 +81,9 @@ public class PatchHistoryController {
             @RequestParam(required = false) String customerName,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String deploymentVersion,
+            @RequestParam(required = false) String detailType,
+            @RequestParam(required = false) String detailDeploymentVersion,
+            @RequestParam(required = false) String detailVersionRelation,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "0") int page,
@@ -94,11 +97,21 @@ public class PatchHistoryController {
                         customerName,
                         category,
                         deploymentVersion,
+                        detailType,
+                        detailDeploymentVersion,
+                        detailVersionRelation,
                         startDate,
                         endDate,
                         page,
                         size
                 )
         );
+    }
+
+    @GetMapping("/deployment-versions")
+    public ApiResponse<List<String>> getDeploymentVersions(
+            @RequestParam(required = false) String detailType
+    ) {
+        return ApiResponse.ok(patchHistoryService.getDeploymentVersions(detailType));
     }
 }

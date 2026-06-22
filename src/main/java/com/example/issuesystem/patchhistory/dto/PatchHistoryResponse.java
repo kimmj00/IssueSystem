@@ -6,6 +6,7 @@ import com.example.issuesystem.patchhistory.domain.PatchStatus;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
@@ -18,6 +19,7 @@ public class PatchHistoryResponse {
     private String customerName;
     private String versionInfo;
     private PatchStatus status;
+    private String content;
     private String symptomSummary;
     private String symptomDetail;
     private String causeDetail;
@@ -25,6 +27,7 @@ public class PatchHistoryResponse {
     private String tags;
     private String authorName;
     private LocalDateTime createdAt;
+    private LocalDate completedDate;
     private String category;
     private String deploymentVersion;
 
@@ -42,6 +45,7 @@ public class PatchHistoryResponse {
                 .customerName(patchHistory.getCustomerName())
                 .versionInfo(patchHistory.getVersionInfo())
                 .status(patchHistory.getStatus())
+                .content(patchHistory.getSymptomDetail())
                 .symptomSummary(patchHistory.getSymptomSummary())
                 .symptomDetail(patchHistory.getSymptomDetail())
                 .causeDetail(patchHistory.getCauseDetail())
@@ -49,6 +53,7 @@ public class PatchHistoryResponse {
                 .tags(patchHistory.getTags())
                 .authorName(patchHistory.getAuthorName())
                 .createdAt(patchHistory.getCreatedAt())
+                .completedDate(patchHistory.getCompletedDate())
                 .category(patchHistory.getCategory())
                 .deploymentVersion(patchHistory.getDeploymentVersion())
                 .build();

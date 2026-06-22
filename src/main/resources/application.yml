@@ -114,3 +114,44 @@ logging:
 app:
   file:
     upload-dir: /tmp/issue_system/uploads # Render 무료 서버용 임시 업로드 경로
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test-db
+
+  datasource:
+    url: jdbc:postgresql://10.0.0.166:15432/zenius?currentSchema=zenius
+    username: zenius
+    password: ${TEST_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+    open-in-view: false
+
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 500MB
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+
+app:
+  file:
+    upload-dir: D:/issue_system/test-uploads
+  crypto:
+    file-secret-key: ${FILE_SECRET_KEY:test-db-file-secret-key-32-bytes}

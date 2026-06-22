@@ -82,28 +82,22 @@ export default function PatchHistoryDetailWindow() {
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-2xl font-semibold text-slate-900">{patchHistory.title}</h2>
                 <Badge>{patchHistory.infraType}</Badge>
-                <Badge>{patchHistory.status}</Badge>
               </div>
 
               <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 <InfoBox title="ID" value={patchHistory.id} />
-                <InfoBox title="시스템명" value={patchHistory.systemName} />
-                <InfoBox title="고객사" value={patchHistory.customerName} />
+                <InfoBox title="INFRA" value={patchHistory.infraType} />
                 <InfoBox title="구분" value={patchHistory.category} />
-                <InfoBox title="DB버전" value={patchHistory.versionInfo} />
-                <InfoBox title="배포 버전" value={patchHistory.deploymentVersion} />
+                <InfoBox title="배포버전" value={patchHistory.deploymentVersion} />
+                <InfoBox title="완료일" value={patchHistory.completedDate} />
+                <InfoBox title="등록일" value={formatDateTime(patchHistory.createdAt)} />
                 <InfoBox title="작성자" value={patchHistory.authorName} />
-                <InfoBox title="작성일" value={formatDateTime(patchHistory.createdAt)} />
               </div>
             </section>
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="grid grid-cols-1 gap-4">
-                <DetailBlock title="증상 요약" value={patchHistory.symptomSummary} />
-                <DetailBlock title="증상 상세" value={patchHistory.symptomDetail} />
-                <DetailBlock title="원인" value={patchHistory.causeDetail} />
-                <DetailBlock title="조치 내용" value={patchHistory.actionDetail} />
-                <DetailBlock title="태그" value={patchHistory.tags} />
+                <DetailBlock title="내용" value={patchHistory.content || patchHistory.symptomDetail} />
               </div>
             </section>
           </div>

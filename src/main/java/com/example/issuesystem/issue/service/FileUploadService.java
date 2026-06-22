@@ -4,6 +4,8 @@ import com.example.issuesystem.issue.domain.InfraType;
 import com.example.issuesystem.issue.domain.IssueCase;
 import com.example.issuesystem.issue.domain.IssueStatus;
 import com.example.issuesystem.issue.repository.IssueCaseRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
@@ -12,7 +14,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +32,9 @@ public class FileUploadService {
 
     private final IssueCaseRepository issueCaseRepository;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     /**
      * 엑셀 업로드 처리
      * - 엑셀을 읽어서 IssueCase 목록으로 변환
@@ -31,6 +42,16 @@ public class FileUploadService {
      */
     @Transactional
     public int processExcelFile(MultipartFile file) {
+        String fileName = file.getOriginalFilename();
+
+        if (containsIgnoreCase(fileName, "\uB9C8\uC774\uB108\uD328\uCE58")) {
+            return processMinorPatchExcelFile(file);
+        }
+
+        return processPatchListExcelFile(file);
+    }
+
+    private int processPatchListExcelFile(MultipartFile file) {
         int savedCount = 0;
 
         // 한 번에 저장할 데이터 개수
@@ -164,6 +185,97 @@ public class FileUploadService {
         }
     }
 
+    private int processMinorPatchExcelFile(MultipartFile file) {
+        int savedCount = 0;
+        final int BATCH_SIZE = 100;
+
+        List<IssueCase> batch = new ArrayList<>();
+        Map<IssueCase, LocalDateTime> createdAtMap = new HashMap<>();
+
+        log.info("Minor patch excel processing started: fileName={}", file.getOriginalFilename());
+
+        try (InputStream inputStream = file.getInputStream();
+             Workbook workbook = WorkbookFactory.create(inputStream)) {
+
+            Sheet sheet = workbook.getSheet("Sheet1");
+
+            if (sheet == null) {
+                throw new IllegalArgumentException("Sheet1 sheet was not found.");
+            }
+
+            Map<String, Integer> headerMap = readHeaderRow(sheet, 5);
+            validateMinorPatchHeaders(headerMap);
+
+            for (int rowNum = 6; rowNum <= sheet.getLastRowNum(); rowNum++) {
+                Row row = sheet.getRow(rowNum);
+
+                if (row == null || isMinorPatchBlankRow(row, headerMap)) {
+                    continue;
+                }
+
+                String division = getCellValue(row, headerMap.get("\uAD6C\uBD84"));
+                String function = getCellValue(row, headerMap.get("\uAE30\uB2A5"));
+                String infra = getCellValue(row, headerMap.get("\uC778\uD504\uB77C"));
+                String content = getCellValue(row, headerMap.get("\uB0B4\uC6A9"));
+                String scriptExecuted = getCellValue(row, getFirstHeaderIndex(headerMap,
+                        "\u0053\u0063\u0072\u0070\u0069\u0074 \uC2E4\uD589\uC5EC\uBD80",
+                        "\u0053\u0063\u0072\u0069\u0070\u0074 \uC2E4\uD589\uC5EC\uBD80"));
+                String note = getCellValue(row, headerMap.get("\uBE44\uACE0"));
+                String commonApplyVersion = getCellValue(row, headerMap.get("\uACF5\uD1B5\uC801\uC6A9\uBC84\uC804"));
+                String author = getCellValue(row, headerMap.get("\uB2F4\uB2F9\uC790"));
+                LocalDateTime completedAt = getCellDateTime(row, headerMap.get("\uC644\uB8CC\uC77C"));
+
+                IssueCase issueCase = IssueCase.builder()
+                        .title(makeMinorPatchTitle(content, sheet.getSheetName(), rowNum))
+                        .infraType(resolveInfraType(infra))
+                        .systemName(isBlank(infra) ? "\uBBF8\uC9C0\uC815" : infra)
+                        .customerName(null)
+                        .versionInfo(null)
+                        .deploymentVersion(commonApplyVersion)
+                        .status(IssueStatus.RESOLVED)
+                        .symptomSummary(makeSummary(content))
+                        .symptomDetail(makeMinorPatchDetail(content, scriptExecuted, note))
+                        .causeDetail(null)
+                        .actionDetail(null)
+                        .tags(makeTags(infra, division, function, sheet.getSheetName()))
+                        .authorName(isBlank(author) ? "excel-upload" : author)
+                        .category(makeMinorPatchCategory(function, division))
+                        .build();
+
+                batch.add(issueCase);
+
+                if (completedAt != null) {
+                    createdAtMap.put(issueCase, completedAt);
+                }
+
+                if (batch.size() >= BATCH_SIZE) {
+                    List<IssueCase> savedIssues = issueCaseRepository.saveAll(batch);
+                    issueCaseRepository.flush();
+                    updateCreatedAt(savedIssues, createdAtMap);
+                    savedCount += savedIssues.size();
+                    batch.clear();
+                    createdAtMap.clear();
+                }
+            }
+
+            if (!batch.isEmpty()) {
+                List<IssueCase> savedIssues = issueCaseRepository.saveAll(batch);
+                issueCaseRepository.flush();
+                updateCreatedAt(savedIssues, createdAtMap);
+                savedCount += savedIssues.size();
+                batch.clear();
+                createdAtMap.clear();
+            }
+
+            log.info("Minor patch excel processing completed: savedCount={}", savedCount);
+
+            return savedCount;
+        } catch (Throwable e) {
+            log.error("Minor patch excel parsing failed", e);
+            throw new IllegalStateException("Minor patch excel upload failed: " + e.getMessage(), e);
+        }
+    }
+
     /**
      * 헤더 행 찾기
      * - "번호", "INFRA", "패치내역"이 포함된 행을 헤더로 판단
@@ -191,6 +303,219 @@ public class FileUploadService {
         }
 
         return headerMap;
+    }
+
+    private Map<String, Integer> readHeaderRow(Sheet sheet, int headerRowIndex) {
+        Row headerRow = sheet.getRow(headerRowIndex);
+
+        if (headerRow == null) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, Integer> headerMap = new HashMap<>();
+
+        for (Cell cell : headerRow) {
+            String value = getCellValue(cell);
+
+            if (!isBlank(value)) {
+                headerMap.put(value.trim(), cell.getColumnIndex());
+            }
+        }
+
+        return headerMap;
+    }
+
+    private void validateMinorPatchHeaders(Map<String, Integer> headerMap) {
+        List<String> requiredHeaders = List.of(
+                "구분",
+                "기능",
+                "인프라",
+                "내용",
+                "비고",
+                "공통적용버전",
+                "담당자",
+                "완료일"
+        );
+
+        for (String requiredHeader : requiredHeaders) {
+            if (!headerMap.containsKey(requiredHeader)) {
+                throw new IllegalArgumentException("Required header was not found: " + requiredHeader);
+            }
+        }
+
+        if (getFirstHeaderIndex(headerMap, "Scrpit 실행여부", "Script 실행여부") == null) {
+            throw new IllegalArgumentException("Required header was not found: Scrpit/Script 실행여부");
+        }
+    }
+
+    private boolean isMinorPatchBlankRow(Row row, Map<String, Integer> headerMap) {
+        return isBlank(getCellValue(row, headerMap.get("구분")))
+                && isBlank(getCellValue(row, headerMap.get("기능")))
+                && isBlank(getCellValue(row, headerMap.get("인프라")))
+                && isBlank(getCellValue(row, headerMap.get("내용")))
+                && isBlank(getCellValue(row, headerMap.get("비고")))
+                && isBlank(getCellValue(row, headerMap.get("공통적용버전")))
+                && isBlank(getCellValue(row, headerMap.get("담당자")))
+                && isBlank(getCellValue(row, headerMap.get("완료일")));
+    }
+
+    private Integer getFirstHeaderIndex(Map<String, Integer> headerMap, String... headerNames) {
+        for (String headerName : headerNames) {
+            Integer index = headerMap.get(headerName);
+
+            if (index != null) {
+                return index;
+            }
+        }
+
+        return null;
+    }
+
+    private String makeMinorPatchCategory(String function, String division) {
+        if (isBlank(function)) {
+            return division;
+        }
+
+        if (isBlank(division)) {
+            return function;
+        }
+
+        return limit(function.trim() + "(" + division.trim() + ")", 50);
+    }
+
+    private String makeMinorPatchDetail(String content, String scriptExecuted, String note) {
+        List<String> parts = new ArrayList<>();
+
+        if (!isBlank(content)) {
+            parts.add(content.trim());
+        }
+
+        if (!isBlank(scriptExecuted)) {
+            parts.add(scriptExecuted.trim());
+        }
+
+        if (!isBlank(note)) {
+            parts.add(note.trim());
+        }
+
+        return parts.isEmpty() ? "내용 없음" : String.join("\n\n", parts);
+    }
+
+    private String makeMinorPatchTitle(String content, String sheetName, int rowNum) {
+        String firstSentence = firstSentence(content);
+
+        if (isBlank(firstSentence)) {
+            firstSentence = sheetName + " minor patch row " + (rowNum + 1);
+        }
+
+        return limit(firstSentence, 200);
+    }
+
+    private String firstSentence(String value) {
+        if (isBlank(value)) {
+            return "";
+        }
+
+        String normalized = value.trim();
+        int sentenceEnd = findFirstSentenceEnd(normalized);
+
+        if (sentenceEnd >= 0) {
+            return normalized.substring(0, sentenceEnd + 1).trim();
+        }
+
+        return makeSummary(normalized);
+    }
+
+    private int findFirstSentenceEnd(String value) {
+        int result = -1;
+
+        for (String delimiter : List.of(".", "?", "!", "。", "？", "！", "다.", "요.")) {
+            int index = value.indexOf(delimiter);
+
+            if (index >= 0) {
+                int endIndex = index + delimiter.length() - 1;
+                result = result < 0 ? endIndex : Math.min(result, endIndex);
+            }
+        }
+
+        return result;
+    }
+
+    private LocalDateTime getCellDateTime(Row row, Integer columnIndex) {
+        if (row == null || columnIndex == null) {
+            return null;
+        }
+
+        Cell cell = row.getCell(columnIndex);
+
+        if (cell == null) {
+            return null;
+        }
+
+        if (cell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
+            return cell.getDateCellValue().toInstant()
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDateTime();
+        }
+
+        return parseDateTime(getCellValue(cell));
+    }
+
+    private LocalDateTime parseDateTime(String value) {
+        if (isBlank(value)) {
+            return null;
+        }
+
+        String normalized = value.trim().replace(".", "-").replace("/", "-");
+
+        for (DateTimeFormatter formatter : List.of(
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"),
+                DateTimeFormatter.ofPattern("yyyy-M-d HH:mm:ss"),
+                DateTimeFormatter.ofPattern("yyyy-M-d HH:mm")
+        )) {
+            try {
+                return LocalDateTime.parse(normalized, formatter);
+            } catch (DateTimeParseException ignored) {
+                // Try the next supported format.
+            }
+        }
+
+        for (DateTimeFormatter formatter : List.of(
+                DateTimeFormatter.ofPattern("yyyy-MM-dd"),
+                DateTimeFormatter.ofPattern("yyyy-M-d")
+        )) {
+            try {
+                return LocalDate.parse(normalized, formatter).atStartOfDay();
+            } catch (DateTimeParseException ignored) {
+                // Try the next supported format.
+            }
+        }
+
+        throw new IllegalArgumentException("Unsupported date format: " + value);
+    }
+
+    private void updateCreatedAt(List<IssueCase> savedIssues, Map<IssueCase, LocalDateTime> createdAtMap) {
+        for (IssueCase issueCase : savedIssues) {
+            LocalDateTime createdAt = createdAtMap.get(issueCase);
+
+            if (createdAt == null) {
+                continue;
+            }
+
+            entityManager.createNativeQuery("""
+                    update issue_case
+                    set created_at = :createdAt
+                    where id = :id
+                    """)
+                    .setParameter("createdAt", createdAt)
+                    .setParameter("id", issueCase.getId())
+                    .executeUpdate();
+        }
+    }
+
+    private boolean containsIgnoreCase(String value, String keyword) {
+        return value != null && value.toLowerCase().contains(keyword.toLowerCase());
     }
 
     /**

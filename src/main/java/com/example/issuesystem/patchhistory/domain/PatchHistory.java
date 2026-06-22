@@ -8,6 +8,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 @Getter
 @Entity
 // 기존 운영 DB와 데이터 호환을 위해 물리 테이블명은 issue_case로 유지합니다.
@@ -64,6 +66,9 @@ public class PatchHistory extends BaseTimeEntity {
     @Column(length = 50)
     private String deploymentVersion;  // 배포버전
 
+    @Column
+    private LocalDate completedDate;
+
     @Builder
     public PatchHistory(
             String title,
@@ -79,7 +84,8 @@ public class PatchHistory extends BaseTimeEntity {
             String tags,
             String authorName,
             String category,
-            String deploymentVersion
+            String deploymentVersion,
+            LocalDate completedDate
     ) {
         this.title = title;
         this.infraType = infraType;
@@ -95,6 +101,7 @@ public class PatchHistory extends BaseTimeEntity {
         this.authorName = authorName;
         this.category = category;
         this.deploymentVersion = deploymentVersion;
+        this.completedDate = completedDate;
     }
 
     public void update(
@@ -110,7 +117,8 @@ public class PatchHistory extends BaseTimeEntity {
             String actionDetail,
             String tags,
             String category,
-            String deploymentVersion
+            String deploymentVersion,
+            LocalDate completedDate
     ) {
         this.title = title;
         this.infraType = infraType;
@@ -125,5 +133,6 @@ public class PatchHistory extends BaseTimeEntity {
         this.tags = tags;
         this.category = category;
         this.deploymentVersion = deploymentVersion;
+        this.completedDate = completedDate;
     }
 }

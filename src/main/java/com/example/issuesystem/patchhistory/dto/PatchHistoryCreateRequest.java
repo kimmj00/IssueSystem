@@ -7,6 +7,8 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDate;
+
 @Getter
 @Setter
 public class PatchHistoryCreateRequest {
@@ -26,17 +28,19 @@ public class PatchHistoryCreateRequest {
     @NotNull(message = "상태는 필수입니다.")
     private PatchStatus status;
 
-    @NotBlank(message = "증상 요약은 필수입니다.")
     private String symptomSummary;
 
-    @NotBlank(message = "증상 상세는 필수입니다.")
     private String symptomDetail;
+
+    @NotBlank(message = "내용은 필수입니다.")
+    private String content;
 
     private String causeDetail;
     private String actionDetail;
     private String tags;
     private String category;
     private String deploymentVersion;
+    private LocalDate completedDate;
 
     @NotBlank(message = "작성자는 필수입니다.")
     private String authorName;

@@ -89,6 +89,15 @@ export default function CreatePatchHistoryModal({
               />
             </LabeledInput>
 
+            <LabeledInput label="완료일">
+              <input
+                type="date"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
+                value={form.completedDate}
+                onChange={(e) => handleChange('completedDate', e.target.value)}
+              />
+            </LabeledInput>
+
             <LabeledInput label="상태">
               <select
                 className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
@@ -127,39 +136,16 @@ export default function CreatePatchHistoryModal({
             </LabeledInput>
           </div>
 
-          <LabeledInput label="증상 요약">
-            <input
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
-              value={form.symptomSummary}
-              onChange={(e) => handleChange('symptomSummary', e.target.value)}
-              placeholder="예: DB 연결이 간헐적으로 끊김"
-            />
-          </LabeledInput>
-
-          <LabeledInput label="증상 상세">
+          <LabeledInput label="내용">
             <textarea
               className="min-h-28 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
-              value={form.symptomDetail}
-              onChange={(e) => handleChange('symptomDetail', e.target.value)}
-              placeholder="상세 증상을 입력하세요"
-            />
-          </LabeledInput>
-
-          <LabeledInput label="원인">
-            <textarea
-              className="min-h-28 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
-              value={form.causeDetail}
-              onChange={(e) => handleChange('causeDetail', e.target.value)}
-              placeholder="원인을 입력하세요"
-            />
-          </LabeledInput>
-
-          <LabeledInput label="조치 내용">
-            <textarea
-              className="min-h-28 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
-              value={form.actionDetail}
-              onChange={(e) => handleChange('actionDetail', e.target.value)}
-              placeholder="조치 내용을 입력하세요"
+              value={form.content}
+              onChange={(e) => {
+                handleChange('content', e.target.value);
+                handleChange('symptomDetail', e.target.value);
+                handleChange('symptomSummary', e.target.value.split(/\r?\n/, 1)[0] || '');
+              }}
+              placeholder="패치 내용을 입력하세요"
             />
           </LabeledInput>
 

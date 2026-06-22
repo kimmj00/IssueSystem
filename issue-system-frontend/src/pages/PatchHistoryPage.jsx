@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import Badge from '../components/common/Badge';
 import LabeledInput from '../components/common/LabeledInput';
 import SectionCard from '../components/common/SectionCard';
 import CreatePatchHistoryModal from '../components/modal/CreatePatchHistoryModal';
 import ExcelUploadModal from '../components/modal/ExcelUploadModal';
-import { API_BASE, emptyForm, infraOptions, statusOptions } from '../constants/patchHistoryOptions';
+import { API_BASE, emptyForm, infraOptions } from '../constants/patchHistoryOptions';
 import PageTitle from '../components/common/PageTitle';
 
 // 페이지 버튼 목록을 만듭니다.
@@ -42,28 +41,6 @@ function buildPageItems(currentPage, totalPages) {
   return items;
 }
 
-// input[type="date"]에 들어갈 yyyy-MM-dd 문자열 생성
-function toDateInputValue(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
-}
-
-// 기본 시작일: 현재일 기준 한 달 전
-function getDefaultStartDate() {
-  const date = new Date();
-  date.setMonth(date.getMonth() - 1);
-
-  return toDateInputValue(date);
-}
-
-// 기본 종료일: 현재일
-function getDefaultEndDate() {
-  return toDateInputValue(new Date());
-}
-
 // 등록일 표시 포맷
 // 예: 2026-05-14T10:30:20 → 2026-05-14 10:30
 function formatDateTime(value) {
@@ -72,6 +49,14 @@ function formatDateTime(value) {
   }
 
   return String(value).replace('T', ' ').slice(0, 16);
+}
+
+function formatDate(value) {
+  if (!value) {
+    return '-';
+  }
+
+  return String(value).slice(0, 10);
 }
 
 // 검색 영역에서 반복되는 input 스타일입니다.
@@ -84,6 +69,43 @@ const toolbarButtonClass =
 
 // 패치이력 메인 페이지
 // 검색, 엑셀 업로드 버튼, 추가 버튼, 목록, 새창 상세보기를 담당합니다.
+const detailTypeOptions = [
+  { value: 'ALL', label: '\uC804\uCCB4' },
+  { value: 'WEB', label: 'Web' },
+  { value: 'CORE', label: 'Core' },
+  { value: 'SECURITY', label: '\uBCF4\uC548\uCDE8\uC57D\uC810' },
+];
+
+const detailVersionRelationOptions = [
+  { value: 'ALL', label: '\uC804\uCCB4' },
+  { value: 'BEFORE', label: '\uC774\uC804' },
+  { value: 'AFTER', label: '\uC774\uD6C4' },
+  { value: 'SAME', label: '\uB3D9\uC77C' },
+];
+
+function normalizeDetailTypeValue(value) {
+  const normalized = String(value || '').trim().toUpperCase();
+
+  if (normalized === 'ALL' || String(value || '').trim() === '\uC804\uCCB4') return 'ALL';
+  if (normalized === 'WEB') return 'WEB';
+  if (normalized === 'CORE') return 'CORE';
+  if (normalized === 'SECURITY' || String(value || '').includes('\uBCF4\uC548')) return 'SECURITY';
+
+  return normalized;
+}
+
+function normalizeRelationValue(value) {
+  const normalized = String(value || '').trim().toUpperCase();
+  const trimmed = String(value || '').trim();
+
+  if (normalized === 'ALL' || trimmed === '\uC804\uCCB4') return 'ALL';
+  if (normalized === 'SAME' || trimmed === '\uB3D9\uC77C') return 'SAME';
+  if (normalized === 'BEFORE' || trimmed === '\uC774\uC804') return 'BEFORE';
+  if (normalized === 'AFTER' || trimmed === '\uC774\uD6C4') return 'AFTER';
+
+  return normalized;
+}
+
 export default function PatchHistoryPage() {
   // 목록 데이터 상태
   const [patchHistories, setPatchHistories] = useState([]);
@@ -96,6 +118,12 @@ export default function PatchHistoryPage() {
   // 엑셀 업로드 모달 상태
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [isUploadFilesModalOpen, setIsUploadFilesModalOpen] = useState(false);
+  const [uploadFiles, setUploadFiles] = useState([]);
+  const [loadingUploadFiles, setLoadingUploadFiles] = useState(false);
+  const [excludedItems, setExcludedItems] = useState([]);
+  const [isExcludedModalOpen, setIsExcludedModalOpen] = useState(false);
 
   // 로딩/메시지 상태
   const [loadingList, setLoadingList] = useState(false);
@@ -104,14 +132,21 @@ export default function PatchHistoryPage() {
 
   // 검색 조건 상태
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [customerFilter, setCustomerFilter] = useState('');
+  const customerFilter = '';
   const [infraFilter, setInfraFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const statusFilter = 'ALL';
   const [categoryFilter, setCategoryFilter] = useState('');
   const [deploymentVersionFilter, setDeploymentVersionFilter] = useState('');
+  const [isDetailSearchOpen, setIsDetailSearchOpen] = useState(false);
+  const [detailInfraFilter, setDetailInfraFilter] = useState('');
+  const [detailType, setDetailType] = useState('WEB');
+  const [detailDeploymentVersion, setDetailDeploymentVersion] = useState('');
+  const [detailVersionRelation, setDetailVersionRelation] = useState('ALL');
+  const [deploymentVersionOptions, setDeploymentVersionOptions] = useState([]);
+  const [loadingDeploymentVersions, setLoadingDeploymentVersions] = useState(false);
   // 기간 검색 조건. 기본값은 비워두어 기존처럼 전체 기간을 조회한다.
-  const [startDateFilter, setStartDateFilter] = useState(getDefaultStartDate);
-  const [endDateFilter, setEndDateFilter] = useState(getDefaultEndDate);
+  const [startDateFilter] = useState('');
+  const [endDateFilter] = useState('');
 
   // 페이징 상태
   // 기본 표시 개수는 5개로 유지하되, 사용자가 select로 변경할 수 있게 합니다.
@@ -125,6 +160,29 @@ export default function PatchHistoryPage() {
   // 현재 페이지 기준으로 하단 페이지 버튼 목록을 계산합니다.
   const pageItems = useMemo(() => buildPageItems(page, totalPages), [page, totalPages]);
 
+  const fetchDeploymentVersions = async (nextDetailType = detailType) => {
+    setLoadingDeploymentVersions(true);
+
+    try {
+      const params = new URLSearchParams();
+      params.append('detailType', nextDetailType);
+
+      const res = await fetch(`${API_BASE}/api/patch-histories/deployment-versions?${params.toString()}`);
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.message || '배포버전 목록을 조회하지 못했습니다.');
+      }
+
+      setDeploymentVersionOptions(result.data || []);
+    } catch (e) {
+      console.error(e);
+      setDeploymentVersionOptions([]);
+    } finally {
+      setLoadingDeploymentVersions(false);
+    }
+  };
+
   // 검색 조건과 페이지 정보를 기준으로 목록을 조회합니다.
   const fetchPatchHistories = async (targetPage = page, targetSize = size) => {
     setLoadingList(true);
@@ -137,7 +195,20 @@ export default function PatchHistoryPage() {
       if (customerFilter.trim()) params.append('customerName', customerFilter.trim());
       if (categoryFilter.trim()) params.append('category', categoryFilter.trim());
       if (deploymentVersionFilter.trim()) params.append('deploymentVersion', deploymentVersionFilter.trim());
-      if (infraFilter !== 'ALL') params.append('infraType', infraFilter);
+      if (isDetailSearchOpen) {
+        const normalizedDetailType = normalizeDetailTypeValue(detailType);
+        if (normalizedDetailType) {
+          params.append('detailType', normalizedDetailType);
+        }
+        if (detailDeploymentVersion && normalizeRelationValue(detailVersionRelation) !== 'ALL') {
+          params.append('detailDeploymentVersion', detailDeploymentVersion.trim());
+          params.append('detailVersionRelation', normalizeRelationValue(detailVersionRelation));
+        }
+      }
+      const appliedInfraFilter = isDetailSearchOpen && detailInfraFilter.trim()
+        ? detailInfraFilter.trim()
+        : infraFilter;
+      if (appliedInfraFilter !== 'ALL') params.append('infraType', appliedInfraFilter);
       if (statusFilter !== 'ALL') params.append('status', statusFilter);
       // 기간 조건이 있을 때만 전송한다.
       // 값이 없으면 백엔드에서 전체 기간으로 조회한다.
@@ -174,6 +245,26 @@ export default function PatchHistoryPage() {
     fetchPatchHistories(0, size);
   };
 
+  const handleDetailTypeChange = (nextDetailType) => {
+    const normalizedDetailType = normalizeDetailTypeValue(nextDetailType);
+
+    setDetailType(normalizedDetailType);
+    setDetailDeploymentVersion('');
+
+    if (normalizedDetailType) {
+      fetchDeploymentVersions(normalizedDetailType);
+    }
+  };
+
+  const handleDetailSearchToggle = () => {
+    const nextOpen = !isDetailSearchOpen;
+    setIsDetailSearchOpen(nextOpen);
+
+    if (nextOpen && deploymentVersionOptions.length === 0) {
+      fetchDeploymentVersions(detailType);
+    }
+  };
+
   // 한 페이지에 표시할 목록 개수를 바꾸고 첫 페이지부터 다시 조회합니다.
   const handleSizeChange = (e) => {
     const nextSize = Number(e.target.value);
@@ -202,8 +293,33 @@ export default function PatchHistoryPage() {
     setFile(e.target.files[0]);
   };
 
+  const fetchUploadFiles = async () => {
+    setLoadingUploadFiles(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/patch-histories/upload-files`);
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.message || '등록 파일 리스트를 조회하지 못했습니다.');
+      }
+
+      setUploadFiles(result.data || []);
+      setIsUploadFilesModalOpen(true);
+    } catch (e) {
+      console.error(e);
+      alert(e.message || '등록 파일 리스트 조회 중 오류가 발생했습니다.');
+    } finally {
+      setLoadingUploadFiles(false);
+    }
+  };
+
   // 엑셀 업로드 처리
   const handleUpload = async () => {
+    if (uploading) {
+      return;
+    }
+
     if (!file) {
       alert('업로드할 엑셀 파일을 선택하세요.');
       return;
@@ -211,6 +327,8 @@ export default function PatchHistoryPage() {
 
     const formData = new FormData();
     formData.append('file', file);
+
+    setUploading(true);
 
     try {
       const res = await fetch(`${API_BASE}/api/patch-histories/upload`, {
@@ -226,6 +344,11 @@ export default function PatchHistoryPage() {
 
       const result = JSON.parse(text);
 
+      const uploadResult = result.data;
+      const savedCount = typeof uploadResult === 'number' ? uploadResult : uploadResult?.savedCount || 0;
+      const nextExcludedItems = typeof uploadResult === 'number' ? [] : uploadResult?.excludedItems || [];
+      result.data = savedCount;
+
       if (!result.success) {
         throw new Error(result.message || '엑셀 업로드에 실패했습니다.');
       }
@@ -234,9 +357,16 @@ export default function PatchHistoryPage() {
       setFile(null);
       setIsUploadModalOpen(false);
       await fetchPatchHistories(0, size);
+
+      if (nextExcludedItems.length > 0 && window.confirm('등록제외 항목이 있습니다 확인하겠습니까?')) {
+        setExcludedItems(nextExcludedItems);
+        setIsExcludedModalOpen(true);
+      }
     } catch (e) {
       console.error(e);
       alert(e.message || '엑셀 업로드 중 오류가 발생했습니다.');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -302,8 +432,8 @@ export default function PatchHistoryPage() {
       <div className="space-y-5">
         <SectionCard className="p-3">
           <div className="flex flex-wrap items-end gap-2">
-            <div className="w-full sm:w-[170px]">
-              <LabeledInput label="키워드" compact>
+            <div className="w-full sm:w-[240px]">
+              <LabeledInput label="검색어" compact>
                 <input
                   className={searchInputClass}
                   value={searchKeyword}
@@ -314,25 +444,23 @@ export default function PatchHistoryPage() {
                       handleSearch();
                     }
                   }}
-                  placeholder="제목, 증상, 태그"
+                  placeholder="제목, 내용"
                 />
               </LabeledInput>
             </div>
 
-            <div className="w-full sm:w-[150px]">
-              <LabeledInput label="고객사" compact>
-                <input
+            <div className="w-full sm:w-[120px]">
+              <LabeledInput label="INFRA" compact>
+                <select
                   className={searchInputClass}
-                  value={customerFilter}
-                  onChange={(e) => setCustomerFilter(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleSearch();
-                    }
-                  }}
-                  placeholder="고객사명"
-                />
+                  value={infraFilter}
+                  onChange={(e) => setInfraFilter(e.target.value)}
+                >
+                  <option value="ALL">전체</option>
+                  {infraOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
               </LabeledInput>
             </div>
 
@@ -342,7 +470,13 @@ export default function PatchHistoryPage() {
                   className={searchInputClass}
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
-                  placeholder="Tomcat / Manager"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSearch();
+                    }
+                  }}
+                  placeholder="WEB(추가)"
                 />
               </LabeledInput>
             </div>
@@ -364,58 +498,6 @@ export default function PatchHistoryPage() {
               </LabeledInput>
             </div>
 
-            <div className="w-full sm:w-[120px]">
-              <LabeledInput label="인프라" compact>
-                <select
-                  className={searchInputClass}
-                  value={infraFilter}
-                  onChange={(e) => setInfraFilter(e.target.value)}
-                >
-                  <option value="ALL">전체</option>
-                  {infraOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </LabeledInput>
-            </div>
-
-            <div className="w-full sm:w-[120px]">
-              <LabeledInput label="상태" compact>
-                <select
-                  className={searchInputClass}
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <option value="ALL">전체</option>
-                  {statusOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </LabeledInput>
-            </div>
-
-            <div className="w-full sm:w-[145px]">
-              <LabeledInput label="시작일" compact>
-                <input
-                  type="date"
-                  className={searchInputClass}
-                  value={startDateFilter}
-                  onChange={(e) => setStartDateFilter(e.target.value)}
-                />
-              </LabeledInput>
-            </div>
-
-            <div className="w-full sm:w-[145px]">
-              <LabeledInput label="종료일" compact>
-                <input
-                  type="date"
-                  className={searchInputClass}
-                  value={endDateFilter}
-                  onChange={(e) => setEndDateFilter(e.target.value)}
-                />
-              </LabeledInput>
-            </div>
-
             {/* 검색 버튼: 검색 조건 바로 오른쪽 */}
             <div className="flex w-full items-end sm:w-auto">
               <button
@@ -428,6 +510,16 @@ export default function PatchHistoryPage() {
             </div>
 
             {/* 우측 액션 버튼: 엑셀 업로드 / 추가 */}
+            <div className="flex w-full items-end sm:w-auto">
+              <button
+                type="button"
+                onClick={handleDetailSearchToggle}
+                className={`${toolbarButtonClass} w-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:w-[150px]`}
+              >
+                구분 별 상세검색
+              </button>
+            </div>
+
             <div className="ml-auto flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
               <button
                 type="button"
@@ -459,37 +551,176 @@ export default function PatchHistoryPage() {
               </button>
             </div>
           </div>
+
+          {isDetailSearchOpen && (
+            <div className="mt-3 border-t border-slate-200 pt-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <datalist id="detail-infra-options">
+                  <option value="ALL" />
+                  {infraOptions.map((option) => (
+                    <option key={option} value={option} />
+                  ))}
+                </datalist>
+                <datalist id="detail-type-options">
+                  {detailTypeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </datalist>
+                <datalist id="detail-deployment-version-options">
+                  {deploymentVersionOptions.map((version) => (
+                    <option key={version} value={version} />
+                  ))}
+                </datalist>
+                <datalist id="detail-version-relation-options">
+                  {detailVersionRelationOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </datalist>
+
+                <div className="w-full sm:w-[150px]">
+                  <LabeledInput label="INFRA" compact>
+                    <input
+                      list="detail-infra-options"
+                      className={searchInputClass}
+                      value={detailInfraFilter}
+                      onChange={(e) => setDetailInfraFilter(e.target.value)}
+                      placeholder="전체"
+                    />
+                  </LabeledInput>
+                </div>
+
+                <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                  {detailTypeOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => handleDetailTypeChange(option.value)}
+                      className={`h-9 rounded-lg border px-4 text-sm font-semibold transition ${
+                        detailType === option.value
+                          ? 'border-slate-900 bg-slate-900 text-white'
+                          : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="w-full sm:w-[150px]">
+                  <LabeledInput label="구분" compact>
+                    <input
+                      list="detail-type-options"
+                      className={searchInputClass}
+                      value={detailType}
+                      onChange={(e) => setDetailType(e.target.value)}
+                      onBlur={(e) => handleDetailTypeChange(e.target.value)}
+                      placeholder="WEB"
+                    />
+                  </LabeledInput>
+                </div>
+
+                <div className="w-full sm:w-[220px]">
+                  <LabeledInput label="배포버전" compact>
+                    <input
+                      list="detail-deployment-version-options"
+                      className={searchInputClass}
+                      value={detailDeploymentVersion}
+                      onChange={(e) => setDetailDeploymentVersion(e.target.value)}
+                      disabled={loadingDeploymentVersions}
+                      placeholder={loadingDeploymentVersions ? '불러오는 중' : '전체'}
+                    />
+                  </LabeledInput>
+                </div>
+
+                <div className="w-full sm:w-[150px]">
+                  <LabeledInput label="기준" compact>
+                    <select
+                      className={searchInputClass}
+                      value={detailVersionRelation}
+                      onChange={(e) => setDetailVersionRelation(e.target.value)}
+                    >
+                      {detailVersionRelationOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </LabeledInput>
+                </div>
+
+                <div className="flex w-full items-end gap-2 sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => fetchPatchHistories(0, size)}
+                    className={`${toolbarButtonClass} w-full bg-slate-900 text-white hover:bg-slate-800 sm:w-[88px]`}
+                  >
+                    검색
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDetailType('WEB');
+                      setDetailInfraFilter('');
+                      setDetailDeploymentVersion('');
+                      setDetailVersionRelation('ALL');
+                      setDeploymentVersionOptions([]);
+                    }}
+                    className={`${toolbarButtonClass} w-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:w-[88px]`}
+                  >
+                    초기화
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </SectionCard>
 
-        <SectionCard title="패치이력 목록" description="목록 행을 클릭하면 상세보기가 새 창으로 열립니다.">
+        <SectionCard
+          title={(
+            <span className="flex flex-wrap items-center gap-3">
+              <span>패치이력 목록</span>
+              <button
+                type="button"
+                onClick={fetchUploadFiles}
+                disabled={loadingUploadFiles}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loadingUploadFiles ? '조회 중...' : '등록 파일 리스트'}
+              </button>
+            </span>
+          )}
+          description="목록 행을 클릭하면 상세보기가 새 창으로 열립니다."
+        >
           <div className="overflow-hidden rounded-2xl border border-slate-200">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1180px] divide-y divide-slate-200 text-sm">
+              <table className="w-full min-w-[1400px] divide-y divide-slate-200 text-sm">
                 <thead className="bg-slate-100">
                   <tr>
-                    {/* ID 컬럼 제거 */}
-                    <th className="w-[18%] px-4 py-3 text-left font-semibold">제목</th>
-                    <th className="w-[34%] px-4 py-3 text-left font-semibold">증상 상세</th>
-                    <th className="w-[8%] px-4 py-3 text-left font-semibold">인프라</th>
-                    <th className="w-[9%] px-4 py-3 text-left font-semibold">고객사</th>
-                    <th className="w-[8%] px-4 py-3 text-left font-semibold">상태</th>
-                    <th className="w-[8%] px-4 py-3 text-left font-semibold">작성자</th>
-                    <th className="w-[9%] px-4 py-3 text-left font-semibold">등록일</th>
+                    <th className="w-[7%] px-4 py-3 text-left font-semibold">INFRA</th>
+                    <th className="w-[11%] px-4 py-3 text-left font-semibold">구분</th>
+                    <th className="w-[11%] px-4 py-3 text-left font-semibold">배포버전</th>
+                    <th className="w-[10%] px-4 py-3 text-left font-semibold">완료일</th>
+                    <th className="w-[19%] px-4 py-3 text-left font-semibold">제목</th>
+                    <th className="w-[25%] px-4 py-3 text-left font-semibold">내용</th>
+                    <th className="w-[10%] px-4 py-3 text-left font-semibold">등록일</th>
+                    <th className="w-[7%] px-4 py-3 text-left font-semibold">작성자</th>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {loadingList ? (
                     <tr>
-                      {/* 컬럼이 7개이므로 colSpan도 7 */}
-                      <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                      <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
                         불러오는 중...
                       </td>
                     </tr>
                   ) : patchHistories.length === 0 ? (
                     <tr>
-                      {/* 컬럼이 7개이므로 colSpan도 7 */}
-                      <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                      <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
                         등록된 패치이력이 없습니다.
                       </td>
                     </tr>
@@ -501,35 +732,41 @@ export default function PatchHistoryPage() {
                         className="cursor-pointer transition hover:bg-slate-50"
                       >
                         <td className="px-4 py-3">
-                          <div className="max-w-[220px] truncate font-medium text-slate-900">
+                          {patchHistory.infraType || '-'}
+                        </td>
+
+                        <td className="px-4 py-3 text-slate-700">
+                          <div className="max-w-[180px] truncate">
+                            {patchHistory.category || '-'}
+                          </div>
+                        </td>
+
+                        <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                          {patchHistory.deploymentVersion || '-'}
+                        </td>
+
+                        <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                          {formatDate(patchHistory.completedDate)}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="max-w-[320px] truncate font-medium text-slate-900">
                             {patchHistory.title || '-'}
                           </div>
                         </td>
 
                         <td className="px-4 py-3 text-slate-700">
-                          <div className="max-w-[430px] truncate">
-                            {patchHistory.symptomDetail || '-'}
+                          <div className="max-w-[460px] truncate">
+                            {patchHistory.content || patchHistory.symptomDetail || '-'}
                           </div>
-                        </td>
-
-                        <td className="px-4 py-3">
-                          {patchHistory.infraType || '-'}
-                        </td>
-
-                        <td className="whitespace-nowrap px-4 py-3">
-                          {patchHistory.customerName || '-'}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <Badge>{patchHistory.status}</Badge>
-                        </td>
-
-                        <td className="px-4 py-3">
-                          {patchHistory.authorName || '-'}
                         </td>
 
                         <td className="whitespace-nowrap px-4 py-3 text-slate-700">
                           {formatDateTime(patchHistory.createdAt)}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {patchHistory.authorName || '-'}
                         </td>
                       </tr>
                     ))
@@ -638,8 +875,72 @@ export default function PatchHistoryPage() {
           file={file}
           onFileChange={handleFileChange}
           onUpload={handleUpload}
+          isUploading={uploading}
           onClose={() => setIsUploadModalOpen(false)}
         />
+      )}
+
+      {isUploadFilesModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-[720px] rounded-2xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <h2 className="text-xl font-semibold text-slate-900">등록 파일 리스트</h2>
+              <button
+                type="button"
+                onClick={() => setIsUploadFilesModalOpen(false)}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                닫기
+              </button>
+            </div>
+
+            <div className="max-h-[520px] overflow-y-auto px-6 py-5">
+              {uploadFiles.length === 0 ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                  등록된 파일이 없습니다.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {uploadFiles.map((item) => (
+                    <div key={item.id} className="rounded-lg border border-slate-200 px-4 py-3">
+                      <div className="font-medium text-slate-900">{item.fileName}</div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {formatDateTime(item.createdAt)} · 등록 {item.savedCount}건 · 제외 {item.excludedCount}건
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isExcludedModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-[820px] rounded-2xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <h2 className="text-xl font-semibold text-slate-900">등록 제외 항목</h2>
+              <button
+                type="button"
+                onClick={() => setIsExcludedModalOpen(false)}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                닫기
+              </button>
+            </div>
+
+            <div className="max-h-[520px] overflow-y-auto px-6 py-5">
+              <pre className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-800">
+                {excludedItems
+                  .map((item, index) => (
+                    `${index + 1}. [${item.sheetName || '-'} / ${item.rowNumber || '-'}행] ${item.reason || '등록 제외'}\n${item.title || '-'}`
+                  ))
+                  .join('\n\n')}
+              </pre>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

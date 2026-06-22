@@ -37,18 +37,12 @@ export default function PatchHistoryDetailModal({ loading, patchHistory, onClose
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-2xl font-semibold text-slate-900">{patchHistory.title}</h3>
                 <Badge>{patchHistory.infraType}</Badge>
-                <Badge>{patchHistory.status}</Badge>
               </div>
 
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 <div className="rounded-xl bg-slate-50 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">시스템명</div>
-                  <div className="mt-1 text-sm text-slate-900">{patchHistory.systemName || '-'}</div>
-                </div>
-
-                <div className="rounded-xl bg-slate-50 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">고객사</div>
-                  <div className="mt-1 text-sm text-slate-900">{patchHistory.customerName || '-'}</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">INFRA</div>
+                  <div className="mt-1 text-sm text-slate-900">{patchHistory.infraType || '-'}</div>
                 </div>
 
                 <div className="rounded-xl bg-slate-50 p-4">
@@ -57,13 +51,13 @@ export default function PatchHistoryDetailModal({ loading, patchHistory, onClose
                 </div>
 
                 <div className="rounded-xl bg-slate-50 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">DB버전</div>
-                  <div className="mt-1 text-sm text-slate-900">{patchHistory.versionInfo || '-'}</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">배포버전</div>
+                  <div className="mt-1 text-sm text-slate-900">{patchHistory.deploymentVersion || '-'}</div>
                 </div>
 
                 <div className="rounded-xl bg-slate-50 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">배포 버전</div>
-                  <div className="mt-1 text-sm text-slate-900">{patchHistory.deploymentVersion || '-'}</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">완료일</div>
+                  <div className="mt-1 text-sm text-slate-900">{patchHistory.completedDate || '-'}</div>
                 </div>
 
                 <div className="rounded-xl bg-slate-50 p-4">
@@ -72,11 +66,7 @@ export default function PatchHistoryDetailModal({ loading, patchHistory, onClose
                 </div>
               </div>
 
-              <DetailBlock title="증상 요약" value={patchHistory.symptomSummary} />
-              <DetailBlock title="증상 상세" value={patchHistory.symptomDetail} />
-              <DetailBlock title="원인" value={patchHistory.causeDetail} />
-              <DetailBlock title="조치 내용" value={patchHistory.actionDetail} />
-              <DetailBlock title="태그" value={patchHistory.tags} />
+              <DetailBlock title="내용" value={patchHistory.content || patchHistory.symptomDetail} />
             </div>
           )}
         </div>

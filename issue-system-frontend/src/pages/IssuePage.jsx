@@ -96,6 +96,7 @@ export default function IssuePage() {
   // 엑셀 업로드 모달 상태
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
   // 로딩/메시지 상태
   const [loadingList, setLoadingList] = useState(false);
@@ -204,6 +205,10 @@ export default function IssuePage() {
 
   // 엑셀 업로드 처리
   const handleUpload = async () => {
+    if (uploading) {
+      return;
+    }
+
     if (!file) {
       alert('업로드할 엑셀 파일을 선택하세요.');
       return;
@@ -211,6 +216,8 @@ export default function IssuePage() {
 
     const formData = new FormData();
     formData.append('file', file);
+
+    setUploading(true);
 
     try {
       const res = await fetch(`${API_BASE}/api/issue-cases/upload`, {
@@ -226,6 +233,10 @@ export default function IssuePage() {
 
       const result = JSON.parse(text);
 
+      const uploadResult = result.data;
+      const savedCount = typeof uploadResult === 'number' ? uploadResult : uploadResult?.savedCount || 0;
+      result.data = savedCount;
+
       if (!result.success) {
         throw new Error(result.message || '엑셀 업로드에 실패했습니다.');
       }
@@ -237,6 +248,8 @@ export default function IssuePage() {
     } catch (e) {
       console.error(e);
       alert(e.message || '엑셀 업로드 중 오류가 발생했습니다.');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -645,6 +658,7 @@ export default function IssuePage() {
           file={file}
           onFileChange={handleFileChange}
           onUpload={handleUpload}
+          isUploading={uploading}
           onClose={() => setIsUploadModalOpen(false)}
         />
       )}

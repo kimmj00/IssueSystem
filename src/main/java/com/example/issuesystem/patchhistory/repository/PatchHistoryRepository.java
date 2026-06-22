@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -463,4 +464,253 @@ public interface PatchHistoryRepository extends JpaRepository<PatchHistory, Long
 
     /** ID 목록으로 패치이력 엔티티 재조회 */
     List<PatchHistory> findByIdIn(List<Long> ids);
+
+    @Query(value = """
+            select i.id
+            from issue_case i
+            where
+                (
+                    :keyword is null
+                    or btrim(:keyword) = ''
+                    or lower(concat_ws(' ',
+                        i.title,
+                        i.system_name,
+                        i.customer_name,
+                        i.symptom_summary,
+                        i.symptom_detail,
+                        i.cause_detail,
+                        i.action_detail,
+                        i.tags,
+                        i.category,
+                        i.deployment_version,
+                        i.version_info
+                    )) like concat('%', lower(btrim(:keyword)), '%')
+                )
+                and (:infraType is null or i.infra_type = cast(:infraType as varchar))
+                and (:status is null or i.status = cast(:status as varchar))
+                and (:customerName is null or :customerName = '' or
+                    coalesce(i.customer_name, '') ilike concat('%', :customerName, '%'))
+                and (:category is null or :category = '' or
+                    coalesce(i.category, '') ilike concat('%', :category, '%'))
+                and (:deploymentVersion is null or :deploymentVersion = '' or
+                    coalesce(i.deployment_version, '') ilike concat('%', :deploymentVersion, '%'))
+                and (
+                    (:detailType = 'WEB' and (
+                        coalesce(i.category, '') ilike '%DB%'
+                        or coalesce(i.category, '') ilike '%WEB%'
+                        or coalesce(i.category, '') ilike '%보안취약점%'
+                    ))
+                    or (:detailType = 'CORE' and coalesce(i.category, '') not ilike '%WEB%')
+                    or (:detailType = 'SECURITY' and lower(concat_ws(' ',
+                        i.title,
+                        i.system_name,
+                        i.customer_name,
+                        i.symptom_summary,
+                        i.symptom_detail,
+                        i.cause_detail,
+                        i.action_detail,
+                        i.tags,
+                        i.category,
+                        i.deployment_version,
+                        i.version_info
+                    )) like '%보안취약점%')
+                )
+                and (
+                    :detailDeploymentVersion is null
+                    or :detailVersionRelation = 'ALL'
+                    or (
+                        :useCompletedDateComparison = true
+                        and cast(:referenceCompletedDate as date) is not null
+                        and (
+                            (:detailVersionRelation = 'SAME' and i.completed_date = cast(:referenceCompletedDate as date))
+                            or (:detailVersionRelation = 'BEFORE' and i.completed_date < cast(:referenceCompletedDate as date))
+                            or (:detailVersionRelation = 'AFTER' and i.completed_date > cast(:referenceCompletedDate as date))
+                        )
+                    )
+                    or (
+                        :useCompletedDateComparison = false
+                        and :selectedVersionNumber is not null
+                        and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '') is not null
+                        and (
+                            (:detailVersionRelation = 'SAME'
+                                and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                                    = cast(:selectedVersionNumber as numeric))
+                            or (:detailVersionRelation = 'BEFORE'
+                                and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                                    < cast(:selectedVersionNumber as numeric))
+                            or (:detailVersionRelation = 'AFTER'
+                                and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                                    > cast(:selectedVersionNumber as numeric))
+                        )
+                    )
+                )
+                and i.created_at >= :startDate
+                and i.created_at < :endDate
+            order by i.id desc
+            """,
+            countQuery = """
+            select count(*)
+            from issue_case i
+            where
+                (
+                    :keyword is null
+                    or btrim(:keyword) = ''
+                    or lower(concat_ws(' ',
+                        i.title,
+                        i.system_name,
+                        i.customer_name,
+                        i.symptom_summary,
+                        i.symptom_detail,
+                        i.cause_detail,
+                        i.action_detail,
+                        i.tags,
+                        i.category,
+                        i.deployment_version,
+                        i.version_info
+                    )) like concat('%', lower(btrim(:keyword)), '%')
+                )
+                and (:infraType is null or i.infra_type = cast(:infraType as varchar))
+                and (:status is null or i.status = cast(:status as varchar))
+                and (:customerName is null or :customerName = '' or
+                    coalesce(i.customer_name, '') ilike concat('%', :customerName, '%'))
+                and (:category is null or :category = '' or
+                    coalesce(i.category, '') ilike concat('%', :category, '%'))
+                and (:deploymentVersion is null or :deploymentVersion = '' or
+                    coalesce(i.deployment_version, '') ilike concat('%', :deploymentVersion, '%'))
+                and (
+                    (:detailType = 'WEB' and (
+                        coalesce(i.category, '') ilike '%DB%'
+                        or coalesce(i.category, '') ilike '%WEB%'
+                        or coalesce(i.category, '') ilike '%보안취약점%'
+                    ))
+                    or (:detailType = 'CORE' and coalesce(i.category, '') not ilike '%WEB%')
+                    or (:detailType = 'SECURITY' and lower(concat_ws(' ',
+                        i.title,
+                        i.system_name,
+                        i.customer_name,
+                        i.symptom_summary,
+                        i.symptom_detail,
+                        i.cause_detail,
+                        i.action_detail,
+                        i.tags,
+                        i.category,
+                        i.deployment_version,
+                        i.version_info
+                    )) like '%보안취약점%')
+                )
+                and (
+                    :detailDeploymentVersion is null
+                    or :detailVersionRelation = 'ALL'
+                    or (
+                        :useCompletedDateComparison = true
+                        and cast(:referenceCompletedDate as date) is not null
+                        and (
+                            (:detailVersionRelation = 'SAME' and i.completed_date = cast(:referenceCompletedDate as date))
+                            or (:detailVersionRelation = 'BEFORE' and i.completed_date < cast(:referenceCompletedDate as date))
+                            or (:detailVersionRelation = 'AFTER' and i.completed_date > cast(:referenceCompletedDate as date))
+                        )
+                    )
+                    or (
+                        :useCompletedDateComparison = false
+                        and :selectedVersionNumber is not null
+                        and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '') is not null
+                        and (
+                            (:detailVersionRelation = 'SAME'
+                                and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                                    = cast(:selectedVersionNumber as numeric))
+                            or (:detailVersionRelation = 'BEFORE'
+                                and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                                    < cast(:selectedVersionNumber as numeric))
+                            or (:detailVersionRelation = 'AFTER'
+                                and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                                    > cast(:selectedVersionNumber as numeric))
+                        )
+                    )
+                )
+                and i.created_at >= :startDate
+                and i.created_at < :endDate
+            """,
+            nativeQuery = true)
+    Page<Long> detailSearchIds(
+            @Param("keyword") String keyword,
+            @Param("infraType") String infraType,
+            @Param("status") String status,
+            @Param("customerName") String customerName,
+            @Param("category") String category,
+            @Param("deploymentVersion") String deploymentVersion,
+            @Param("detailType") String detailType,
+            @Param("detailDeploymentVersion") String detailDeploymentVersion,
+            @Param("detailVersionRelation") String detailVersionRelation,
+            @Param("selectedVersionNumber") String selectedVersionNumber,
+            @Param("useCompletedDateComparison") boolean useCompletedDateComparison,
+            @Param("referenceCompletedDate") LocalDate referenceCompletedDate,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            Pageable pageable
+    );
+
+    @Query(value = """
+            select distinct i.deployment_version
+            from issue_case i
+            where i.deployment_version is not null
+              and btrim(i.deployment_version) <> ''
+              and (
+                  :detailType is null
+                  or (:detailType = 'WEB' and i.deployment_version ~ '^[0-9]{8}\\.[A-Za-z]+$')
+                  or (:detailType = 'CORE' and i.deployment_version ilike 'B%')
+                  or (:detailType = 'SECURITY')
+              )
+            order by i.deployment_version desc
+            """,
+            nativeQuery = true)
+    List<String> findDeploymentVersions(@Param("detailType") String detailType);
+
+    @Query(value = """
+            select i.completed_date
+            from issue_case i
+            where i.deployment_version = :deploymentVersion
+              and i.completed_date is not null
+            order by i.completed_date desc
+            limit 1
+            """,
+            nativeQuery = true)
+    LocalDate findReferenceCompletedDate(@Param("deploymentVersion") String deploymentVersion);
+
+    @Query(value = """
+            select exists (
+                select 1
+                from issue_case i
+                where i.title is not distinct from :title
+                  and i.infra_type is not distinct from cast(:infraType as varchar)
+                  and i.system_name is not distinct from :systemName
+                  and i.customer_name is not distinct from :customerName
+                  and i.version_info is not distinct from :versionInfo
+                  and i.status is not distinct from cast(:status as varchar)
+                  and i.symptom_summary is not distinct from :symptomSummary
+                  and i.symptom_detail is not distinct from :symptomDetail
+                  and i.cause_detail is not distinct from :causeDetail
+                  and i.action_detail is not distinct from :actionDetail
+                  and i.author_name is not distinct from :authorName
+                  and i.category is not distinct from :category
+                  and i.deployment_version is not distinct from :deploymentVersion
+                  and i.completed_date is not distinct from :completedDate
+            )
+            """,
+            nativeQuery = true)
+    boolean existsBySameContent(
+            @Param("title") String title,
+            @Param("infraType") String infraType,
+            @Param("systemName") String systemName,
+            @Param("customerName") String customerName,
+            @Param("versionInfo") String versionInfo,
+            @Param("status") String status,
+            @Param("symptomSummary") String symptomSummary,
+            @Param("symptomDetail") String symptomDetail,
+            @Param("causeDetail") String causeDetail,
+            @Param("actionDetail") String actionDetail,
+            @Param("authorName") String authorName,
+            @Param("category") String category,
+            @Param("deploymentVersion") String deploymentVersion,
+            @Param("completedDate") LocalDate completedDate
+    );
 }

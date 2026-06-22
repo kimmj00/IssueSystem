@@ -6,6 +6,8 @@ public enum InfraType {
     ERMS,
     SMS,
     NMS,
+    GPM,
+    운영관리,
     DBMS,
     FMS,
     IMS,

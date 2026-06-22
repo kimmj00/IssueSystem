@@ -35,6 +35,9 @@ public class PatchHistoryService {
      */
     @Transactional
     public Long create(PatchHistoryCreateRequest request) {
+        String content = chooseText(request.getContent(), request.getSymptomDetail());
+        String summary = chooseText(request.getSymptomSummary(), firstLine(content), request.getTitle());
+
         PatchHistory patchHistory = PatchHistory.builder()
                 .title(request.getTitle())
                 .infraType(request.getInfraType())
@@ -42,14 +45,15 @@ public class PatchHistoryService {
                 .customerName(request.getCustomerName())
                 .versionInfo(request.getVersionInfo())
                 .status(request.getStatus())
-                .symptomSummary(request.getSymptomSummary())
-                .symptomDetail(request.getSymptomDetail())
+                .symptomSummary(summary)
+                .symptomDetail(content)
                 .causeDetail(request.getCauseDetail())
                 .actionDetail(request.getActionDetail())
                 .tags(request.getTags())
                 .authorName(request.getAuthorName())
                 .category(request.getCategory())
                 .deploymentVersion(request.getDeploymentVersion())
+                .completedDate(request.getCompletedDate())
                 .build();
 
         return patchHistoryRepository.save(patchHistory).getId();
@@ -61,6 +65,9 @@ public class PatchHistoryService {
         PatchHistory patchHistory = patchHistoryRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("패치이력을 찾을 수 없습니다."));
 
+        String content = chooseText(request.getContent(), request.getSymptomDetail());
+        String summary = chooseText(request.getSymptomSummary(), firstLine(content), request.getTitle());
+
         patchHistory.update(
                 request.getTitle(),
                 request.getInfraType(),
@@ -68,13 +75,14 @@ public class PatchHistoryService {
                 request.getCustomerName(),
                 request.getVersionInfo(),
                 request.getStatus(),
-                request.getSymptomSummary(),
-                request.getSymptomDetail(),
+                summary,
+                content,
                 request.getCauseDetail(),
                 request.getActionDetail(),
                 request.getTags(),
                 request.getCategory(),
-                request.getDeploymentVersion()
+                request.getDeploymentVersion(),
+                request.getCompletedDate()
         );
     }
 
@@ -110,6 +118,9 @@ public class PatchHistoryService {
             String customerName,
             String category,
             String deploymentVersion,
+            String detailType,
+            String detailDeploymentVersion,
+            String detailVersionRelation,
             LocalDate startDate,
             LocalDate endDate,
             int page,
@@ -127,17 +138,48 @@ public class PatchHistoryService {
                 ? endDate.plusDays(1).atStartOfDay()
                 : LocalDateTime.of(9999, 12, 31, 0, 0);
 
-        Page<Long> idPage = patchHistoryRepository.searchIds(
-                keyword,
-                infraType != null ? infraType.name() : null,
-                status != null ? status.name() : null,
-                customerName,
-                category,
-                deploymentVersion,
-                startDateTime,
-                endDateTime,
-                PageRequest.of(safePage, safeSize)
-        );
+        String normalizedDetailType = normalizeDetailType(detailType);
+        String normalizedRelation = normalizeVersionRelation(detailVersionRelation);
+        String normalizedDetailDeploymentVersion = blankToNull(detailDeploymentVersion);
+        if ("ALL".equals(normalizedRelation)) {
+            normalizedDetailDeploymentVersion = null;
+        }
+        String selectedVersionNumber = extractVersionNumber(normalizedDetailDeploymentVersion);
+        boolean useCompletedDateComparison = "SECURITY".equals(normalizedDetailType)
+                && isDateAlphaVersion(normalizedDetailDeploymentVersion);
+        LocalDate referenceCompletedDate = useCompletedDateComparison && normalizedDetailDeploymentVersion != null
+                ? patchHistoryRepository.findReferenceCompletedDate(normalizedDetailDeploymentVersion)
+                : null;
+
+        Page<Long> idPage = normalizedDetailType == null
+                ? patchHistoryRepository.searchIds(
+                        keyword,
+                        infraType != null ? infraType.name() : null,
+                        status != null ? status.name() : null,
+                        customerName,
+                        category,
+                        deploymentVersion,
+                        startDateTime,
+                        endDateTime,
+                        PageRequest.of(safePage, safeSize)
+                )
+                : patchHistoryRepository.detailSearchIds(
+                        keyword,
+                        infraType != null ? infraType.name() : null,
+                        status != null ? status.name() : null,
+                        customerName,
+                        category,
+                        deploymentVersion,
+                        normalizedDetailType,
+                        normalizedDetailDeploymentVersion,
+                        normalizedRelation,
+                        selectedVersionNumber,
+                        useCompletedDateComparison,
+                        referenceCompletedDate,
+                        startDateTime,
+                        endDateTime,
+                        PageRequest.of(safePage, safeSize)
+                );
 
         List<Long> ids = idPage.getContent();
 
@@ -170,5 +212,78 @@ public class PatchHistoryService {
         );
 
         return PageResponse.from(responsePage);
+    }
+
+    @Transactional
+    public List<String> getDeploymentVersions(String detailType) {
+        String normalizedDetailType = normalizeDetailType(detailType);
+
+        return patchHistoryRepository.findDeploymentVersions(normalizedDetailType);
+    }
+
+    private String normalizeDetailType(String detailType) {
+        if (detailType == null || detailType.trim().isEmpty()) {
+            return null;
+        }
+
+        String normalized = detailType.trim().toUpperCase();
+
+        return switch (normalized) {
+            case "WEB", "CORE", "SECURITY" -> normalized;
+            default -> null;
+        };
+    }
+
+    private String normalizeVersionRelation(String relation) {
+        if (relation == null || relation.trim().isEmpty()) {
+            return "SAME";
+        }
+
+        String normalized = relation.trim().toUpperCase();
+
+        return switch (normalized) {
+            case "ALL", "SAME", "BEFORE", "AFTER" -> normalized;
+            default -> "SAME";
+        };
+    }
+
+    private String blankToNull(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+
+        return value.trim();
+    }
+
+    private boolean isDateAlphaVersion(String value) {
+        return value != null && value.matches("\\d{8}\\.[A-Za-z]+");
+    }
+
+    private String extractVersionNumber(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String digits = value.replaceAll("\\D", "");
+
+        return digits.isEmpty() ? null : digits;
+    }
+
+    private String chooseText(String... values) {
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) {
+                return value;
+            }
+        }
+
+        return "";
+    }
+
+    private String firstLine(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return "";
+        }
+
+        return value.split("\\R", 2)[0].trim();
     }
 }
