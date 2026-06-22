@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS issue_case (
     author_name VARCHAR(100) NOT NULL,
     category VARCHAR(50),
     deployment_version VARCHAR(50),
+    completed_date DATE,
     created_at TIMESTAMP(6) NOT NULL,
     updated_at TIMESTAMP(6) NOT NULL
 );
@@ -56,6 +57,15 @@ CREATE TABLE IF NOT EXISTS knowledge_share_attachment (
     CONSTRAINT fk_knowledge_share_attachment_share
         FOREIGN KEY (knowledge_share_id)
         REFERENCES knowledge_share (id)
+);
+
+CREATE TABLE IF NOT EXISTS patch_history_upload_log (
+    id BIGSERIAL PRIMARY KEY,
+    file_name VARCHAR(255) NOT NULL,
+    saved_count INTEGER NOT NULL,
+    excluded_count INTEGER NOT NULL,
+    created_at TIMESTAMP(6) NOT NULL,
+    updated_at TIMESTAMP(6) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS work_report_upload (
@@ -148,6 +158,15 @@ CREATE INDEX IF NOT EXISTS idx_issue_case_symptom_summary_trgm
 
 CREATE INDEX IF NOT EXISTS idx_issue_case_tags_trgm
     ON issue_case USING gin ((lower(coalesce(tags, ''))) gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS idx_issue_case_category
+    ON issue_case (category);
+
+CREATE INDEX IF NOT EXISTS idx_issue_case_deployment_version
+    ON issue_case (deployment_version);
+
+CREATE INDEX IF NOT EXISTS idx_issue_case_completed_date
+    ON issue_case (completed_date);
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_share_title_trgm
     ON knowledge_share USING gin ((lower(title)) gin_trgm_ops);
