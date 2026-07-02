@@ -97,6 +97,7 @@ function MultiSelectDropdown({
   emptyLabel = '전체',
   disabled = false,
 }) {
+  const dropdownRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [optionKeyword, setOptionKeyword] = useState('');
   const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
@@ -110,6 +111,11 @@ function MultiSelectDropdown({
     return options.filter((option) => String(option).toLowerCase().includes(keyword));
   }, [optionKeyword, options]);
 
+  const closeDropdown = () => {
+    setOpen(false);
+    setOptionKeyword('');
+  };
+
   const toggleOpen = () => {
     setOpen((prev) => {
       const nextOpen = !prev;
@@ -122,8 +128,34 @@ function MultiSelectDropdown({
     });
   };
 
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const handleDocumentMouseDown = (e) => {
+      if (!dropdownRef.current?.contains(e.target)) {
+        closeDropdown();
+      }
+    };
+
+    const handleDocumentKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        closeDropdown();
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentMouseDown);
+    document.addEventListener('keydown', handleDocumentKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentMouseDown);
+      document.removeEventListener('keydown', handleDocumentKeyDown);
+    };
+  }, [open]);
+
   return (
-    <div className="relative">
+    <div ref={dropdownRef} className="relative">
       <LabeledInput label={label} compact>
         <button
           type="button"
