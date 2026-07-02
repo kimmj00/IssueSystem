@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import LabeledInput from '../components/common/LabeledInput';
 import SectionCard from '../components/common/SectionCard';
 import CreateKnowledgeModal from '../components/modal/CreateKnowledgeModal';
@@ -46,6 +46,8 @@ const searchInputClass =
 // 패치이력 검색 영역과 동일한 button 스타일
 const toolbarButtonClass =
     'h-9 shrink-0 rounded-lg px-3 text-sm font-semibold shadow-sm transition';
+
+const AUTO_SEARCH_DELAY_MS = 350;
 
 // input[type="date"]에 들어갈 yyyy-MM-dd 문자열 생성
 function toDateInputValue(date) {
@@ -139,6 +141,7 @@ export default function KnowledgePage() {
       () => buildPageItems(page, totalPages),
       [page, totalPages]
   );
+  const autoSearchInitializedRef = useRef(false);
 
   // 지식공유 목록 조회
   const fetchKnowledge = async (targetPage = page, targetSize = size) => {
@@ -203,10 +206,19 @@ export default function KnowledgePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 검색 버튼 클릭
-  const handleSearch = () => {
-    fetchKnowledge(0, size);
-  };
+  useEffect(() => {
+    if (!autoSearchInitializedRef.current) {
+      autoSearchInitializedRef.current = true;
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      fetchKnowledge(0, size);
+    }, AUTO_SEARCH_DELAY_MS);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keyword, customerName, infraType, startDate, endDate]);
 
   // 페이지당 표시 개수 변경
   const handleSizeChange = (e) => {
@@ -332,12 +344,6 @@ export default function KnowledgePage() {
                       className={searchInputClass}
                       value={keyword}
                       onChange={(e) => setKeyword(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleSearch();
-                        }
-                      }}
                       placeholder="제목, 내용 검색"
                   />
                 </LabeledInput>
@@ -366,12 +372,6 @@ export default function KnowledgePage() {
                       className={searchInputClass}
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleSearch();
-                        }
-                      }}
                       placeholder="고객사명"
                   />
                 </LabeledInput>
@@ -397,17 +397,6 @@ export default function KnowledgePage() {
                       onChange={(e) => setEndDate(e.target.value)}
                   />
                 </LabeledInput>
-              </div>
-
-              {/* 검색 버튼: 검색 조건 바로 오른쪽 */}
-              <div className="flex w-full items-end sm:w-auto">
-                <button
-                    type="button"
-                    onClick={handleSearch}
-                    className={`${toolbarButtonClass} w-full bg-slate-900 text-white hover:bg-slate-800 sm:w-[88px]`}
-                >
-                  검색
-                </button>
               </div>
 
               {/* 등록 버튼: 우측 끝 */}

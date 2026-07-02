@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import LabeledInput from '../components/common/LabeledInput';
 import SectionCard from '../components/common/SectionCard';
 import CreatePatchHistoryModal from '../components/modal/CreatePatchHistoryModal';
@@ -66,6 +66,8 @@ const searchInputClass =
 // 검색 영역에서 반복되는 버튼 스타일입니다.
 const toolbarButtonClass =
   'h-9 shrink-0 rounded-lg px-3 text-sm font-semibold shadow-sm transition';
+
+const AUTO_SEARCH_DELAY_MS = 350;
 
 // 패치이력 메인 페이지
 // 검색, 엑셀 업로드 버튼, 추가 버튼, 목록, 새창 상세보기를 담당합니다.
@@ -159,6 +161,7 @@ export default function PatchHistoryPage() {
 
   // 현재 페이지 기준으로 하단 페이지 버튼 목록을 계산합니다.
   const pageItems = useMemo(() => buildPageItems(page, totalPages), [page, totalPages]);
+  const autoSearchInitializedRef = useRef(false);
 
   const fetchDeploymentVersions = async (nextDetailType = detailType) => {
     setLoadingDeploymentVersions(true);
@@ -238,11 +241,6 @@ export default function PatchHistoryPage() {
     } finally {
       setLoadingList(false);
     }
-  };
-
-  // 검색 버튼 또는 Enter 입력 시 첫 페이지부터 다시 조회합니다.
-  const handleSearch = () => {
-    fetchPatchHistories(0, size);
   };
 
   const handleDetailTypeChange = (nextDetailType) => {
@@ -412,6 +410,30 @@ export default function PatchHistoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!autoSearchInitializedRef.current) {
+      autoSearchInitializedRef.current = true;
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      fetchPatchHistories(0, size);
+    }, AUTO_SEARCH_DELAY_MS);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    searchKeyword,
+    infraFilter,
+    categoryFilter,
+    deploymentVersionFilter,
+    isDetailSearchOpen,
+    detailInfraFilter,
+    detailType,
+    detailDeploymentVersion,
+    detailVersionRelation,
+  ]);
+
   return (
     <>
       <PageTitle
@@ -438,12 +460,6 @@ export default function PatchHistoryPage() {
                   className={searchInputClass}
                   value={searchKeyword}
                   onChange={(e) => setSearchKeyword(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleSearch();
-                    }
-                  }}
                   placeholder="제목, 내용"
                 />
               </LabeledInput>
@@ -470,12 +486,6 @@ export default function PatchHistoryPage() {
                   className={searchInputClass}
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleSearch();
-                    }
-                  }}
                   placeholder="WEB(추가)"
                 />
               </LabeledInput>
@@ -487,26 +497,9 @@ export default function PatchHistoryPage() {
                   className={searchInputClass}
                   value={deploymentVersionFilter}
                   onChange={(e) => setDeploymentVersionFilter(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleSearch();
-                    }
-                  }}
                   placeholder="20251114.X"
                 />
               </LabeledInput>
-            </div>
-
-            {/* 검색 버튼: 검색 조건 바로 오른쪽 */}
-            <div className="flex w-full items-end sm:w-auto">
-              <button
-                type="button"
-                onClick={handleSearch}
-                className={`${toolbarButtonClass} w-full bg-slate-900 text-white hover:bg-slate-800 sm:w-[88px]`}
-              >
-                검색
-              </button>
             </div>
 
             {/* 우측 액션 버튼: 엑셀 업로드 / 추가 */}
@@ -653,13 +646,6 @@ export default function PatchHistoryPage() {
                 </div>
 
                 <div className="flex w-full items-end gap-2 sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={() => fetchPatchHistories(0, size)}
-                    className={`${toolbarButtonClass} w-full bg-slate-900 text-white hover:bg-slate-800 sm:w-[88px]`}
-                  >
-                    검색
-                  </button>
                   <button
                     type="button"
                     onClick={() => {

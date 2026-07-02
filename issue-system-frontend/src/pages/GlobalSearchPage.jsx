@@ -6,9 +6,7 @@ import { API_BASE, infraOptions } from '../constants/patchHistoryOptions';
 const searchInputClass =
   'h-9 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none ring-0 focus:border-slate-500';
 
-const toolbarButtonClass =
-  'h-9 shrink-0 rounded-lg px-3 text-sm font-semibold shadow-sm transition';
-
+const AUTO_SEARCH_DELAY_MS = 350;
 const DEFAULT_PAGE_SIZE = 7;
 const PAGE_SIZE_OPTIONS = [7, 10, 20, 50];
 
@@ -192,6 +190,7 @@ export default function GlobalSearchPage() {
   const [error, setError] = useState('');
 
   const abortRef = useRef(null);
+  const autoSearchInitializedRef = useRef(false);
 
   const searchAll = async ({
     targetPatchHistoryPage = patchHistoryPage,
@@ -313,27 +312,30 @@ export default function GlobalSearchPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSearch = () => {
-    setPatchHistoryPage(0);
-    setKnowledgePage(0);
-    setWorkIssuePage(0);
-    searchAll({
-      targetPatchHistoryPage: 0,
-      targetPatchHistorySize: patchHistorySize,
-      targetKnowledgePage: 0,
-      targetKnowledgeSize: knowledgeSize,
-      targetWorkIssuePage: 0,
-      targetWorkIssueSize: workIssueSize,
-      targetWorkIssueType: workIssueType,
-    });
-  };
-
-  const handleEnterSearch = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleSearch();
+  useEffect(() => {
+    if (!autoSearchInitializedRef.current) {
+      autoSearchInitializedRef.current = true;
+      return undefined;
     }
-  };
+
+    const timer = setTimeout(() => {
+      setPatchHistoryPage(0);
+      setKnowledgePage(0);
+      setWorkIssuePage(0);
+      searchAll({
+        targetPatchHistoryPage: 0,
+        targetPatchHistorySize: patchHistorySize,
+        targetKnowledgePage: 0,
+        targetKnowledgeSize: knowledgeSize,
+        targetWorkIssuePage: 0,
+        targetWorkIssueSize: workIssueSize,
+        targetWorkIssueType: workIssueType,
+      });
+    }, AUTO_SEARCH_DELAY_MS);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keyword, infraType, customerName, startDate, endDate]);
 
   const movePatchHistoryPage = (targetPage) => {
     if (targetPage < 0 || targetPage >= patchHistoryTotalPages || targetPage === patchHistoryPage) {
@@ -483,7 +485,6 @@ export default function GlobalSearchPage() {
                   className={searchInputClass}
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
-                  onKeyDown={handleEnterSearch}
                   placeholder="제목, 내용, 담당자, 태그"
                 />
               </LabeledInput>
@@ -512,7 +513,6 @@ export default function GlobalSearchPage() {
                   className={searchInputClass}
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  onKeyDown={handleEnterSearch}
                   placeholder="고객사명"
                 />
               </LabeledInput>
@@ -540,16 +540,6 @@ export default function GlobalSearchPage() {
               </LabeledInput>
             </div>
 
-            <div className="flex w-full items-end sm:w-auto">
-              <button
-                type="button"
-                onClick={handleSearch}
-                disabled={loading}
-                className={`${toolbarButtonClass} w-full bg-slate-900 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400 sm:w-[88px]`}
-              >
-                {loading ? '검색중' : '검색'}
-              </button>
-            </div>
           </div>
         </SectionCard>
 
