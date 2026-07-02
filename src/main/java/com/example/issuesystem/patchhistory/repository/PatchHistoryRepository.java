@@ -211,6 +211,12 @@ public interface PatchHistoryRepository extends JpaRepository<PatchHistory, Long
                 coalesce(i.category, '') ilike concat('%', :category, '%'))
             and (:deploymentVersion is null or :deploymentVersion = '' or
                 coalesce(i.deployment_version, '') ilike concat('%', :deploymentVersion, '%'))
+            and (:infraTypesCsv is null or
+                coalesce(i.infra_type, '') = any(string_to_array(:infraTypesCsv, :filterDelimiter)))
+            and (:categoriesCsv is null or
+                coalesce(i.category, '') = any(string_to_array(:categoriesCsv, :filterDelimiter)))
+            and (:deploymentVersionsCsv is null or
+                coalesce(i.deployment_version, '') = any(string_to_array(:deploymentVersionsCsv, :filterDelimiter)))
             and i.created_at >= :startDate
             and i.created_at < :endDate
         order by
@@ -446,6 +452,12 @@ public interface PatchHistoryRepository extends JpaRepository<PatchHistory, Long
                 coalesce(i.category, '') ilike concat('%', :category, '%'))
             and (:deploymentVersion is null or :deploymentVersion = '' or
                 coalesce(i.deployment_version, '') ilike concat('%', :deploymentVersion, '%'))
+            and (:infraTypesCsv is null or
+                coalesce(i.infra_type, '') = any(string_to_array(:infraTypesCsv, :filterDelimiter)))
+            and (:categoriesCsv is null or
+                coalesce(i.category, '') = any(string_to_array(:categoriesCsv, :filterDelimiter)))
+            and (:deploymentVersionsCsv is null or
+                coalesce(i.deployment_version, '') = any(string_to_array(:deploymentVersionsCsv, :filterDelimiter)))
             and i.created_at >= :startDate
             and i.created_at < :endDate
         """,
@@ -457,6 +469,10 @@ public interface PatchHistoryRepository extends JpaRepository<PatchHistory, Long
             @Param("customerName") String customerName,
             @Param("category") String category,
             @Param("deploymentVersion") String deploymentVersion,
+            @Param("infraTypesCsv") String infraTypesCsv,
+            @Param("categoriesCsv") String categoriesCsv,
+            @Param("deploymentVersionsCsv") String deploymentVersionsCsv,
+            @Param("filterDelimiter") String filterDelimiter,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate,
             Pageable pageable
@@ -494,6 +510,12 @@ public interface PatchHistoryRepository extends JpaRepository<PatchHistory, Long
                     coalesce(i.category, '') ilike concat('%', :category, '%'))
                 and (:deploymentVersion is null or :deploymentVersion = '' or
                     coalesce(i.deployment_version, '') ilike concat('%', :deploymentVersion, '%'))
+                and (:infraTypesCsv is null or
+                    coalesce(i.infra_type, '') = any(string_to_array(:infraTypesCsv, :filterDelimiter)))
+                and (:categoriesCsv is null or
+                    coalesce(i.category, '') = any(string_to_array(:categoriesCsv, :filterDelimiter)))
+                and (:deploymentVersionsCsv is null or
+                    coalesce(i.deployment_version, '') = any(string_to_array(:deploymentVersionsCsv, :filterDelimiter)))
                 and (
                     (:detailType = 'WEB' and (
                         coalesce(i.category, '') ilike '%DB%'
@@ -577,6 +599,12 @@ public interface PatchHistoryRepository extends JpaRepository<PatchHistory, Long
                     coalesce(i.category, '') ilike concat('%', :category, '%'))
                 and (:deploymentVersion is null or :deploymentVersion = '' or
                     coalesce(i.deployment_version, '') ilike concat('%', :deploymentVersion, '%'))
+                and (:infraTypesCsv is null or
+                    coalesce(i.infra_type, '') = any(string_to_array(:infraTypesCsv, :filterDelimiter)))
+                and (:categoriesCsv is null or
+                    coalesce(i.category, '') = any(string_to_array(:categoriesCsv, :filterDelimiter)))
+                and (:deploymentVersionsCsv is null or
+                    coalesce(i.deployment_version, '') = any(string_to_array(:deploymentVersionsCsv, :filterDelimiter)))
                 and (
                     (:detailType = 'WEB' and (
                         coalesce(i.category, '') ilike '%DB%'
@@ -638,6 +666,10 @@ public interface PatchHistoryRepository extends JpaRepository<PatchHistory, Long
             @Param("customerName") String customerName,
             @Param("category") String category,
             @Param("deploymentVersion") String deploymentVersion,
+            @Param("infraTypesCsv") String infraTypesCsv,
+            @Param("categoriesCsv") String categoriesCsv,
+            @Param("deploymentVersionsCsv") String deploymentVersionsCsv,
+            @Param("filterDelimiter") String filterDelimiter,
             @Param("detailType") String detailType,
             @Param("detailDeploymentVersion") String detailDeploymentVersion,
             @Param("detailVersionRelation") String detailVersionRelation,
@@ -664,6 +696,31 @@ public interface PatchHistoryRepository extends JpaRepository<PatchHistory, Long
             """,
             nativeQuery = true)
     List<String> findDeploymentVersions(@Param("detailType") String detailType);
+
+    @Query(value = """
+            select distinct i.category
+            from issue_case i
+            where i.category is not null
+              and btrim(i.category) <> ''
+            order by i.category
+            """,
+            nativeQuery = true)
+    List<String> findCategories();
+
+    @Query(value = """
+            select distinct i.deployment_version
+            from issue_case i
+            where i.deployment_version is not null
+              and btrim(i.deployment_version) <> ''
+              and (:categoriesCsv is null or
+                  coalesce(i.category, '') = any(string_to_array(:categoriesCsv, :filterDelimiter)))
+            order by i.deployment_version desc
+            """,
+            nativeQuery = true)
+    List<String> findDeploymentVersionsByCategories(
+            @Param("categoriesCsv") String categoriesCsv,
+            @Param("filterDelimiter") String filterDelimiter
+    );
 
     @Query(value = """
             select i.completed_date

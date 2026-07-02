@@ -5,6 +5,7 @@ import com.example.issuesystem.common.domain.InfraType;
 import com.example.issuesystem.patchhistory.domain.PatchHistory;
 import com.example.issuesystem.patchhistory.domain.PatchStatus;
 import com.example.issuesystem.patchhistory.dto.PatchHistoryCreateRequest;
+import com.example.issuesystem.patchhistory.dto.PatchHistoryFilterOptionsResponse;
 import com.example.issuesystem.patchhistory.dto.PatchHistoryResponse;
 import com.example.issuesystem.patchhistory.dto.PatchHistoryUpdateRequest;
 import com.example.issuesystem.patchhistory.repository.PatchHistoryRepository;
@@ -25,6 +26,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class PatchHistoryService {
+
+    private static final String FILTER_DELIMITER = "\u001F";
 
     private final PatchHistoryRepository patchHistoryRepository;
 
@@ -114,10 +117,13 @@ public class PatchHistoryService {
     public PageResponse<PatchHistoryResponse> search(
             String keyword,
             InfraType infraType,
+            List<InfraType> infraTypes,
             PatchStatus status,
             String customerName,
             String category,
+            List<String> categories,
             String deploymentVersion,
+            List<String> deploymentVersions,
             String detailType,
             String detailDeploymentVersion,
             String detailVersionRelation,
@@ -139,6 +145,9 @@ public class PatchHistoryService {
                 : LocalDateTime.of(9999, 12, 31, 0, 0);
 
         String normalizedDetailType = normalizeDetailType(detailType);
+        String infraTypesCsv = joinInfraTypes(infraTypes);
+        String categoriesCsv = joinValues(categories);
+        String deploymentVersionsCsv = joinValues(deploymentVersions);
         String normalizedRelation = normalizeVersionRelation(detailVersionRelation);
         String normalizedDetailDeploymentVersion = blankToNull(detailDeploymentVersion);
         if ("ALL".equals(normalizedRelation)) {
@@ -159,6 +168,10 @@ public class PatchHistoryService {
                         customerName,
                         category,
                         deploymentVersion,
+                        infraTypesCsv,
+                        categoriesCsv,
+                        deploymentVersionsCsv,
+                        FILTER_DELIMITER,
                         startDateTime,
                         endDateTime,
                         PageRequest.of(safePage, safeSize)
@@ -170,6 +183,10 @@ public class PatchHistoryService {
                         customerName,
                         category,
                         deploymentVersion,
+                        infraTypesCsv,
+                        categoriesCsv,
+                        deploymentVersionsCsv,
+                        FILTER_DELIMITER,
                         normalizedDetailType,
                         normalizedDetailDeploymentVersion,
                         normalizedRelation,
@@ -215,6 +232,19 @@ public class PatchHistoryService {
     }
 
     @Transactional
+    public PatchHistoryFilterOptionsResponse getFilterOptions(List<String> categories) {
+        String categoriesCsv = joinValues(categories);
+
+        return PatchHistoryFilterOptionsResponse.builder()
+                .categories(patchHistoryRepository.findCategories())
+                .deploymentVersions(patchHistoryRepository.findDeploymentVersionsByCategories(
+                        categoriesCsv,
+                        FILTER_DELIMITER
+                ))
+                .build();
+    }
+
+    @Transactional
     public List<String> getDeploymentVersions(String detailType) {
         String normalizedDetailType = normalizeDetailType(detailType);
 
@@ -253,6 +283,34 @@ public class PatchHistoryService {
         }
 
         return value.trim();
+    }
+
+    private String joinInfraTypes(List<InfraType> values) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+
+        String joined = values.stream()
+                .filter(value -> value != null)
+                .map(Enum::name)
+                .distinct()
+                .collect(Collectors.joining(FILTER_DELIMITER));
+
+        return joined.isEmpty() ? null : joined;
+    }
+
+    private String joinValues(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+
+        String joined = values.stream()
+                .map(this::blankToNull)
+                .filter(value -> value != null)
+                .distinct()
+                .collect(Collectors.joining(FILTER_DELIMITER));
+
+        return joined.isEmpty() ? null : joined;
     }
 
     private boolean isDateAlphaVersion(String value) {

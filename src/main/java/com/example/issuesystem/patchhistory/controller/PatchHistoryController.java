@@ -5,6 +5,7 @@ import com.example.issuesystem.common.PageResponse;
 import com.example.issuesystem.common.domain.InfraType;
 import com.example.issuesystem.patchhistory.domain.PatchStatus;
 import com.example.issuesystem.patchhistory.dto.PatchHistoryCreateRequest;
+import com.example.issuesystem.patchhistory.dto.PatchHistoryFilterOptionsResponse;
 import com.example.issuesystem.patchhistory.dto.PatchHistoryResponse;
 import com.example.issuesystem.patchhistory.dto.PatchHistoryUpdateRequest;
 import com.example.issuesystem.patchhistory.service.PatchHistoryService;
@@ -77,10 +78,13 @@ public class PatchHistoryController {
     public ApiResponse<PageResponse<PatchHistoryResponse>> search(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) InfraType infraType,
+            @RequestParam(required = false) List<InfraType> infraTypes,
             @RequestParam(required = false) PatchStatus status,
             @RequestParam(required = false) String customerName,
             @RequestParam(required = false) String category,
+            @RequestParam(required = false) List<String> categories,
             @RequestParam(required = false) String deploymentVersion,
+            @RequestParam(required = false) List<String> deploymentVersions,
             @RequestParam(required = false) String detailType,
             @RequestParam(required = false) String detailDeploymentVersion,
             @RequestParam(required = false) String detailVersionRelation,
@@ -93,10 +97,13 @@ public class PatchHistoryController {
                 patchHistoryService.search(
                         keyword,
                         infraType,
+                        infraTypes,
                         status,
                         customerName,
                         category,
+                        categories,
                         deploymentVersion,
+                        deploymentVersions,
                         detailType,
                         detailDeploymentVersion,
                         detailVersionRelation,
@@ -106,6 +113,13 @@ public class PatchHistoryController {
                         size
                 )
         );
+    }
+
+    @GetMapping("/filter-options")
+    public ApiResponse<PatchHistoryFilterOptionsResponse> getFilterOptions(
+            @RequestParam(required = false) List<String> categories
+    ) {
+        return ApiResponse.ok(patchHistoryService.getFilterOptions(categories));
     }
 
     @GetMapping("/deployment-versions")
