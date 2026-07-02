@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import SectionCard from '../components/common/SectionCard';
+import LabeledInput from '../components/common/LabeledInput';
 import { API_BASE } from '../constants/patchHistoryOptions';
 
 // 작업 및 이슈이력 API 기본 경로입니다.
@@ -42,20 +43,14 @@ const INFRA_TYPES = [
 const DEFAULT_PAGE_SIZE = 50;
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
 const MAX_DETAIL_LINES = 80;
+const searchInputClass =
+  'h-9 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none ring-0 focus:border-slate-500';
 
 function SearchIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <circle cx="11" cy="11" r="7" />
       <path d="M20 20l-3.5-3.5" />
-    </svg>
-  );
-}
-
-function FilterIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M22 3H2l8 9.5V19l4 2v-8.5L22 3z" />
     </svg>
   );
 }
@@ -134,6 +129,26 @@ async function readApiResponse(response, fallbackMessage) {
 // null/undefined가 화면에 그대로 찍히지 않게 문자열로 보정합니다.
 function text(value) {
   return value == null ? '' : String(value).trim();
+}
+
+function normalizeUploadFileName(fileName) {
+  return text(fileName).toLowerCase();
+}
+
+function uniqueUploadList(uploadList) {
+  const uniqueUploads = new Map();
+
+  (uploadList || []).forEach((upload) => {
+    const key = normalizeUploadFileName(upload.originalFileName);
+
+    if (!key || uniqueUploads.has(key)) {
+      return;
+    }
+
+    uniqueUploads.set(key, upload);
+  });
+
+  return Array.from(uniqueUploads.values());
 }
 
 function escapeRegExp(value) {
@@ -498,7 +513,6 @@ function WorkIssueFilterBar({
   executorOptions,
   customerOptions,
   showCustomerFilter,
-  onReset,
 }) {
   const toggleInfra = (infra) => {
     setSelectedInfraTypes((prev) =>
@@ -510,18 +524,14 @@ function WorkIssueFilterBar({
     <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[220px] flex-1">
-          <label className="mb-1 block text-xs font-medium text-slate-700">검색어 (AND 조건)</label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-              <SearchIcon />
-            </span>
+          <LabeledInput label="검색어" compact>
             <input
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
               placeholder="검색어 입력..."
-              className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm outline-none ring-0 transition focus:border-slate-500"
+              className={searchInputClass}
             />
-          </div>
+          </LabeledInput>
         </div>
 
         <div className="w-[180px]">
@@ -592,14 +602,6 @@ function WorkIssueFilterBar({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={onReset}
-          className="ml-auto inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-        >
-          <FilterIcon />
-          초기화
-        </button>
       </div>
     </div>
   );
@@ -1184,7 +1186,6 @@ export default function WorkIssueHistoryPage() {
   const [activeInnerTab, setActiveInnerTab] = useState('projects');
   const [uploads, setUploads] = useState([]);
   const [selectedUploadId, setSelectedUploadId] = useState('');
-  const [summary, setSummary] = useState(null);
   const [projects, setProjects] = useState([]);
   const [maintenanceRows, setMaintenanceRows] = useState([]);
 
@@ -1207,18 +1208,17 @@ export default function WorkIssueHistoryPage() {
       const uploadList = await fetch(`${WORK_ISSUE_API}/uploads`)
         .then((response) => readApiResponse(response, '업로드 이력 조회에 실패했습니다.'));
 
-      const resolvedUploadId = uploadId || (uploadList?.[0]?.uploadId ? String(uploadList[0].uploadId) : '');
+      const uniqueUploads = uniqueUploadList(uploadList);
+      const resolvedUploadId = uploadId || (uniqueUploads?.[0]?.uploadId ? String(uniqueUploads[0].uploadId) : '');
       const query = resolvedUploadId ? `?uploadId=${resolvedUploadId}` : '';
 
-      const [summaryData, projectData, maintenanceData] = await Promise.all([
-        fetch(`${WORK_ISSUE_API}/summary${query}`).then((response) => readApiResponse(response, '요약 조회에 실패했습니다.')),
+      const [projectData, maintenanceData] = await Promise.all([
         fetch(`${WORK_ISSUE_API}/projects${query}`).then((response) => readApiResponse(response, '프로젝트 조회에 실패했습니다.')),
         fetch(`${WORK_ISSUE_API}/maintenance${query}`).then((response) => readApiResponse(response, '유지보수 조회에 실패했습니다.')),
       ]);
 
-      setUploads(uploadList || []);
+      setUploads(uniqueUploads);
       setSelectedUploadId(resolvedUploadId);
-      setSummary(summaryData);
       setProjects(groupProjectRows((projectData || []).map(normalizeProject)));
       setMaintenanceRows((maintenanceData || []).map(normalizeMaintenance));
     } catch (e) {
@@ -1294,16 +1294,6 @@ export default function WorkIssueHistoryPage() {
       infraTypes: selectedInfraTypes,
     });
   }, [maintenanceRows, keyword, salesRep, executor, selectedInfraTypes]);
-
-  const totalMd = number(summary?.projectMdTotal) + number(summary?.maintenanceMdTotal);
-
-  const resetFilters = () => {
-    setKeyword('');
-    setSalesRep('');
-    setExecutor('');
-    setCustomer('');
-    setSelectedInfraTypes([]);
-  };
 
   return (
     <>
@@ -1385,16 +1375,11 @@ export default function WorkIssueHistoryPage() {
             </div>
           </div>
 
-          {(message || error || loading || summary) ? (
+          {(message || error || loading) ? (
             <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
               {error ? <span className="font-semibold text-red-600">{error}</span> : null}
               {!error && message ? <span className="font-semibold text-blue-600">{message}</span> : null}
               {!error && !message && loading ? <span className="font-semibold text-slate-500">데이터를 조회 중입니다.</span> : null}
-              {!error && !message && !loading && summary ? (
-                <span>
-                  기준 파일: <b>{summary.originalFileName || '-'}</b> · 프로젝트 <b>{summary.projectCount || 0}</b>건 · 유지보수 <b>{summary.maintenanceCount || 0}</b>건 · 공수 <b>{totalMd.toFixed(1)}</b>M/D
-                </span>
-              ) : null}
             </div>
           ) : null}
 
@@ -1413,7 +1398,6 @@ export default function WorkIssueHistoryPage() {
             executorOptions={executorOptions}
             customerOptions={customerOptions}
             showCustomerFilter={activeInnerTab === 'projects'}
-            onReset={resetFilters}
           />
 
           {activeInnerTab === 'projects' ? <ProjectTable rows={filteredProjects} keyword={keyword} /> : null}
