@@ -2,7 +2,6 @@ package com.example.issuesystem.common.domain;
 
 public enum InfraType {
     EMS,
-    예방점검,
     ERMS,
     SMS,
     NMS,

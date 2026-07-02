@@ -550,8 +550,13 @@ public class FileUploadService {
             return InfraType.EMS;
         }
 
+        String normalized = value.trim();
+        if ("예방점검".equals(normalized) || "GPM".equalsIgnoreCase(normalized)) {
+            return InfraType.GPM;
+        }
+
         try {
-            return InfraType.valueOf(value.trim());
+            return InfraType.valueOf(normalized);
         } catch (IllegalArgumentException e) {
             return InfraType.EMS;
         }
