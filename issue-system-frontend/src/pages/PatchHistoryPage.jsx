@@ -98,7 +98,29 @@ function MultiSelectDropdown({
   disabled = false,
 }) {
   const [open, setOpen] = useState(false);
+  const [optionKeyword, setOptionKeyword] = useState('');
   const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
+  const filteredOptions = useMemo(() => {
+    const keyword = optionKeyword.trim().toLowerCase();
+
+    if (!keyword) {
+      return options;
+    }
+
+    return options.filter((option) => String(option).toLowerCase().includes(keyword));
+  }, [optionKeyword, options]);
+
+  const toggleOpen = () => {
+    setOpen((prev) => {
+      const nextOpen = !prev;
+
+      if (!nextOpen) {
+        setOptionKeyword('');
+      }
+
+      return nextOpen;
+    });
+  };
 
   return (
     <div className="relative">
@@ -106,7 +128,7 @@ function MultiSelectDropdown({
         <button
           type="button"
           disabled={disabled}
-          onClick={() => setOpen((prev) => !prev)}
+          onClick={toggleOpen}
           className={`${searchInputClass} flex items-center justify-between bg-white text-left disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400`}
         >
           <span className="truncate">{getFilterLabel(selectedValues, emptyLabel)}</span>
@@ -116,6 +138,16 @@ function MultiSelectDropdown({
 
       {open && (
         <div className="absolute left-0 z-30 mt-1 max-h-72 w-64 overflow-y-auto rounded-lg border border-slate-200 bg-white py-2 shadow-lg">
+          <div className="px-2 pb-2">
+            <input
+              value={optionKeyword}
+              onChange={(e) => setOptionKeyword(e.target.value)}
+              className="h-8 w-full rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-slate-500"
+              placeholder={`${label} 검색`}
+              autoFocus
+            />
+          </div>
+
           <label className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
             <input
               type="checkbox"
@@ -125,7 +157,7 @@ function MultiSelectDropdown({
             <span className="flex-1">(모두)</span>
           </label>
 
-          {options.map((option) => (
+          {filteredOptions.map((option) => (
             <label
               key={option}
               className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
@@ -138,6 +170,12 @@ function MultiSelectDropdown({
               <span className="min-w-0 flex-1 truncate" title={option}>{option}</span>
             </label>
           ))}
+
+          {filteredOptions.length === 0 && (
+            <div className="px-3 py-3 text-center text-sm text-slate-400">
+              검색 결과가 없습니다.
+            </div>
+          )}
         </div>
       )}
     </div>
