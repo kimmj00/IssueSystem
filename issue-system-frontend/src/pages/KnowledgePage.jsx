@@ -56,14 +56,6 @@ function toDateInputValue(date) {
   return `${year}-${month}-${day}`;
 }
 
-// 기본 시작일: 현재 기준 한 달 전
-function getDefaultStartDate() {
-  const date = new Date();
-  date.setMonth(date.getMonth() - 1);
-
-  return toDateInputValue(date);
-}
-
 // 기본 종료일: 현재 날짜
 function getDefaultEndDate() {
   return toDateInputValue(new Date());
@@ -118,7 +110,7 @@ export default function KnowledgePage() {
   const [keyword, setKeyword] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [infraType, setInfraType] = useState('ALL');
-  const [startDate, setStartDate] = useState(getDefaultStartDate);
+  const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState(getDefaultEndDate);
 
   // 목록 상태

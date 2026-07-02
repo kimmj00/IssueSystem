@@ -19,12 +19,6 @@ function toDateInputValue(date) {
   return `${year}-${month}-${day}`;
 }
 
-function getDefaultStartDate() {
-  const date = new Date();
-  date.setMonth(date.getMonth() - 1);
-  return toDateInputValue(date);
-}
-
 function getDefaultEndDate() {
   return toDateInputValue(new Date());
 }
@@ -161,7 +155,7 @@ export default function GlobalSearchPage() {
   const [infraType, setInfraType] = useState('ALL');
   const [customerName, setCustomerName] = useState('');
   const [workIssueType, setWorkIssueType] = useState('ALL');
-  const [startDate, setStartDate] = useState(getDefaultStartDate);
+  const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState(getDefaultEndDate);
 
   const [patchHistoryRows, setPatchHistoryRows] = useState([]);
