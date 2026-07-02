@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const infraOptions = [
   'EMS',
-  '예방점검',
+  'GPM',
   'ERMS',
   'SMS',
   'NMS',
@@ -40,6 +40,252 @@ function Field({ label, children }) {
         <div className="mb-2 text-sm font-medium text-slate-700">{label}</div>
         {children}
       </label>
+  );
+}
+
+function isContentEmpty(value) {
+  if (!value) {
+    return true;
+  }
+
+  if (/<img\b/i.test(value)) {
+    return false;
+  }
+
+  return value
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .trim() === '';
+}
+
+function escapeHtmlAttribute(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char]));
+}
+
+function sanitizeContentHtml(value) {
+  const template = document.createElement('template');
+  const allowedTags = new Set([
+    'B',
+    'BR',
+    'DIV',
+    'EM',
+    'I',
+    'IMG',
+    'LI',
+    'OL',
+    'P',
+    'STRONG',
+    'U',
+    'UL',
+  ]);
+
+  template.innerHTML = value || '';
+
+  template.content.querySelectorAll('*').forEach((node) => {
+    if (!allowedTags.has(node.tagName)) {
+      node.replaceWith(document.createTextNode(node.textContent || ''));
+      return;
+    }
+
+    if (node.tagName === 'IMG') {
+      const src = node.getAttribute('src') || '';
+      const alt = node.getAttribute('alt') || '';
+
+      node.getAttributeNames().forEach((name) => node.removeAttribute(name));
+
+      if (src.startsWith('data:image/')) {
+        node.setAttribute('src', src);
+        node.setAttribute('alt', alt);
+      } else {
+        node.remove();
+      }
+
+      return;
+    }
+
+    node.getAttributeNames().forEach((name) => node.removeAttribute(name));
+  });
+
+  return template.innerHTML;
+}
+
+function RichTextEditor({ value, onChange }) {
+  const editorRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    if (value === '' && editorRef.current && editorRef.current.innerHTML !== '') {
+      editorRef.current.innerHTML = '';
+    }
+  }, [value]);
+
+  const syncContent = () => {
+    onChange(editorRef.current?.innerHTML || '');
+  };
+
+  const runCommand = (command) => {
+    editorRef.current?.focus();
+    document.execCommand(command, false, null);
+    syncContent();
+  };
+
+  const insertImages = (files) => {
+    Array.from(files || [])
+        .filter((file) => file.type.startsWith('image/'))
+        .forEach((file) => {
+          const reader = new FileReader();
+
+          reader.onload = () => {
+            editorRef.current?.focus();
+            document.execCommand(
+                'insertHTML',
+                false,
+                `<img src="${reader.result}" alt="${escapeHtmlAttribute(file.name)}" />`
+            );
+            syncContent();
+          };
+
+          reader.readAsDataURL(file);
+        });
+  };
+
+  const placeCaretFromPoint = (x, y) => {
+    const selection = window.getSelection();
+
+    if (!selection) {
+      return;
+    }
+
+    let range = null;
+
+    if (document.caretRangeFromPoint) {
+      range = document.caretRangeFromPoint(x, y);
+    } else if (document.caretPositionFromPoint) {
+      const position = document.caretPositionFromPoint(x, y);
+
+      if (position) {
+        range = document.createRange();
+        range.setStart(position.offsetNode, position.offset);
+      }
+    }
+
+    if (range) {
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  };
+
+  const handlePaste = (e) => {
+    const files = Array.from(e.clipboardData?.files || []);
+    const imageFiles = files.filter((file) => file.type.startsWith('image/'));
+
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      insertImages(imageFiles);
+      return;
+    }
+
+    const text = e.clipboardData?.getData('text/plain');
+    if (text) {
+      e.preventDefault();
+      document.execCommand('insertText', false, text);
+      syncContent();
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setDragging(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    placeCaretFromPoint(e.clientX, e.clientY);
+    insertImages(e.dataTransfer?.files);
+  };
+
+  return (
+      <div>
+        <div className="flex flex-wrap items-center gap-1 rounded-t-xl border border-b-0 border-slate-300 bg-slate-50 px-2 py-2">
+          <button
+              type="button"
+              onClick={() => runCommand('bold')}
+              className="h-8 min-w-8 rounded-md border border-slate-300 bg-white px-2 text-sm font-bold text-slate-700 hover:bg-slate-100"
+          >
+            B
+          </button>
+          <button
+              type="button"
+              onClick={() => runCommand('italic')}
+              className="h-8 min-w-8 rounded-md border border-slate-300 bg-white px-2 text-sm italic text-slate-700 hover:bg-slate-100"
+          >
+            I
+          </button>
+          <button
+              type="button"
+              onClick={() => runCommand('insertUnorderedList')}
+              className="h-8 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          >
+            목록
+          </button>
+          <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              className="h-8 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          >
+            이미지
+          </button>
+          <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                insertImages(e.target.files);
+                e.target.value = '';
+              }}
+          />
+        </div>
+
+        <div className="relative">
+          {isContentEmpty(value) && (
+              <div className="pointer-events-none absolute left-4 top-3 text-sm text-slate-400">
+                본문을 입력하거나 이미지를 삽입하세요.
+              </div>
+          )}
+          <div
+              ref={editorRef}
+              contentEditable
+              suppressContentEditableWarning
+              onInput={syncContent}
+              onPaste={handlePaste}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`min-h-[360px] w-full overflow-y-auto rounded-b-xl border px-4 py-3 text-sm leading-6 outline-none focus:border-slate-500 [&_img]:max-w-full [&_img]:rounded-lg ${
+                  dragging
+                      ? 'border-slate-700 bg-slate-50'
+                      : 'border-slate-300 bg-white'
+              }`}
+          />
+        </div>
+      </div>
   );
 }
 
@@ -96,7 +342,7 @@ export default function CreateKnowledgeModal({
       return;
     }
 
-    if (!form.content.trim()) {
+    if (isContentEmpty(form.content)) {
       alert('내용을 입력하세요.');
       return;
     }
@@ -106,12 +352,14 @@ export default function CreateKnowledgeModal({
       return;
     }
 
+    const sanitizedContent = sanitizeContentHtml(form.content).trim();
+
     await onSubmit({
       ...form,
       title: form.title.trim(),
       customerName: form.customerName.trim(),
       authorName: form.authorName.trim(),
-      content: form.content.trim(),
+      content: sanitizedContent,
       attachmentName: files.map((file) => file.name).join(', '),
       files,
     });
@@ -202,12 +450,10 @@ export default function CreateKnowledgeModal({
                 )}
 
                 <Field label="내용">
-                <textarea
-                    value={form.content}
-                    onChange={(e) => changeValue('content', e.target.value)}
-                    className="min-h-[360px] w-full resize-y rounded-xl border border-slate-300 px-4 py-3 text-sm leading-6 outline-none focus:border-slate-500"
-                    placeholder="제목/내용 검색 대상이 되는 본문을 입력하세요."
-                />
+                  <RichTextEditor
+                      value={form.content}
+                      onChange={(nextContent) => changeValue('content', nextContent)}
+                  />
                 </Field>
               </div>
 
