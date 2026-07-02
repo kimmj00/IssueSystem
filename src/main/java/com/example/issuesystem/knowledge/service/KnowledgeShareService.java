@@ -27,6 +27,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class KnowledgeShareService {
 
+    private static final String FILTER_DELIMITER = "\u001F";
+
     private final KnowledgeShareRepository knowledgeShareRepository;
     private final KnowledgeShareAttachmentRepository attachmentRepository;
     private final KnowledgeFileStorageService fileStorageService;
@@ -84,6 +86,7 @@ public class KnowledgeShareService {
             String keyword,
             String customerName,
             InfraType infraType,
+            List<InfraType> infraTypes,
             LocalDate startDate,
             LocalDate endDate,
             int page,
@@ -108,6 +111,8 @@ public class KnowledgeShareService {
                 // KnowledgeShareRepository가 nativeQuery로 변경되었기 때문에
                 // Enum 객체가 아니라 DB에 저장된 문자열 값을 전달한다.
                 infraType != null ? infraType.name() : null,
+                joinInfraTypes(infraTypes),
+                FILTER_DELIMITER,
 
                 startDateTime,
                 endDateTime,
@@ -166,6 +171,21 @@ public class KnowledgeShareService {
     }
 
     /** 다운로드 응답에 필요한 파일 정보 */
+    private String joinInfraTypes(List<InfraType> values) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+
+        String joined = values.stream()
+                .filter(value -> value != null)
+                .map(Enum::name)
+                .distinct()
+                .reduce((left, right) -> left + FILTER_DELIMITER + right)
+                .orElse("");
+
+        return joined.isEmpty() ? null : joined;
+    }
+
     public record DownloadFile(
             Resource resource,
             String originalFileName,

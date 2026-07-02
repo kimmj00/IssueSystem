@@ -13,6 +13,57 @@ function formatDateTime(value) {
     return String(value).replace('T', ' ').slice(0, 16);
 }
 
+function hasHtmlContent(value) {
+    return /<\/?[a-z][\s\S]*>/i.test(value || '');
+}
+
+function sanitizeContentHtml(value) {
+    const template = document.createElement('template');
+    const allowedTags = new Set([
+        'B',
+        'BR',
+        'DIV',
+        'EM',
+        'I',
+        'IMG',
+        'LI',
+        'OL',
+        'P',
+        'STRONG',
+        'U',
+        'UL',
+    ]);
+
+    template.innerHTML = value || '';
+
+    template.content.querySelectorAll('*').forEach((node) => {
+        if (!allowedTags.has(node.tagName)) {
+            node.replaceWith(document.createTextNode(node.textContent || ''));
+            return;
+        }
+
+        if (node.tagName === 'IMG') {
+            const src = node.getAttribute('src') || '';
+            const alt = node.getAttribute('alt') || '';
+
+            node.getAttributeNames().forEach((name) => node.removeAttribute(name));
+
+            if (src.startsWith('data:image/')) {
+                node.setAttribute('src', src);
+                node.setAttribute('alt', alt);
+            } else {
+                node.remove();
+            }
+
+            return;
+        }
+
+        node.getAttributeNames().forEach((name) => node.removeAttribute(name));
+    });
+
+    return template.innerHTML;
+}
+
 function InfoBox({ label, value }) {
     return (
         <div className="rounded-lg bg-slate-50 px-3 py-3">
@@ -27,14 +78,24 @@ function InfoBox({ label, value }) {
 }
 
 function DetailBlock({ title, value }) {
+    const isHtml = hasHtmlContent(value);
+    const sanitizedHtml = isHtml ? sanitizeContentHtml(value) : '';
+
     return (
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-3 text-sm font-semibold text-slate-700">
                 {title}
             </div>
-            <div className="min-h-14 whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800">
-                {value || '-'}
-            </div>
+            {isHtml ? (
+                <div
+                    className="min-h-14 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 [&_img]:my-3 [&_img]:max-w-full [&_img]:rounded-lg"
+                    dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+                />
+            ) : (
+                <div className="min-h-14 whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800">
+                    {value || '-'}
+                </div>
+            )}
         </section>
     );
 }

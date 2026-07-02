@@ -12,7 +12,7 @@ const API_BASE =
 // 지식공유 인프라 검색/등록 옵션
 const infraOptions = [
   'EMS',
-  '예방점검',
+  'GPM',
   'ERMS',
   'SMS',
   'NMS',
@@ -107,11 +107,30 @@ function buildPageItems(currentPage, totalPages) {
   return items;
 }
 
+function stripHtml(value) {
+  if (!value) {
+    return '';
+  }
+
+  return String(value)
+      .replace(/<img\b[^>]*>/gi, ' [이미지] ')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+}
+
+function toggleSelectedValue(values, value) {
+  return values.includes(value)
+      ? values.filter((item) => item !== value)
+      : [...values, value];
+}
+
 export default function KnowledgePage() {
   // 검색 조건 상태
   const [keyword, setKeyword] = useState('');
   const [customerName, setCustomerName] = useState('');
-  const [infraType, setInfraType] = useState('ALL');
+  const [selectedInfraTypes, setSelectedInfraTypes] = useState([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState(getDefaultEndDate);
 
@@ -159,9 +178,9 @@ export default function KnowledgePage() {
         params.append('customerName', customerName.trim());
       }
 
-      if (infraType !== 'ALL') {
-        params.append('infraType', infraType);
-      }
+      selectedInfraTypes.forEach((infraType) => {
+        params.append('infraTypes', infraType);
+      });
 
       if (startDate) {
         params.append('startDate', startDate);
@@ -218,7 +237,7 @@ export default function KnowledgePage() {
 
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyword, customerName, infraType, startDate, endDate]);
+  }, [keyword, customerName, selectedInfraTypes, startDate, endDate]);
 
   // 페이지당 표시 개수 변경
   const handleSizeChange = (e) => {
@@ -349,23 +368,6 @@ export default function KnowledgePage() {
                 </LabeledInput>
               </div>
 
-              <div className="w-full sm:w-[120px]">
-                <LabeledInput label="인프라" compact>
-                  <select
-                      className={searchInputClass}
-                      value={infraType}
-                      onChange={(e) => setInfraType(e.target.value)}
-                  >
-                    <option value="ALL">전체</option>
-                    {infraOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                    ))}
-                  </select>
-                </LabeledInput>
-              </div>
-
               <div className="w-full sm:w-[150px]">
                 <LabeledInput label="고객사" compact>
                   <input
@@ -408,6 +410,30 @@ export default function KnowledgePage() {
                 >
                   등록
                 </button>
+              </div>
+            </div>
+
+            <div className="mt-3 border-t border-slate-200 pt-3">
+              <div className="mb-2 text-sm font-medium text-slate-700">인프라 필터</div>
+              <div className="flex flex-wrap gap-1.5">
+                {infraOptions.map((option) => {
+                  const selected = selectedInfraTypes.includes(option);
+
+                  return (
+                      <button
+                          key={option}
+                          type="button"
+                          onClick={() => setSelectedInfraTypes((prev) => toggleSelectedValue(prev, option))}
+                          className={`inline-flex h-8 min-w-[58px] items-center justify-center rounded-md border px-2 text-xs font-bold transition ${
+                              selected
+                                  ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
+                                  : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-slate-400 hover:bg-white hover:text-slate-900'
+                          }`}
+                      >
+                        {option}
+                      </button>
+                  );
+                })}
               </div>
             </div>
           </SectionCard>
@@ -485,7 +511,7 @@ export default function KnowledgePage() {
                           {/* 내용: 제목 바로 다음에 표시 */}
                           <td className="px-4 py-3 text-slate-600">
                             <div className="max-w-[460px] truncate">
-                              {item.content || '-'}
+                              {stripHtml(item.content) || '-'}
                             </div>
                           </td>
 

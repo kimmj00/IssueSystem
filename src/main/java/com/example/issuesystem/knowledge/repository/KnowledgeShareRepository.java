@@ -181,6 +181,15 @@ public interface KnowledgeShareRepository extends JpaRepository<KnowledgeShare, 
                               and ksi.infra_type = cast(:infraType as varchar)
                         )
                     )
+                    and (
+                        :infraTypesCsv is null
+                        or exists (
+                            select 1
+                            from knowledge_share_infra ksi
+                            where ksi.knowledge_share_id = ks.id
+                              and ksi.infra_type = any(string_to_array(:infraTypesCsv, :filterDelimiter))
+                        )
+                    )
                     and ks.created_at >= :startDate
                     and ks.created_at < :endDate
                 order by
@@ -371,6 +380,15 @@ public interface KnowledgeShareRepository extends JpaRepository<KnowledgeShare, 
                               and ksi.infra_type = cast(:infraType as varchar)
                         )
                     )
+                    and (
+                        :infraTypesCsv is null
+                        or exists (
+                            select 1
+                            from knowledge_share_infra ksi
+                            where ksi.knowledge_share_id = ks.id
+                              and ksi.infra_type = any(string_to_array(:infraTypesCsv, :filterDelimiter))
+                        )
+                    )
                     and ks.created_at >= :startDate
                     and ks.created_at < :endDate
             """,
@@ -380,6 +398,8 @@ public interface KnowledgeShareRepository extends JpaRepository<KnowledgeShare, 
             @Param("keyword") String keyword,
             @Param("customerName") String customerName,
             @Param("infraType") String infraType,
+            @Param("infraTypesCsv") String infraTypesCsv,
+            @Param("filterDelimiter") String filterDelimiter,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate,
             Pageable pageable
