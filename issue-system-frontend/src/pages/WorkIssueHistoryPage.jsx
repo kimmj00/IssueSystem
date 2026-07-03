@@ -46,6 +46,30 @@ const MAX_DETAIL_LINES = 80;
 const searchInputClass =
   'h-9 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none ring-0 focus:border-slate-500';
 
+function getInitialSearchParam(name, fallback = '') {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(name) || fallback;
+}
+
+function getInitialWorkIssueTab() {
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get('tab');
+  const workIssueType = params.get('workIssueType');
+  const keyword = params.get('keyword');
+
+  if (INNER_TABS.some((item) => item.key === tab)) {
+    return tab;
+  }
+  if (keyword) {
+    return 'search';
+  }
+  if (workIssueType === 'MAINTENANCE') {
+    return 'maintenance';
+  }
+
+  return 'projects';
+}
+
 function SearchIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -162,6 +186,24 @@ function getKeywordTerms(keyword) {
     .filter(Boolean);
 }
 
+function isCodeKeyword(term) {
+  return /^[a-z0-9]+$/i.test(term);
+}
+
+function keywordPattern(term) {
+  const escaped = escapeRegExp(term);
+
+  if (isCodeKeyword(term)) {
+    return new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, 'i');
+  }
+
+  return new RegExp(escaped, 'i');
+}
+
+function includesKeyword(value, term) {
+  return keywordPattern(term).test(text(value));
+}
+
 function highlightText(value, keyword) {
   const source = text(value);
   const terms = getKeywordTerms(keyword);
@@ -170,9 +212,14 @@ function highlightText(value, keyword) {
     return source;
   }
 
-  const pattern = new RegExp(`(${terms.map(escapeRegExp).join('|')})`, 'gi');
+  const pattern = new RegExp(
+    `(${terms
+      .map((term) => (isCodeKeyword(term) ? `(?<![a-z0-9])${escapeRegExp(term)}(?![a-z0-9])` : escapeRegExp(term)))
+      .join('|')})`,
+    'gi'
+  );
   return source.split(pattern).map((part, index) => {
-    const matched = terms.some((term) => part.toLowerCase() === term.toLowerCase());
+    const matched = terms.some((term) => includesKeyword(part, term));
 
     if (!matched) {
       return part;
@@ -200,7 +247,7 @@ function formatDateTime(value) {
 }
 
 // 수행인원 문자열을 화면 필터에서 쓰기 좋은 배열로 변환합니다.
-const EXCLUDED_EXECUTOR_NAMES = new Set(['박천웅', '박신후', '배동훈', '안형락', '베동훈']);
+const EXCLUDED_EXECUTOR_NAMES = new Set(['-', '박천웅', '박신후', '배동훈', '안형락', '베동훈', '박기열', '김도형', '오재근']);
 
 function splitPeople(value) {
   return text(value)
@@ -243,7 +290,6 @@ function inferMaintenanceInfraTypes(item) {
   const result = [];
   if (text(item.smsStatus) && text(item.smsStatus).toUpperCase() !== 'X') result.push('SMS');
   if (text(item.nmsStatus) && text(item.nmsStatus).toUpperCase() !== 'X') result.push('NMS');
-  if (text(item.pgVersion) && text(item.pgVersion).toUpperCase() !== 'X') result.push('DBMS');
   if (text(item.apm).toUpperCase() === 'O') result.push('APM');
 
   const target = [
@@ -448,19 +494,19 @@ function matchAllKeywords(row, keyword) {
     .join(' ')
     .toLowerCase();
 
-  return words.every((word) => target.includes(word));
+  return words.every((word) => includesKeyword(target, word));
 }
 
 function includesKeywordTerms(value, terms, requireAll = true) {
-  const target = text(value).toLowerCase();
+  const target = text(value);
 
   if (!target || terms.length === 0) {
     return false;
   }
 
   return requireAll
-    ? terms.every((term) => target.includes(term.toLowerCase()))
-    : terms.some((term) => target.includes(term.toLowerCase()));
+    ? terms.every((term) => includesKeyword(target, term))
+    : terms.some((term) => includesKeyword(target, term));
 }
 
 function getSearchPreview(row, keyword) {
@@ -1183,17 +1229,20 @@ function SearchResultList({ projectRows, maintenanceRows, keyword }) {
 export default function WorkIssueHistoryPage() {
   const fileInputRef = useRef(null);
 
-  const [activeInnerTab, setActiveInnerTab] = useState('projects');
+  const [activeInnerTab, setActiveInnerTab] = useState(getInitialWorkIssueTab);
   const [uploads, setUploads] = useState([]);
   const [selectedUploadId, setSelectedUploadId] = useState('');
   const [projects, setProjects] = useState([]);
   const [maintenanceRows, setMaintenanceRows] = useState([]);
 
-  const [keyword, setKeyword] = useState('');
+  const [keyword, setKeyword] = useState(() => getInitialSearchParam('keyword'));
   const [salesRep, setSalesRep] = useState('');
   const [executor, setExecutor] = useState('');
-  const [customer, setCustomer] = useState('');
-  const [selectedInfraTypes, setSelectedInfraTypes] = useState([]);
+  const [customer, setCustomer] = useState(() => getInitialSearchParam('customerName'));
+  const [selectedInfraTypes, setSelectedInfraTypes] = useState(() => {
+    const infraType = getInitialSearchParam('infraType');
+    return infraType ? [infraType] : [];
+  });
 
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);

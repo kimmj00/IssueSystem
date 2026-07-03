@@ -107,13 +107,25 @@ function buildPageItems(currentPage, totalPages) {
   return items;
 }
 
+function getInitialSearchParam(name, fallback = '') {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(name) || fallback;
+}
+
+function isFromGlobalSearch() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('fromGlobalSearch') === '1';
+}
+
 export default function KnowledgePage() {
   // 검색 조건 상태
-  const [keyword, setKeyword] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [infraType, setInfraType] = useState('ALL');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState(getDefaultEndDate);
+  const [keyword, setKeyword] = useState(() => getInitialSearchParam('keyword'));
+  const [customerName, setCustomerName] = useState(() => getInitialSearchParam('customerName'));
+  const [infraType, setInfraType] = useState(() => getInitialSearchParam('infraType', 'ALL'));
+  const [startDate, setStartDate] = useState(() => getInitialSearchParam('startDate'));
+  const [endDate, setEndDate] = useState(() =>
+      getInitialSearchParam('endDate', isFromGlobalSearch() ? '' : getDefaultEndDate())
+  );
 
   // 목록 상태
   const [items, setItems] = useState([]);

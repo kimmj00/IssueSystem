@@ -126,13 +126,22 @@ function buildSearchParams({
   return params;
 }
 
-function SummaryCard({ label, count, description }) {
+function SummaryCard({ label, count, description, onClick }) {
+  const Component = onClick ? 'button' : 'div';
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+    <Component
+      {...(onClick ? { type: 'button', onClick } : {})}
+      className={`rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm ${
+        onClick
+          ? 'transition hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300'
+          : ''
+      }`}
+    >
       <div className="text-sm text-slate-500">{label}</div>
       <div className="mt-1 text-2xl font-bold text-slate-900">{(count || 0).toLocaleString()}건</div>
       <div className="mt-1 text-xs text-slate-500">{description}</div>
-    </div>
+    </Component>
   );
 }
 
@@ -462,6 +471,47 @@ export default function GlobalSearchPage() {
     window.open(url, `work-issue-history-detail-${type}-${item.id}`, features);
   };
 
+  const moveToResultPage = (menuKey) => {
+    const params = new URLSearchParams();
+    const trimmedKeyword = keyword.trim();
+    const hasSearchCondition = Boolean(
+      trimmedKeyword
+      || customerName.trim()
+      || infraType !== 'ALL'
+      || (menuKey === 'WORK_ISSUE_HISTORY' && workIssueType !== 'ALL')
+    );
+
+    params.set('menu', menuKey);
+    params.set('fromGlobalSearch', '1');
+
+    if (trimmedKeyword) {
+      params.set('keyword', trimmedKeyword);
+    }
+
+    if (hasSearchCondition) {
+      if (customerName.trim()) {
+        params.set('customerName', customerName.trim());
+      }
+      if (infraType !== 'ALL') {
+        params.set('infraType', infraType);
+      }
+      if (startDate) {
+        params.set('startDate', startDate);
+      }
+      if (endDate) {
+        params.set('endDate', endDate);
+      }
+      if (menuKey === 'WORK_ISSUE_HISTORY') {
+        params.set('tab', trimmedKeyword ? 'search' : 'projects');
+        if (workIssueType !== 'ALL') {
+          params.set('workIssueType', workIssueType);
+        }
+      }
+    }
+
+    window.location.assign(`${window.location.pathname}?${params.toString()}`);
+  };
+
   const currentWorkIssueTotal =
     workIssueType === 'PROJECT'
       ? workProjectTotal
@@ -550,9 +600,9 @@ export default function GlobalSearchPage() {
         )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard label="패치이력" count={patchHistoryTotal} />
-          <SummaryCard label="지식공유 DB" count={knowledgeTotal} />
-          <SummaryCard label="작업 및 이슈이력" count={workIssueHistoryTotal} />
+          <SummaryCard label="패치이력" count={patchHistoryTotal} onClick={() => moveToResultPage('PATCH_HISTORY')} />
+          <SummaryCard label="지식공유 DB" count={knowledgeTotal} onClick={() => moveToResultPage('KNOWLEDGE')} />
+          <SummaryCard label="작업 및 이슈이력" count={workIssueHistoryTotal} onClick={() => moveToResultPage('WORK_ISSUE_HISTORY')} />
           <SummaryCard label="전체 결과" count={totalCount} />
         </div>
 
@@ -587,7 +637,14 @@ export default function GlobalSearchPage() {
           </SectionCard>
         ) : (
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2 2xl:grid-cols-3">
-            <SectionCard title={`패치이력 결과 (${(patchHistoryTotal || 0).toLocaleString()}건)`}>
+            <SectionCard>
+              <button
+                type="button"
+                onClick={() => moveToResultPage('PATCH_HISTORY')}
+                className="mb-4 text-left text-lg font-semibold text-slate-900 transition hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                패치이력 결과 ({(patchHistoryTotal || 0).toLocaleString()}건)
+              </button>
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
                   <thead className="bg-slate-100">
@@ -649,7 +706,14 @@ export default function GlobalSearchPage() {
               />
             </SectionCard>
 
-            <SectionCard title={`지식공유 결과 (${(knowledgeTotal || 0).toLocaleString()}건)`}>
+            <SectionCard>
+              <button
+                type="button"
+                onClick={() => moveToResultPage('KNOWLEDGE')}
+                className="mb-4 text-left text-lg font-semibold text-slate-900 transition hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                지식공유 결과 ({(knowledgeTotal || 0).toLocaleString()}건)
+              </button>
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="w-full table-fixed divide-y divide-slate-200 text-xs">
                   <thead className="bg-slate-100">
@@ -721,9 +785,13 @@ export default function GlobalSearchPage() {
 
             <SectionCard>
               <div className="mb-3 flex items-center gap-1.5 overflow-x-auto whitespace-nowrap">
-                <h2 className="shrink-0 text-lg font-semibold text-slate-900">
+                <button
+                  type="button"
+                  onClick={() => moveToResultPage('WORK_ISSUE_HISTORY')}
+                  className="shrink-0 text-left text-lg font-semibold text-slate-900 transition hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                >
                   작업 및 이슈이력 결과 ({workIssueHistoryTotal.toLocaleString()}건)
-                </h2>
+                </button>
                 <button
                   type="button"
                   onClick={() => changeWorkIssueType('ALL')}
