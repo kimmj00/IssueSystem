@@ -1,3 +1,134 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@keyframes save-screen-fly {
+  0% {
+    opacity: 0;
+    transform: translate(0, 42px) scale(0.92) rotateX(18deg);
+  }
+  18% {
+    opacity: 1;
+    transform: translate(0, -18px) scale(1.04) rotateX(0deg);
+  }
+  34% {
+    opacity: 1;
+    transform: translate(0, -32px) scale(1) rotateX(0deg);
+  }
+  70% {
+    opacity: 0.95;
+    transform: translate(calc(var(--save-screen-fly-x) * 0.62), calc(var(--save-screen-fly-y) * 0.62 - 32px)) scale(0.58) rotateZ(2deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--save-screen-fly-x), var(--save-screen-fly-y)) scale(0.12) rotateZ(4deg);
+  }
+}
+
+.save-screen-capture-flyer {
+  position: fixed;
+  z-index: 60;
+  overflow: hidden;
+  pointer-events: none;
+  border: 1px solid rgb(125 211 252);
+  border-radius: 14px;
+  background: white;
+  box-shadow: 0 30px 80px rgb(15 23 42 / 0.32);
+  animation: save-screen-fly 1520ms cubic-bezier(0.16, 0.84, 0.22, 1) forwards;
+  transform-origin: center;
+}
+
+.save-screen-capture-bar {
+  display: flex;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  background: rgb(15 23 42);
+  padding: 0 12px;
+}
+
+.save-screen-capture-bar span {
+  height: 8px;
+  width: 8px;
+  border-radius: 999px;
+}
+
+.save-screen-capture-bar span:nth-child(1) {
+  background: rgb(252 165 165);
+}
+
+.save-screen-capture-bar span:nth-child(2) {
+  background: rgb(253 224 71);
+}
+
+.save-screen-capture-bar span:nth-child(3) {
+  background: rgb(134 239 172);
+}
+
+.save-screen-capture-viewport {
+  height: calc(100% - 32px);
+  overflow: hidden;
+  background: rgb(248 250 252);
+}
+
+.save-screen-capture-content {
+  pointer-events: none;
+}
+
+.save-screen-capture-content .fixed,
+.save-screen-capture-content .sticky {
+  position: static !important;
+}
+
+.saved-screen-preview {
+  height: 64px;
+  overflow: hidden;
+  background: rgb(248 250 252);
+}
+
+.saved-screen-preview-content {
+  display: block;
+  pointer-events: none;
+  transform-origin: top left;
+}
+
+.saved-screen-preview-content * {
+  pointer-events: none !important;
+}
+
+.saved-screen-preview-content .fixed,
+.saved-screen-preview-content .sticky {
+  position: static !important;
+}
+
+.saved-screen-hover-preview {
+  width: min(540px, calc(100vw - 320px));
+  height: min(420px, calc(100vh - 140px));
+  pointer-events: none;
+}
+
+.saved-screen-hover-viewport {
+  height: calc(100% - 28px);
+  overflow: hidden;
+  background: rgb(248 250 252);
+}
+
+.saved-screen-hover-content {
+  display: block;
+  pointer-events: none;
+  transform-origin: top left;
+}
+
+.saved-screen-hover-content * {
+  pointer-events: none !important;
+}
+
+.saved-screen-hover-content .fixed,
+.saved-screen-hover-content .sticky {
+  position: static !important;
+}
+
+.save-screen-flyer {
+  animation: save-screen-fly 1450ms cubic-bezier(0.16, 0.84, 0.22, 1) forwards;
+  transform-origin: center;
+}

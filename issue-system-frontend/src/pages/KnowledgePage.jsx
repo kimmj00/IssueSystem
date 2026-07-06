@@ -3,11 +3,8 @@ import LabeledInput from '../components/common/LabeledInput';
 import SectionCard from '../components/common/SectionCard';
 import CreateKnowledgeModal from '../components/modal/CreateKnowledgeModal';
 import PageTitle from '../components/common/PageTitle';
-
-const API_BASE =
-    process.env.NODE_ENV === 'development'
-        ? 'http://localhost:8080'
-        : '';
+import SaveScreenButton from '../components/common/SaveScreenButton';
+import { API_BASE } from '../constants/patchHistoryOptions';
 
 // 지식공유 인프라 검색/등록 옵션
 const infraOptions = [
@@ -114,19 +111,20 @@ function buildPageItems(currentPage, totalPages) {
 }
 
 export default function KnowledgePage() {
+  const initialParams = new URLSearchParams(window.location.search);
   // 검색 조건 상태
-  const [keyword, setKeyword] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [infraType, setInfraType] = useState('ALL');
-  const [startDate, setStartDate] = useState(getDefaultStartDate);
-  const [endDate, setEndDate] = useState(getDefaultEndDate);
+  const [keyword, setKeyword] = useState(initialParams.get('keyword') || '');
+  const [customerName, setCustomerName] = useState(initialParams.get('customerName') || '');
+  const [infraType, setInfraType] = useState(initialParams.get('infraType') || 'ALL');
+  const [startDate, setStartDate] = useState(initialParams.get('startDate') || getDefaultStartDate);
+  const [endDate, setEndDate] = useState(initialParams.get('endDate') || getDefaultEndDate);
 
   // 목록 상태
   const [items, setItems] = useState([]);
 
   // 페이징 상태
-  const [page, setPage] = useState(0);
-  const [size, setSize] = useState(10);
+  const [page, setPage] = useState(Number(initialParams.get('page') || 0));
+  const [size, setSize] = useState(Number(initialParams.get('size') || 10));
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [hasPrevious, setHasPrevious] = useState(false);
@@ -207,7 +205,7 @@ export default function KnowledgePage() {
 
   // 최초 진입 시 1회 조회
   useEffect(() => {
-    fetchKnowledge(0, size);
+    fetchKnowledge(page, size);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -309,6 +307,20 @@ export default function KnowledgePage() {
     const features = 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
 
     window.open(url, `knowledge-detail-${id}`, features);
+  };
+
+  const buildSavedScreenUrl = () => {
+    const params = new URLSearchParams();
+    params.set('menu', 'KNOWLEDGE');
+    if (keyword.trim()) params.set('keyword', keyword.trim());
+    if (customerName.trim()) params.set('customerName', customerName.trim());
+    if (infraType !== 'ALL') params.set('infraType', infraType);
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+    params.set('page', String(page));
+    params.set('size', String(size));
+
+    return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
   };
 
   return (
@@ -419,7 +431,13 @@ export default function KnowledgePage() {
               </div>
 
               {/* 등록 버튼: 우측 끝 */}
-              <div className="ml-auto flex w-full justify-end sm:w-auto">
+              <div className="ml-auto flex w-full flex-wrap justify-end gap-2 sm:w-auto">
+                <SaveScreenButton
+                    title={`지식공유 DB${keyword.trim() ? ` - ${keyword.trim()}` : ''}`}
+                    url={buildSavedScreenUrl()}
+                    className="w-full sm:w-[132px]"
+                />
+
                 <button
                     type="button"
                     onClick={() => setIsCreateModalOpen(true)}

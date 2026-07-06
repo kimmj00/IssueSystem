@@ -5,7 +5,7 @@ import { API_BASE } from '../constants/patchHistoryOptions';
 
 // 패치이력 상세보기 새 창 전용 페이지
 // URL 예시: /?popup=patch-history-detail&id=1184
-export default function PatchHistoryDetailWindow() {
+export default function PatchHistoryDetailWindow({ headerAction = null }) {
   const patchHistoryId = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('id');
@@ -14,6 +14,21 @@ export default function PatchHistoryDetailWindow() {
   const [patchHistory, setPatchHistory] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const handleClose = () => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('embedded') === '1' && window.parent && window.parent !== window) {
+      window.parent.postMessage(
+        {
+          type: 'issue-system:close-split-screen',
+          index: Number(params.get('splitIndex')),
+        },
+        window.location.origin
+      );
+      return;
+    }
+
+    window.close();
+  };
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -50,12 +65,15 @@ export default function PatchHistoryDetailWindow() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-sm text-slate-300">패치이력</div>
-            <h1 className="mt-1 text-xl font-bold">패치이력 상세보기</h1>
+            <div className="mt-1 flex items-center gap-2">
+              <h1 className="text-xl font-bold">패치이력 상세보기</h1>
+              {headerAction}
+            </div>
           </div>
 
           <button
             type="button"
-            onClick={() => window.close()}
+            onClick={handleClose}
             className="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800"
           >
             창 닫기
