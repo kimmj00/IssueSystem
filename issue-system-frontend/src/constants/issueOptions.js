@@ -3,7 +3,7 @@
 // 배포 환경에서는 같은 도메인 기준으로 호출합니다.
 export const API_BASE =
   process.env.NODE_ENV === 'development'
-    ? 'http://localhost:8080'
+    ? `${window.location.protocol}//${window.location.hostname}:8080`
     : '';
 
 // 인프라 옵션

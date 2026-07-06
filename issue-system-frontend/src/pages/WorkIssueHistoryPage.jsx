@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import SectionCard from '../components/common/SectionCard';
 import LabeledInput from '../components/common/LabeledInput';
+import SaveScreenButton from '../components/common/SaveScreenButton';
 import { API_BASE } from '../constants/patchHistoryOptions';
 
 // 작업 및 이슈이력 API 기본 경로입니다.
@@ -1228,6 +1229,7 @@ function SearchResultList({ projectRows, maintenanceRows, keyword }) {
 
 export default function WorkIssueHistoryPage() {
   const fileInputRef = useRef(null);
+  const initialParams = new URLSearchParams(window.location.search);
 
   const [activeInnerTab, setActiveInnerTab] = useState(getInitialWorkIssueTab);
   const [uploads, setUploads] = useState([]);
@@ -1236,10 +1238,15 @@ export default function WorkIssueHistoryPage() {
   const [maintenanceRows, setMaintenanceRows] = useState([]);
 
   const [keyword, setKeyword] = useState(() => getInitialSearchParam('keyword'));
-  const [salesRep, setSalesRep] = useState('');
-  const [executor, setExecutor] = useState('');
-  const [customer, setCustomer] = useState(() => getInitialSearchParam('customerName'));
+  const [salesRep, setSalesRep] = useState(() => getInitialSearchParam('salesRep'));
+  const [executor, setExecutor] = useState(() => getInitialSearchParam('executor'));
+  const [customer, setCustomer] = useState(() => getInitialSearchParam('customerName', getInitialSearchParam('customer')));
   const [selectedInfraTypes, setSelectedInfraTypes] = useState(() => {
+    const infraTypes = getInitialSearchParam('infraTypes');
+    if (infraTypes) {
+      return infraTypes.split(',').filter(Boolean);
+    }
+
     const infraType = getInitialSearchParam('infraType');
     return infraType ? [infraType] : [];
   });
@@ -1278,7 +1285,7 @@ export default function WorkIssueHistoryPage() {
   }
 
   useEffect(() => {
-    fetchWorkIssueData('');
+    fetchWorkIssueData(initialParams.get('uploadId') || '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1344,6 +1351,22 @@ export default function WorkIssueHistoryPage() {
     });
   }, [maintenanceRows, keyword, salesRep, executor, selectedInfraTypes]);
 
+  const buildSavedScreenUrl = () => {
+    const params = new URLSearchParams();
+    params.set('menu', 'WORK_ISSUE_HISTORY');
+    params.set('tab', activeInnerTab);
+    params.set('innerTab', activeInnerTab);
+    if (selectedUploadId) params.set('uploadId', selectedUploadId);
+    if (keyword.trim()) params.set('keyword', keyword.trim());
+    if (salesRep) params.set('salesRep', salesRep);
+    if (executor) params.set('executor', executor);
+    if (customer) params.set('customerName', customer);
+    if (selectedInfraTypes.length > 0) params.set('infraTypes', selectedInfraTypes.join(','));
+    if (selectedInfraTypes.length === 1) params.set('infraType', selectedInfraTypes[0]);
+
+    return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+  };
+
   return (
     <>
       <div className="mb-4 flex items-baseline">
@@ -1378,6 +1401,12 @@ export default function WorkIssueHistoryPage() {
             })}
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
+              <SaveScreenButton
+                title={`작업 및 이슈이력${keyword.trim() ? ` - ${keyword.trim()}` : ''}`}
+                url={buildSavedScreenUrl()}
+                className="w-full sm:w-[132px]"
+              />
+
               {uploads.length > 0 ? (
                 <select
                   value={selectedUploadId}

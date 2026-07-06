@@ -31,11 +31,25 @@ function endpointFor(type, id) {
   return `${API_BASE}/api/work-issue-histories/projects/${id}`;
 }
 
-export default function WorkIssueHistoryDetailWindow() {
+export default function WorkIssueHistoryDetailWindow({ headerAction = null }) {
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const id = params.get('id');
   const type = params.get('type') === 'MAINTENANCE' ? 'MAINTENANCE' : 'PROJECT';
   const typeLabel = type === 'MAINTENANCE' ? '유지보수' : '프로젝트';
+  const handleClose = () => {
+    if (params.get('embedded') === '1' && window.parent && window.parent !== window) {
+      window.parent.postMessage(
+        {
+          type: 'issue-system:close-split-screen',
+          index: Number(params.get('splitIndex')),
+        },
+        window.location.origin
+      );
+      return;
+    }
+
+    window.close();
+  };
 
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -76,12 +90,15 @@ export default function WorkIssueHistoryDetailWindow() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-sm text-slate-300">작업 및 이슈이력</div>
-            <h1 className="mt-1 text-xl font-bold">{typeLabel} 상세보기</h1>
+            <div className="mt-1 flex items-center gap-2">
+              <h1 className="text-xl font-bold">{typeLabel} 상세보기</h1>
+              {headerAction}
+            </div>
           </div>
 
           <button
             type="button"
-            onClick={() => window.close()}
+            onClick={handleClose}
             className="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800"
           >
             창 닫기

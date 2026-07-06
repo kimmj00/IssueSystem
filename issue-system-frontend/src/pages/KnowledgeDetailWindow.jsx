@@ -1,9 +1,5 @@
 import React, { useEffect, useState } from 'react';
-
-const API_BASE =
-    process.env.NODE_ENV === 'development'
-        ? 'http://localhost:8080'
-        : '';
+import { API_BASE } from '../constants/patchHistoryOptions';
 
 function formatDateTime(value) {
     if (!value) {
@@ -39,13 +35,27 @@ function DetailBlock({ title, value }) {
     );
 }
 
-export default function KnowledgeDetailWindow() {
+export default function KnowledgeDetailWindow({ headerAction = null }) {
     const [knowledge, setKnowledge] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id');
+    const handleClose = () => {
+        if (params.get('embedded') === '1' && window.parent && window.parent !== window) {
+            window.parent.postMessage(
+                {
+                    type: 'issue-system:close-split-screen',
+                    index: Number(params.get('splitIndex')),
+                },
+                window.location.origin
+            );
+            return;
+        }
+
+        window.close();
+    };
 
     const fetchDetail = async () => {
         if (!id) {
@@ -87,14 +97,17 @@ export default function KnowledgeDetailWindow() {
                 <div className="flex items-center justify-between">
                     <div>
                         <div className="text-sm text-slate-300">지식공유 DB</div>
-                        <h1 className="mt-1 text-xl font-semibold">지식공유 상세보기</h1>
+                        <div className="mt-1 flex items-center gap-2">
+                            <h1 className="text-xl font-semibold">지식공유 상세보기</h1>
+                            {headerAction}
+                        </div>
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={() => window.close()}
-                        className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-white hover:bg-slate-800"
-                    >
+                        <button
+                            type="button"
+                            onClick={handleClose}
+                            className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-white hover:bg-slate-800"
+                        >
                         창 닫기
                     </button>
                 </div>

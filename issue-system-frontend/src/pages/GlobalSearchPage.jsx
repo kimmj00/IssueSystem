@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import SectionCard from '../components/common/SectionCard';
 import LabeledInput from '../components/common/LabeledInput';
+import SaveScreenButton from '../components/common/SaveScreenButton';
 import { API_BASE, infraOptions } from '../constants/patchHistoryOptions';
 
 const searchInputClass =
@@ -158,12 +159,13 @@ function TruncateCell({ value, className = '', strong = false }) {
 }
 
 export default function GlobalSearchPage() {
-  const [keyword, setKeyword] = useState('');
-  const [infraType, setInfraType] = useState('ALL');
-  const [customerName, setCustomerName] = useState('');
-  const [workIssueType, setWorkIssueType] = useState('ALL');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState(getDefaultEndDate);
+  const initialParams = new URLSearchParams(window.location.search);
+  const [keyword, setKeyword] = useState(() => initialParams.get('keyword') || '');
+  const [infraType, setInfraType] = useState(() => initialParams.get('infraType') || 'ALL');
+  const [customerName, setCustomerName] = useState(() => initialParams.get('customerName') || '');
+  const [workIssueType, setWorkIssueType] = useState(() => initialParams.get('workIssueType') || 'ALL');
+  const [startDate, setStartDate] = useState(() => initialParams.get('startDate') || '');
+  const [endDate, setEndDate] = useState(() => initialParams.get('endDate') || getDefaultEndDate());
 
   const [patchHistoryRows, setPatchHistoryRows] = useState([]);
   const [knowledgeRows, setKnowledgeRows] = useState([]);
@@ -176,20 +178,20 @@ export default function GlobalSearchPage() {
   const [workMaintenanceTotal, setWorkMaintenanceTotal] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
 
-  const [patchHistoryPage, setPatchHistoryPage] = useState(0);
-  const [patchHistorySize, setPatchHistorySize] = useState(DEFAULT_PAGE_SIZE);
+  const [patchHistoryPage, setPatchHistoryPage] = useState(Number(initialParams.get('patchHistoryPage') || 0));
+  const [patchHistorySize, setPatchHistorySize] = useState(Number(initialParams.get('patchHistorySize') || DEFAULT_PAGE_SIZE));
   const [patchHistoryTotalPages, setPatchHistoryTotalPages] = useState(0);
   const [patchHistoryHasNext, setPatchHistoryHasNext] = useState(false);
   const [patchHistoryHasPrevious, setPatchHistoryHasPrevious] = useState(false);
 
-  const [knowledgePage, setKnowledgePage] = useState(0);
-  const [knowledgeSize, setKnowledgeSize] = useState(DEFAULT_PAGE_SIZE);
+  const [knowledgePage, setKnowledgePage] = useState(Number(initialParams.get('knowledgePage') || 0));
+  const [knowledgeSize, setKnowledgeSize] = useState(Number(initialParams.get('knowledgeSize') || DEFAULT_PAGE_SIZE));
   const [knowledgeTotalPages, setKnowledgeTotalPages] = useState(0);
   const [knowledgeHasNext, setKnowledgeHasNext] = useState(false);
   const [knowledgeHasPrevious, setKnowledgeHasPrevious] = useState(false);
 
-  const [workIssuePage, setWorkIssuePage] = useState(0);
-  const [workIssueSize, setWorkIssueSize] = useState(DEFAULT_PAGE_SIZE);
+  const [workIssuePage, setWorkIssuePage] = useState(Number(initialParams.get('workIssuePage') || 0));
+  const [workIssueSize, setWorkIssueSize] = useState(Number(initialParams.get('workIssueSize') || DEFAULT_PAGE_SIZE));
   const [workIssueTotalPages, setWorkIssueTotalPages] = useState(0);
   const [workIssueHasNext, setWorkIssueHasNext] = useState(false);
   const [workIssueHasPrevious, setWorkIssueHasPrevious] = useState(false);
@@ -307,11 +309,7 @@ export default function GlobalSearchPage() {
   };
 
   useEffect(() => {
-    searchAll({
-      targetPatchHistoryPage: 0,
-      targetKnowledgePage: 0,
-      targetWorkIssuePage: 0,
-    });
+    searchAll();
 
     return () => {
       if (abortRef.current) {
@@ -345,6 +343,41 @@ export default function GlobalSearchPage() {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyword, infraType, customerName, startDate, endDate]);
+
+  const handleSearch = () => {
+    setPatchHistoryPage(0);
+    setKnowledgePage(0);
+    setWorkIssuePage(0);
+    searchAll({
+      targetPatchHistoryPage: 0,
+      targetPatchHistorySize: patchHistorySize,
+      targetKnowledgePage: 0,
+      targetKnowledgeSize: knowledgeSize,
+      targetWorkIssuePage: 0,
+      targetWorkIssueSize: workIssueSize,
+      targetWorkIssueType: workIssueType,
+    });
+  };
+
+  const buildSavedScreenUrl = () => {
+    const params = buildSearchParams({
+      keyword,
+      infraType,
+      customerName,
+      startDate,
+      endDate,
+      patchHistoryPage,
+      patchHistorySize,
+      knowledgePage,
+      knowledgeSize,
+      workIssuePage,
+      workIssueSize,
+      workIssueType,
+    });
+    params.set('menu', 'GLOBAL_SEARCH');
+
+    return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+  };
 
   const movePatchHistoryPage = (targetPage) => {
     if (targetPage < 0 || targetPage >= patchHistoryTotalPages || targetPage === patchHistoryPage) {
@@ -590,6 +623,24 @@ export default function GlobalSearchPage() {
               </LabeledInput>
             </div>
 
+            <div className="flex w-full items-end sm:w-auto">
+              <button
+                type="button"
+                onClick={handleSearch}
+                disabled={loading}
+                className="h-9 w-full rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400 sm:w-[88px]"
+              >
+                {loading ? '검색중' : '검색'}
+              </button>
+            </div>
+
+            <div className="flex w-full items-end sm:w-auto">
+              <SaveScreenButton
+                title={`통합검색${keyword.trim() ? ` - ${keyword.trim()}` : ''}`}
+                url={buildSavedScreenUrl()}
+                className="w-full sm:w-[132px]"
+              />
+            </div>
           </div>
         </SectionCard>
 
