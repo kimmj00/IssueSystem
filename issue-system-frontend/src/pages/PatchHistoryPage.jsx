@@ -214,6 +214,11 @@ function MultiSelectDropdown({
   );
 }
 
+function getInitialSearchParam(name, fallback = '') {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(name) || fallback;
+}
+
 export default function PatchHistoryPage() {
   // 목록 데이터 상태
   const [patchHistories, setPatchHistories] = useState([]);
@@ -239,9 +244,10 @@ export default function PatchHistoryPage() {
   const [error, setError] = useState('');
 
   // 검색 조건 상태
-  const [searchKeyword, setSearchKeyword] = useState('');
+  const [searchKeyword, setSearchKeyword] = useState(() => getInitialSearchParam('keyword'));
   const customerFilter = '';
   const [selectedInfraTypes, setSelectedInfraTypes] = useState([]);
+  const [infraFilter, setInfraFilter] = useState(() => getInitialSearchParam('infraType', 'ALL'));
   const statusFilter = 'ALL';
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedDeploymentVersions, setSelectedDeploymentVersions] = useState([]);
