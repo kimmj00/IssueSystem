@@ -5,6 +5,7 @@ import com.example.issuesystem.common.domain.InfraType;
 import com.example.issuesystem.patchhistory.domain.PatchHistory;
 import com.example.issuesystem.patchhistory.domain.PatchStatus;
 import com.example.issuesystem.patchhistory.dto.PatchHistoryCreateRequest;
+import com.example.issuesystem.patchhistory.dto.PatchHistoryFilterOptionsResponse;
 import com.example.issuesystem.patchhistory.dto.PatchHistoryResponse;
 import com.example.issuesystem.patchhistory.dto.PatchHistoryUpdateRequest;
 import com.example.issuesystem.patchhistory.repository.PatchHistoryRepository;
@@ -17,14 +18,36 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class PatchHistoryService {
+
+    private static final String FILTER_DELIMITER = "\u001F";
+    private static final String CATEGORY_ETC = "\uAE30\uD0C0";
+    private static final String CATEGORY_AGENT = "Agent";
+    private static final String CATEGORY_MANAGE = "Manage";
+    private static final String CATEGORY_WEB = "WEB";
+    private static final String CATEGORY_DB = "DB";
+    private static final String CATEGORY_SECURITY = "\uBCF4\uC548\uCDE8\uC57D\uC810";
+    private static final String CATEGORY_SECURITY_KEYWORD = "\uBCF4\uC548\uCDE8\uC57D";
+    private static final String CATEGORY_NO_MATCH = "__NO_PATCH_HISTORY_CATEGORY_MATCH__";
+    private static final List<String> CATEGORY_FILTER_OPTIONS = List.of(
+            CATEGORY_ETC,
+            CATEGORY_AGENT,
+            CATEGORY_MANAGE,
+            CATEGORY_WEB,
+            CATEGORY_DB,
+            CATEGORY_SECURITY
+    );
 
     private final PatchHistoryRepository patchHistoryRepository;
 
@@ -114,10 +137,13 @@ public class PatchHistoryService {
     public PageResponse<PatchHistoryResponse> search(
             String keyword,
             InfraType infraType,
+            List<InfraType> infraTypes,
             PatchStatus status,
             String customerName,
             String category,
+            List<String> categories,
             String deploymentVersion,
+            List<String> deploymentVersions,
             String detailType,
             String detailDeploymentVersion,
             String detailVersionRelation,
@@ -139,6 +165,9 @@ public class PatchHistoryService {
                 : LocalDateTime.of(9999, 12, 31, 0, 0);
 
         String normalizedDetailType = normalizeDetailType(detailType);
+        String infraTypesCsv = joinInfraTypes(infraTypes);
+        String categoriesCsv = joinValues(expandCategoryFilters(categories));
+        String deploymentVersionsCsv = joinValues(deploymentVersions);
         String normalizedRelation = normalizeVersionRelation(detailVersionRelation);
         String normalizedDetailDeploymentVersion = blankToNull(detailDeploymentVersion);
         if ("ALL".equals(normalizedRelation)) {
@@ -159,6 +188,10 @@ public class PatchHistoryService {
                         customerName,
                         category,
                         deploymentVersion,
+                        infraTypesCsv,
+                        categoriesCsv,
+                        deploymentVersionsCsv,
+                        FILTER_DELIMITER,
                         startDateTime,
                         endDateTime,
                         PageRequest.of(safePage, safeSize)
@@ -170,6 +203,10 @@ public class PatchHistoryService {
                         customerName,
                         category,
                         deploymentVersion,
+                        infraTypesCsv,
+                        categoriesCsv,
+                        deploymentVersionsCsv,
+                        FILTER_DELIMITER,
                         normalizedDetailType,
                         normalizedDetailDeploymentVersion,
                         normalizedRelation,
@@ -215,6 +252,19 @@ public class PatchHistoryService {
     }
 
     @Transactional
+    public PatchHistoryFilterOptionsResponse getFilterOptions(List<String> categories) {
+        String categoriesCsv = joinValues(expandCategoryFilters(categories));
+
+        return PatchHistoryFilterOptionsResponse.builder()
+                .categories(CATEGORY_FILTER_OPTIONS)
+                .deploymentVersions(patchHistoryRepository.findDeploymentVersionsByCategories(
+                        categoriesCsv,
+                        FILTER_DELIMITER
+                ))
+                .build();
+    }
+
+    @Transactional
     public List<String> getDeploymentVersions(String detailType) {
         String normalizedDetailType = normalizeDetailType(detailType);
 
@@ -253,6 +303,136 @@ public class PatchHistoryService {
         }
 
         return value.trim();
+    }
+
+    private String joinInfraTypes(List<InfraType> values) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+
+        String joined = values.stream()
+                .filter(value -> value != null)
+                .map(Enum::name)
+                .distinct()
+                .collect(Collectors.joining(FILTER_DELIMITER));
+
+        return joined.isEmpty() ? null : joined;
+    }
+
+    private String joinValues(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+
+        String joined = values.stream()
+                .map(this::blankToNull)
+                .filter(value -> value != null)
+                .distinct()
+                .collect(Collectors.joining(FILTER_DELIMITER));
+
+        return joined.isEmpty() ? null : joined;
+    }
+
+    private List<String> expandCategoryFilters(List<String> categories) {
+        if (categories == null || categories.isEmpty()) {
+            return List.of();
+        }
+
+        Set<String> selectedGroups = new LinkedHashSet<>();
+        Set<String> exactSelections = new LinkedHashSet<>();
+
+        categories.stream()
+                .map(this::normalizeCategoryFilter)
+                .filter(value -> value != null)
+                .forEach(value -> {
+                    if (CATEGORY_FILTER_OPTIONS.contains(value)) {
+                        selectedGroups.add(value);
+                    } else {
+                        exactSelections.add(value);
+                    }
+                });
+
+        if (selectedGroups.isEmpty() && exactSelections.isEmpty()) {
+            return List.of();
+        }
+
+        Set<String> expandedCategories = new LinkedHashSet<>();
+        for (String actualCategory : patchHistoryRepository.findCategories()) {
+            String normalizedActualCategory = blankToNull(actualCategory);
+            if (normalizedActualCategory == null) {
+                continue;
+            }
+
+            if (selectedGroups.contains(classifyCategory(normalizedActualCategory))
+                    || exactSelections.contains(normalizedActualCategory)) {
+                expandedCategories.add(normalizedActualCategory);
+            }
+        }
+
+        expandedCategories.addAll(exactSelections);
+
+        if (expandedCategories.isEmpty()) {
+            return List.of(CATEGORY_NO_MATCH);
+        }
+
+        return new ArrayList<>(expandedCategories);
+    }
+
+    private String normalizeCategoryFilter(String category) {
+        String value = blankToNull(category);
+        if (value == null) {
+            return null;
+        }
+
+        String lowerValue = value.toLowerCase(Locale.ROOT);
+        if (CATEGORY_ETC.equals(value)) {
+            return CATEGORY_ETC;
+        }
+        if (CATEGORY_AGENT.equalsIgnoreCase(value) || lowerValue.contains("agent")) {
+            return CATEGORY_AGENT;
+        }
+        if (CATEGORY_MANAGE.equalsIgnoreCase(value) || lowerValue.contains("manage")) {
+            return CATEGORY_MANAGE;
+        }
+        if (CATEGORY_WEB.equalsIgnoreCase(value)) {
+            return CATEGORY_WEB;
+        }
+        if (CATEGORY_DB.equalsIgnoreCase(value)) {
+            return CATEGORY_DB;
+        }
+        if (CATEGORY_SECURITY.equals(value) || value.contains(CATEGORY_SECURITY_KEYWORD)) {
+            return CATEGORY_SECURITY;
+        }
+
+        return value;
+    }
+
+    private String classifyCategory(String category) {
+        String value = blankToNull(category);
+        if (value == null) {
+            return CATEGORY_ETC;
+        }
+
+        String lowerValue = value.toLowerCase(Locale.ROOT);
+        String upperValue = value.toUpperCase(Locale.ROOT);
+
+        if (value.contains(CATEGORY_SECURITY_KEYWORD)) {
+            return CATEGORY_SECURITY;
+        }
+        if (lowerValue.contains("agent")) {
+            return CATEGORY_AGENT;
+        }
+        if (lowerValue.contains("manage")) {
+            return CATEGORY_MANAGE;
+        }
+        if (upperValue.contains(CATEGORY_WEB)) {
+            return CATEGORY_WEB;
+        }
+        if (upperValue.contains(CATEGORY_DB)) {
+            return CATEGORY_DB;
+        }
+
+        return CATEGORY_ETC;
     }
 
     private boolean isDateAlphaVersion(String value) {

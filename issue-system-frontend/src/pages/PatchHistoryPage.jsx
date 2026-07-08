@@ -72,41 +72,147 @@ const AUTO_SEARCH_DELAY_MS = 350;
 
 // 패치이력 메인 페이지
 // 검색, 엑셀 업로드 버튼, 추가 버튼, 목록, 새창 상세보기를 담당합니다.
-const detailTypeOptions = [
-  { value: 'ALL', label: '\uC804\uCCB4' },
-  { value: 'WEB', label: 'Web' },
-  { value: 'CORE', label: 'Core' },
-  { value: 'SECURITY', label: '\uBCF4\uC548\uCDE8\uC57D\uC810' },
-];
+function getFilterLabel(selectedValues, emptyLabel) {
+  if (selectedValues.length === 0) {
+    return emptyLabel;
+  }
 
-const detailVersionRelationOptions = [
-  { value: 'ALL', label: '\uC804\uCCB4' },
-  { value: 'BEFORE', label: '\uC774\uC804' },
-  { value: 'AFTER', label: '\uC774\uD6C4' },
-  { value: 'SAME', label: '\uB3D9\uC77C' },
-];
+  if (selectedValues.length === 1) {
+    return selectedValues[0];
+  }
 
-function normalizeDetailTypeValue(value) {
-  const normalized = String(value || '').trim().toUpperCase();
-
-  if (normalized === 'ALL' || String(value || '').trim() === '\uC804\uCCB4') return 'ALL';
-  if (normalized === 'WEB') return 'WEB';
-  if (normalized === 'CORE') return 'CORE';
-  if (normalized === 'SECURITY' || String(value || '').includes('\uBCF4\uC548')) return 'SECURITY';
-
-  return normalized;
+  return `${selectedValues[0]} 외 ${selectedValues.length - 1}`;
 }
 
-function normalizeRelationValue(value) {
-  const normalized = String(value || '').trim().toUpperCase();
-  const trimmed = String(value || '').trim();
+function toggleSelectedValue(values, value) {
+  return values.includes(value)
+    ? values.filter((item) => item !== value)
+    : [...values, value];
+}
 
-  if (normalized === 'ALL' || trimmed === '\uC804\uCCB4') return 'ALL';
-  if (normalized === 'SAME' || trimmed === '\uB3D9\uC77C') return 'SAME';
-  if (normalized === 'BEFORE' || trimmed === '\uC774\uC804') return 'BEFORE';
-  if (normalized === 'AFTER' || trimmed === '\uC774\uD6C4') return 'AFTER';
+function MultiSelectDropdown({
+  label,
+  options,
+  selectedValues,
+  onChange,
+  emptyLabel = '전체',
+  disabled = false,
+}) {
+  const dropdownRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [optionKeyword, setOptionKeyword] = useState('');
+  const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
+  const filteredOptions = useMemo(() => {
+    const keyword = optionKeyword.trim().toLowerCase();
 
-  return normalized;
+    if (!keyword) {
+      return options;
+    }
+
+    return options.filter((option) => String(option).toLowerCase().includes(keyword));
+  }, [optionKeyword, options]);
+
+  const closeDropdown = () => {
+    setOpen(false);
+    setOptionKeyword('');
+  };
+
+  const toggleOpen = () => {
+    setOpen((prev) => {
+      const nextOpen = !prev;
+
+      if (!nextOpen) {
+        setOptionKeyword('');
+      }
+
+      return nextOpen;
+    });
+  };
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const handleDocumentMouseDown = (e) => {
+      if (!dropdownRef.current?.contains(e.target)) {
+        closeDropdown();
+      }
+    };
+
+    const handleDocumentKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        closeDropdown();
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentMouseDown);
+    document.addEventListener('keydown', handleDocumentKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentMouseDown);
+      document.removeEventListener('keydown', handleDocumentKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <LabeledInput label={label} compact>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={toggleOpen}
+          className={`${searchInputClass} flex items-center justify-between bg-white text-left disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400`}
+        >
+          <span className="truncate">{getFilterLabel(selectedValues, emptyLabel)}</span>
+          <span className="ml-2 text-xs text-slate-500">▼</span>
+        </button>
+      </LabeledInput>
+
+      {open && (
+        <div className="absolute left-0 z-30 mt-1 max-h-72 w-64 overflow-y-auto rounded-lg border border-slate-200 bg-white py-2 shadow-lg">
+          <div className="px-2 pb-2">
+            <input
+              value={optionKeyword}
+              onChange={(e) => setOptionKeyword(e.target.value)}
+              className="h-8 w-full rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-slate-500"
+              placeholder={`${label} 검색`}
+              autoFocus
+            />
+          </div>
+
+          <label className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
+            <input
+              type="checkbox"
+              checked={selectedValues.length === 0}
+              onChange={() => onChange([])}
+            />
+            <span className="flex-1">(모두)</span>
+          </label>
+
+          {filteredOptions.map((option) => (
+            <label
+              key={option}
+              className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              <input
+                type="checkbox"
+                checked={selectedSet.has(option)}
+                onChange={() => onChange(toggleSelectedValue(selectedValues, option))}
+              />
+              <span className="min-w-0 flex-1 truncate" title={option}>{option}</span>
+            </label>
+          ))}
+
+          {filteredOptions.length === 0 && (
+            <div className="px-3 py-3 text-center text-sm text-slate-400">
+              검색 결과가 없습니다.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function getInitialSearchParam(name, fallback = '') {
@@ -142,8 +248,12 @@ export default function PatchHistoryPage() {
   // 검색 조건 상태
   const [searchKeyword, setSearchKeyword] = useState(() => getInitialSearchParam('keyword'));
   const customerFilter = '';
+  const [selectedInfraTypes, setSelectedInfraTypes] = useState([]);
   const [infraFilter, setInfraFilter] = useState(() => getInitialSearchParam('infraType', 'ALL'));
   const statusFilter = 'ALL';
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [selectedDeploymentVersions, setSelectedDeploymentVersions] = useState([]);
+  const [categoryOptions, setCategoryOptions] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState(initialParams.get('category') || '');
   const [deploymentVersionFilter, setDeploymentVersionFilter] = useState(initialParams.get('deploymentVersion') || '');
   const [isDetailSearchOpen, setIsDetailSearchOpen] = useState(initialParams.get('detailSearch') === 'true');
@@ -152,7 +262,7 @@ export default function PatchHistoryPage() {
   const [detailDeploymentVersion, setDetailDeploymentVersion] = useState(initialParams.get('detailDeploymentVersion') || '');
   const [detailVersionRelation, setDetailVersionRelation] = useState(initialParams.get('detailVersionRelation') || 'ALL');
   const [deploymentVersionOptions, setDeploymentVersionOptions] = useState([]);
-  const [loadingDeploymentVersions, setLoadingDeploymentVersions] = useState(false);
+  const [loadingFilterOptions, setLoadingFilterOptions] = useState(false);
   // 기간 검색 조건. 기본값은 비워두어 기존처럼 전체 기간을 조회한다.
   const [startDateFilter] = useState('');
   const [endDateFilter] = useState('');
@@ -170,26 +280,34 @@ export default function PatchHistoryPage() {
   const pageItems = useMemo(() => buildPageItems(page, totalPages), [page, totalPages]);
   const autoSearchInitializedRef = useRef(false);
 
-  const fetchDeploymentVersions = async (nextDetailType = detailType) => {
-    setLoadingDeploymentVersions(true);
+  const fetchFilterOptions = async (targetCategories = selectedCategories) => {
+    setLoadingFilterOptions(true);
 
     try {
       const params = new URLSearchParams();
-      params.append('detailType', nextDetailType);
+      targetCategories.forEach((category) => params.append('categories', category));
 
-      const res = await fetch(`${API_BASE}/api/patch-histories/deployment-versions?${params.toString()}`);
+      const res = await fetch(`${API_BASE}/api/patch-histories/filter-options?${params.toString()}`);
       const result = await res.json();
 
       if (!res.ok || !result.success) {
         throw new Error(result.message || '배포버전 목록을 조회하지 못했습니다.');
       }
 
-      setDeploymentVersionOptions(result.data || []);
+      const nextDeploymentVersions = result.data?.deploymentVersions || [];
+
+      setCategoryOptions(result.data?.categories || []);
+      setDeploymentVersionOptions(nextDeploymentVersions);
+      setSelectedDeploymentVersions((prev) => {
+        const next = prev.filter((version) => nextDeploymentVersions.includes(version));
+        return next.length === prev.length ? prev : next;
+      });
     } catch (e) {
       console.error(e);
+      setCategoryOptions([]);
       setDeploymentVersionOptions([]);
     } finally {
-      setLoadingDeploymentVersions(false);
+      setLoadingFilterOptions(false);
     }
   };
 
@@ -203,22 +321,9 @@ export default function PatchHistoryPage() {
 
       if (searchKeyword.trim()) params.append('keyword', searchKeyword.trim());
       if (customerFilter.trim()) params.append('customerName', customerFilter.trim());
-      if (categoryFilter.trim()) params.append('category', categoryFilter.trim());
-      if (deploymentVersionFilter.trim()) params.append('deploymentVersion', deploymentVersionFilter.trim());
-      if (isDetailSearchOpen) {
-        const normalizedDetailType = normalizeDetailTypeValue(detailType);
-        if (normalizedDetailType) {
-          params.append('detailType', normalizedDetailType);
-        }
-        if (detailDeploymentVersion && normalizeRelationValue(detailVersionRelation) !== 'ALL') {
-          params.append('detailDeploymentVersion', detailDeploymentVersion.trim());
-          params.append('detailVersionRelation', normalizeRelationValue(detailVersionRelation));
-        }
-      }
-      const appliedInfraFilter = isDetailSearchOpen && detailInfraFilter.trim()
-        ? detailInfraFilter.trim()
-        : infraFilter;
-      if (appliedInfraFilter !== 'ALL') params.append('infraType', appliedInfraFilter);
+      selectedInfraTypes.forEach((infraType) => params.append('infraTypes', infraType));
+      selectedCategories.forEach((category) => params.append('categories', category));
+      selectedDeploymentVersions.forEach((version) => params.append('deploymentVersions', version));
       if (statusFilter !== 'ALL') params.append('status', statusFilter);
       // 기간 조건이 있을 때만 전송한다.
       // 값이 없으면 백엔드에서 전체 기간으로 조회한다.
@@ -247,26 +352,6 @@ export default function PatchHistoryPage() {
       setError(e.message || '목록 조회 중 오류가 발생했습니다.');
     } finally {
       setLoadingList(false);
-    }
-  };
-
-  const handleDetailTypeChange = (nextDetailType) => {
-    const normalizedDetailType = normalizeDetailTypeValue(nextDetailType);
-
-    setDetailType(normalizedDetailType);
-    setDetailDeploymentVersion('');
-
-    if (normalizedDetailType) {
-      fetchDeploymentVersions(normalizedDetailType);
-    }
-  };
-
-  const handleDetailSearchToggle = () => {
-    const nextOpen = !isDetailSearchOpen;
-    setIsDetailSearchOpen(nextOpen);
-
-    if (nextOpen && deploymentVersionOptions.length === 0) {
-      fetchDeploymentVersions(detailType);
     }
   };
 
@@ -433,12 +518,19 @@ export default function PatchHistoryPage() {
 
   // 최초 진입 시 목록을 1회 조회합니다.
   useEffect(() => {
+    fetchFilterOptions([]);
+    fetchPatchHistories(0, 5);
     fetchPatchHistories(page, size);
     if (isDetailSearchOpen) {
       fetchDeploymentVersions(detailType);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    fetchFilterOptions(selectedCategories);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategories]);
 
   useEffect(() => {
     if (!autoSearchInitializedRef.current) {
@@ -454,14 +546,9 @@ export default function PatchHistoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     searchKeyword,
-    infraFilter,
-    categoryFilter,
-    deploymentVersionFilter,
-    isDetailSearchOpen,
-    detailInfraFilter,
-    detailType,
-    detailDeploymentVersion,
-    detailVersionRelation,
+    selectedInfraTypes,
+    selectedCategories,
+    selectedDeploymentVersions,
   ]);
 
   return (
@@ -484,7 +571,7 @@ export default function PatchHistoryPage() {
       <div className="space-y-5">
         <SectionCard className="p-3">
           <div className="flex flex-wrap items-end gap-2">
-            <div className="w-full sm:w-[240px]">
+            <div className="w-full sm:w-[280px]">
               <LabeledInput label="검색어" compact>
                 <input
                   className={searchInputClass}
@@ -495,52 +582,24 @@ export default function PatchHistoryPage() {
               </LabeledInput>
             </div>
 
-            <div className="w-full sm:w-[120px]">
-              <LabeledInput label="INFRA" compact>
-                <select
-                  className={searchInputClass}
-                  value={infraFilter}
-                  onChange={(e) => setInfraFilter(e.target.value)}
-                >
-                  <option value="ALL">전체</option>
-                  {infraOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </LabeledInput>
+            <div className="w-full sm:w-[180px]">
+              <MultiSelectDropdown
+                label="구분"
+                options={categoryOptions}
+                selectedValues={selectedCategories}
+                onChange={setSelectedCategories}
+                disabled={loadingFilterOptions}
+              />
             </div>
 
-            <div className="w-full sm:w-[150px]">
-              <LabeledInput label="구분" compact>
-                <input
-                  className={searchInputClass}
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  placeholder="WEB(추가)"
-                />
-              </LabeledInput>
-            </div>
-
-            <div className="w-full sm:w-[150px]">
-              <LabeledInput label="배포버전" compact>
-                <input
-                  className={searchInputClass}
-                  value={deploymentVersionFilter}
-                  onChange={(e) => setDeploymentVersionFilter(e.target.value)}
-                  placeholder="20251114.X"
-                />
-              </LabeledInput>
-            </div>
-
-            {/* 우측 액션 버튼: 엑셀 업로드 / 추가 */}
-            <div className="flex w-full items-end sm:w-auto">
-              <button
-                type="button"
-                onClick={handleDetailSearchToggle}
-                className={`${toolbarButtonClass} w-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:w-[150px]`}
-              >
-                구분 별 상세검색
-              </button>
+            <div className="w-full sm:w-[220px]">
+              <MultiSelectDropdown
+                label="배포버전"
+                options={deploymentVersionOptions}
+                selectedValues={selectedDeploymentVersions}
+                onChange={setSelectedDeploymentVersions}
+                disabled={loadingFilterOptions}
+              />
             </div>
 
             <div className="ml-auto flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
@@ -581,128 +640,32 @@ export default function PatchHistoryPage() {
             </div>
           </div>
 
-          {isDetailSearchOpen && (
-            <div className="mt-3 border-t border-slate-200 pt-3">
-              <div className="flex flex-wrap items-end gap-3">
-                <datalist id="detail-infra-options">
-                  <option value="ALL" />
-                  {infraOptions.map((option) => (
-                    <option key={option} value={option} />
-                  ))}
-                </datalist>
-                <datalist id="detail-type-options">
-                  {detailTypeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </datalist>
-                <datalist id="detail-deployment-version-options">
-                  {deploymentVersionOptions.map((version) => (
-                    <option key={version} value={version} />
-                  ))}
-                </datalist>
-                <datalist id="detail-version-relation-options">
-                  {detailVersionRelationOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </datalist>
+          <div className="mt-3 border-t border-slate-200 pt-3">
+            <div className="mb-2 text-sm font-medium text-slate-700">인프라 필터</div>
+            <div className="flex flex-wrap gap-1.5">
+              {infraOptions.map((option) => {
+                const selected = selectedInfraTypes.includes(option);
 
-                <div className="w-full sm:w-[150px]">
-                  <LabeledInput label="INFRA" compact>
-                    <input
-                      list="detail-infra-options"
-                      className={searchInputClass}
-                      value={detailInfraFilter}
-                      onChange={(e) => setDetailInfraFilter(e.target.value)}
-                      placeholder="전체"
-                    />
-                  </LabeledInput>
-                </div>
-
-                <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-                  {detailTypeOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => handleDetailTypeChange(option.value)}
-                      className={`h-9 rounded-lg border px-4 text-sm font-semibold transition ${
-                        detailType === option.value
-                          ? 'border-slate-900 bg-slate-900 text-white'
-                          : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="w-full sm:w-[150px]">
-                  <LabeledInput label="구분" compact>
-                    <input
-                      list="detail-type-options"
-                      className={searchInputClass}
-                      value={detailType}
-                      onChange={(e) => setDetailType(e.target.value)}
-                      onBlur={(e) => handleDetailTypeChange(e.target.value)}
-                      placeholder="WEB"
-                    />
-                  </LabeledInput>
-                </div>
-
-                <div className="w-full sm:w-[220px]">
-                  <LabeledInput label="배포버전" compact>
-                    <input
-                      list="detail-deployment-version-options"
-                      className={searchInputClass}
-                      value={detailDeploymentVersion}
-                      onChange={(e) => setDetailDeploymentVersion(e.target.value)}
-                      disabled={loadingDeploymentVersions}
-                      placeholder={loadingDeploymentVersions ? '불러오는 중' : '전체'}
-                    />
-                  </LabeledInput>
-                </div>
-
-                <div className="w-full sm:w-[150px]">
-                  <LabeledInput label="기준" compact>
-                    <select
-                      className={searchInputClass}
-                      value={detailVersionRelation}
-                      onChange={(e) => setDetailVersionRelation(e.target.value)}
-                    >
-                      {detailVersionRelationOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </LabeledInput>
-                </div>
-
-                <div className="flex w-full items-end gap-2 sm:w-auto">
+                return (
                   <button
+                    key={option}
                     type="button"
-                    onClick={() => {
-                      setDetailType('WEB');
-                      setDetailInfraFilter('');
-                      setDetailDeploymentVersion('');
-                      setDetailVersionRelation('ALL');
-                      setDeploymentVersionOptions([]);
-                    }}
-                    className={`${toolbarButtonClass} w-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:w-[88px]`}
+                    onClick={() => setSelectedInfraTypes((prev) => toggleSelectedValue(prev, option))}
+                    className={`inline-flex h-8 min-w-[58px] items-center justify-center rounded-md border px-2 text-xs font-bold transition ${
+                      selected
+                        ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
+                        : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-slate-400 hover:bg-white hover:text-slate-900'
+                    }`}
                   >
-                    초기화
+                    {option}
                   </button>
-                </div>
-              </div>
+                );
+              })}
             </div>
-          )}
+          </div>
         </SectionCard>
 
-        <SectionCard
-          title={(
+        <SectionCard          title={(
             <span className="flex flex-wrap items-center gap-3">
               <span>패치이력 목록</span>
               <button
