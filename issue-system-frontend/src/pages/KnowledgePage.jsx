@@ -124,6 +124,8 @@ function toggleSelectedValue(values, value) {
   return values.includes(value)
       ? values.filter((item) => item !== value)
       : [...values, value];
+}
+
 function getInitialSearchParam(name, fallback = '') {
   const params = new URLSearchParams(window.location.search);
   return params.get(name) || fallback;

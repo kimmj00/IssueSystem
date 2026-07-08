@@ -18,8 +18,12 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -28,6 +32,22 @@ import java.util.stream.Collectors;
 public class PatchHistoryService {
 
     private static final String FILTER_DELIMITER = "\u001F";
+    private static final String CATEGORY_ETC = "\uAE30\uD0C0";
+    private static final String CATEGORY_AGENT = "Agent";
+    private static final String CATEGORY_MANAGE = "Manage";
+    private static final String CATEGORY_WEB = "WEB";
+    private static final String CATEGORY_DB = "DB";
+    private static final String CATEGORY_SECURITY = "\uBCF4\uC548\uCDE8\uC57D\uC810";
+    private static final String CATEGORY_SECURITY_KEYWORD = "\uBCF4\uC548\uCDE8\uC57D";
+    private static final String CATEGORY_NO_MATCH = "__NO_PATCH_HISTORY_CATEGORY_MATCH__";
+    private static final List<String> CATEGORY_FILTER_OPTIONS = List.of(
+            CATEGORY_ETC,
+            CATEGORY_AGENT,
+            CATEGORY_MANAGE,
+            CATEGORY_WEB,
+            CATEGORY_DB,
+            CATEGORY_SECURITY
+    );
 
     private final PatchHistoryRepository patchHistoryRepository;
 
@@ -146,7 +166,7 @@ public class PatchHistoryService {
 
         String normalizedDetailType = normalizeDetailType(detailType);
         String infraTypesCsv = joinInfraTypes(infraTypes);
-        String categoriesCsv = joinValues(categories);
+        String categoriesCsv = joinValues(expandCategoryFilters(categories));
         String deploymentVersionsCsv = joinValues(deploymentVersions);
         String normalizedRelation = normalizeVersionRelation(detailVersionRelation);
         String normalizedDetailDeploymentVersion = blankToNull(detailDeploymentVersion);
@@ -233,10 +253,10 @@ public class PatchHistoryService {
 
     @Transactional
     public PatchHistoryFilterOptionsResponse getFilterOptions(List<String> categories) {
-        String categoriesCsv = joinValues(categories);
+        String categoriesCsv = joinValues(expandCategoryFilters(categories));
 
         return PatchHistoryFilterOptionsResponse.builder()
-                .categories(patchHistoryRepository.findCategories())
+                .categories(CATEGORY_FILTER_OPTIONS)
                 .deploymentVersions(patchHistoryRepository.findDeploymentVersionsByCategories(
                         categoriesCsv,
                         FILTER_DELIMITER
@@ -311,6 +331,108 @@ public class PatchHistoryService {
                 .collect(Collectors.joining(FILTER_DELIMITER));
 
         return joined.isEmpty() ? null : joined;
+    }
+
+    private List<String> expandCategoryFilters(List<String> categories) {
+        if (categories == null || categories.isEmpty()) {
+            return List.of();
+        }
+
+        Set<String> selectedGroups = new LinkedHashSet<>();
+        Set<String> exactSelections = new LinkedHashSet<>();
+
+        categories.stream()
+                .map(this::normalizeCategoryFilter)
+                .filter(value -> value != null)
+                .forEach(value -> {
+                    if (CATEGORY_FILTER_OPTIONS.contains(value)) {
+                        selectedGroups.add(value);
+                    } else {
+                        exactSelections.add(value);
+                    }
+                });
+
+        if (selectedGroups.isEmpty() && exactSelections.isEmpty()) {
+            return List.of();
+        }
+
+        Set<String> expandedCategories = new LinkedHashSet<>();
+        for (String actualCategory : patchHistoryRepository.findCategories()) {
+            String normalizedActualCategory = blankToNull(actualCategory);
+            if (normalizedActualCategory == null) {
+                continue;
+            }
+
+            if (selectedGroups.contains(classifyCategory(normalizedActualCategory))
+                    || exactSelections.contains(normalizedActualCategory)) {
+                expandedCategories.add(normalizedActualCategory);
+            }
+        }
+
+        expandedCategories.addAll(exactSelections);
+
+        if (expandedCategories.isEmpty()) {
+            return List.of(CATEGORY_NO_MATCH);
+        }
+
+        return new ArrayList<>(expandedCategories);
+    }
+
+    private String normalizeCategoryFilter(String category) {
+        String value = blankToNull(category);
+        if (value == null) {
+            return null;
+        }
+
+        String lowerValue = value.toLowerCase(Locale.ROOT);
+        if (CATEGORY_ETC.equals(value)) {
+            return CATEGORY_ETC;
+        }
+        if (CATEGORY_AGENT.equalsIgnoreCase(value) || lowerValue.contains("agent")) {
+            return CATEGORY_AGENT;
+        }
+        if (CATEGORY_MANAGE.equalsIgnoreCase(value) || lowerValue.contains("manage")) {
+            return CATEGORY_MANAGE;
+        }
+        if (CATEGORY_WEB.equalsIgnoreCase(value)) {
+            return CATEGORY_WEB;
+        }
+        if (CATEGORY_DB.equalsIgnoreCase(value)) {
+            return CATEGORY_DB;
+        }
+        if (CATEGORY_SECURITY.equals(value) || value.contains(CATEGORY_SECURITY_KEYWORD)) {
+            return CATEGORY_SECURITY;
+        }
+
+        return value;
+    }
+
+    private String classifyCategory(String category) {
+        String value = blankToNull(category);
+        if (value == null) {
+            return CATEGORY_ETC;
+        }
+
+        String lowerValue = value.toLowerCase(Locale.ROOT);
+        String upperValue = value.toUpperCase(Locale.ROOT);
+
+        if (value.contains(CATEGORY_SECURITY_KEYWORD)) {
+            return CATEGORY_SECURITY;
+        }
+        if (lowerValue.contains("agent")) {
+            return CATEGORY_AGENT;
+        }
+        if (lowerValue.contains("manage")) {
+            return CATEGORY_MANAGE;
+        }
+        if (upperValue.contains(CATEGORY_WEB)) {
+            return CATEGORY_WEB;
+        }
+        if (upperValue.contains(CATEGORY_DB)) {
+            return CATEGORY_DB;
+        }
+
+        return CATEGORY_ETC;
     }
 
     private boolean isDateAlphaVersion(String value) {
