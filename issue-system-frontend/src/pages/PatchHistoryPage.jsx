@@ -5,6 +5,7 @@ import CreatePatchHistoryModal from '../components/modal/CreatePatchHistoryModal
 import ExcelUploadModal from '../components/modal/ExcelUploadModal';
 import { API_BASE, emptyForm, infraOptions } from '../constants/patchHistoryOptions';
 import PageTitle from '../components/common/PageTitle';
+import SaveScreenButton from '../components/common/SaveScreenButton';
 
 // 페이지 버튼 목록을 만듭니다.
 // 전체 페이지가 많을 때는 첫 페이지, 마지막 페이지, 현재 페이지 주변만 보여주고 중간은 ... 처리합니다.
@@ -220,6 +221,7 @@ function getInitialSearchParam(name, fallback = '') {
 }
 
 export default function PatchHistoryPage() {
+  const initialParams = new URLSearchParams(window.location.search);
   // 목록 데이터 상태
   const [patchHistories, setPatchHistories] = useState([]);
 
@@ -252,6 +254,13 @@ export default function PatchHistoryPage() {
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedDeploymentVersions, setSelectedDeploymentVersions] = useState([]);
   const [categoryOptions, setCategoryOptions] = useState([]);
+  const [categoryFilter, setCategoryFilter] = useState(initialParams.get('category') || '');
+  const [deploymentVersionFilter, setDeploymentVersionFilter] = useState(initialParams.get('deploymentVersion') || '');
+  const [isDetailSearchOpen, setIsDetailSearchOpen] = useState(initialParams.get('detailSearch') === 'true');
+  const [detailInfraFilter, setDetailInfraFilter] = useState(initialParams.get('detailInfraType') || '');
+  const [detailType, setDetailType] = useState(initialParams.get('detailType') || 'WEB');
+  const [detailDeploymentVersion, setDetailDeploymentVersion] = useState(initialParams.get('detailDeploymentVersion') || '');
+  const [detailVersionRelation, setDetailVersionRelation] = useState(initialParams.get('detailVersionRelation') || 'ALL');
   const [deploymentVersionOptions, setDeploymentVersionOptions] = useState([]);
   const [loadingFilterOptions, setLoadingFilterOptions] = useState(false);
   // 기간 검색 조건. 기본값은 비워두어 기존처럼 전체 기간을 조회한다.
@@ -260,8 +269,8 @@ export default function PatchHistoryPage() {
 
   // 페이징 상태
   // 기본 표시 개수는 5개로 유지하되, 사용자가 select로 변경할 수 있게 합니다.
-  const [page, setPage] = useState(0);
-  const [size, setSize] = useState(5);
+  const [page, setPage] = useState(Number(initialParams.get('page') || 0));
+  const [size, setSize] = useState(Number(initialParams.get('size') || 5));
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [hasNext, setHasNext] = useState(false);
@@ -367,6 +376,26 @@ export default function PatchHistoryPage() {
     const url = `${window.location.origin}${window.location.pathname}?popup=patch-history-detail&id=${id}`;
     const features = 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
     window.open(url, `patch-history-detail-${id}`, features);
+  };
+
+  const buildSavedScreenUrl = () => {
+    const params = new URLSearchParams();
+    params.set('menu', 'PATCH_HISTORY');
+    if (searchKeyword.trim()) params.set('keyword', searchKeyword.trim());
+    if (infraFilter !== 'ALL') params.set('infraType', infraFilter);
+    if (categoryFilter.trim()) params.set('category', categoryFilter.trim());
+    if (deploymentVersionFilter.trim()) params.set('deploymentVersion', deploymentVersionFilter.trim());
+    if (isDetailSearchOpen) {
+      params.set('detailSearch', 'true');
+      if (detailInfraFilter.trim()) params.set('detailInfraType', detailInfraFilter.trim());
+      if (detailType) params.set('detailType', detailType);
+      if (detailDeploymentVersion.trim()) params.set('detailDeploymentVersion', detailDeploymentVersion.trim());
+      if (detailVersionRelation !== 'ALL') params.set('detailVersionRelation', detailVersionRelation);
+    }
+    params.set('page', String(page));
+    params.set('size', String(size));
+
+    return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
   };
 
   // 파일 선택 시 선택된 파일을 상태에 저장합니다.
@@ -491,6 +520,10 @@ export default function PatchHistoryPage() {
   useEffect(() => {
     fetchFilterOptions([]);
     fetchPatchHistories(0, 5);
+    fetchPatchHistories(page, size);
+    if (isDetailSearchOpen) {
+      fetchDeploymentVersions(detailType);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -570,6 +603,12 @@ export default function PatchHistoryPage() {
             </div>
 
             <div className="ml-auto flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+              <SaveScreenButton
+                title={`패치이력${searchKeyword.trim() ? ` - ${searchKeyword.trim()}` : ''}`}
+                url={buildSavedScreenUrl()}
+                className="w-full sm:w-[132px]"
+              />
+
               <button
                 type="button"
                 onClick={() => setIsUploadModalOpen(true)}
