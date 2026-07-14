@@ -10,9 +10,9 @@ const WORK_ISSUE_API = `${API_BASE}/api/work-issue-histories`;
 
 // 현재 화면 안쪽에서 사용하는 탭입니다. 기존 상단 메뉴 구조는 건드리지 않습니다.
 const INNER_TABS = [
-  { key: 'projects', label: '프로젝트 현황' },
-  { key: 'maintenance', label: '유지보수 현황' },
-  { key: 'search', label: '통합검색' },
+  { key: 'search', label: '통합이력검색', subLabel: '(프로젝트+유지보수)' },
+  { key: 'projects', label: '프로젝트' },
+  { key: 'maintenance', label: '유지보수' },
 ];
 
 const INFRA_TYPES = [
@@ -68,16 +68,7 @@ function getInitialWorkIssueTab() {
     return 'maintenance';
   }
 
-  return 'projects';
-}
-
-function SearchIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="11" cy="11" r="7" />
-      <path d="M20 20l-3.5-3.5" />
-    </svg>
-  );
+  return 'search';
 }
 
 function ChevronIcon({ open }) {
@@ -127,17 +118,19 @@ function DetailPopupButton({ disabled, onOpen }) {
   );
 }
 
-function openWorkIssueHistoryDetailWindow(type, id) {
-  if (!id) {
+function openWorkIssueHistoryDetailWindow(type, row) {
+  const ids = row?.sourceIds?.length ? row.sourceIds : [row?.detailId].filter(Boolean);
+
+  if (ids.length === 0) {
     return;
   }
 
   const resolvedType = type === 'MAINTENANCE' ? 'MAINTENANCE' : 'PROJECT';
-  const encodedId = encodeURIComponent(id);
-  const url = `${window.location.origin}${window.location.pathname}?popup=work-issue-history-detail&type=${resolvedType}&id=${encodedId}`;
+  const encodedIds = encodeURIComponent(ids.join(','));
+  const url = `${window.location.origin}${window.location.pathname}?popup=work-issue-history-detail&type=${resolvedType}&ids=${encodedIds}`;
   const features = 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
 
-  window.open(url, `work-issue-history-detail-${resolvedType}-${encodedId}`, features);
+  window.open(url, `work-issue-history-detail-${resolvedType}-${ids.join('-')}`, features);
 }
 
 // 백엔드 ApiResponse 형식({ success, data, message })에서 data만 꺼냅니다.
@@ -242,6 +235,25 @@ function number(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function formatMetric(value) {
+  const numeric = number(value);
+  return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(1).replace(/\.0$/, '');
+}
+
+function maintenanceSupportScope(row) {
+  return [
+    ['SMS', text(row.smsStatus)],
+    ['NMS', text(row.nmsStatus)],
+  ]
+    .filter(([, status]) => status && status.toUpperCase() !== 'X')
+    .map(([name, status]) => `${name}(${status})`)
+    .join('\n') || '-';
+}
+
+function maintenanceAssigneeText(row) {
+  return text(row.mainDev) || '-';
+}
+
 function formatDateTime(value) {
   if (!value) return '-';
   return String(value).replace('T', ' ').slice(0, 16);
@@ -322,7 +334,7 @@ function inferMaintenanceInfraTypes(item) {
 
 // DB 프로젝트 응답을 기존 화면 레이아웃이 쓰던 형태로 변환합니다.
 function normalizeProject(project) {
-  const executors = splitPeople(project.executors || project.salesRep);
+  const executors = splitPeople(project.executors);
   const detail = splitDetailLines(project.progressLogs, project.remainingIssues);
 
   return {
@@ -345,7 +357,9 @@ function normalizeProject(project) {
       {
         executor: executors.join(', '),
         progressLogs: text(project.progressLogs),
+        visits: number(project.visits),
         md: number(project.md),
+        createdAt: project.createdAt,
       },
     ],
   };
@@ -443,7 +457,7 @@ function formatInspectionDates(inspectionDates) {
 }
 
 function normalizeMaintenance(item) {
-  const executors = splitPeople([item.mainDev, item.subDev].filter(Boolean).join(','));
+  const executors = splitPeople(item.mainDev);
   const inspection = formatInspectionDates(item.inspectionDates);
   const detail = splitDetailLines(item.progressIssues, item.remarks);
 
@@ -754,11 +768,11 @@ function usePaginatedRows(rows) {
   };
 }
 
-function parseTimelineEntries(value, fallbackExecutor) {
+function parseTimelineEntries(value, fallbackExecutor, createdAt) {
   const entries = [];
   let current = null;
   const toSortKey = (label) => {
-    const matched = text(label).match(/(\d{1,2})\/(\d{1,2})/);
+    const matched = text(label).match(/(\d{1,2})[/.](\d{1,2})/);
     if (!matched) return 0;
     return Number(matched[1]) * 100 + Number(matched[2]);
   };
@@ -768,14 +782,15 @@ function parseTimelineEntries(value, fallbackExecutor) {
     .map((line) => line.trim())
     .filter(Boolean)
     .forEach((line) => {
-      const dateMatch = line.match(/^(\d{1,2}\/\d{1,2})(?:\s*[~-]\s*(\d{1,2}(?:\/\d{1,2})?))?\s*(?:\(([^)]+)\))?\s*(.*)$/);
+      const dateMatch = line.match(/^(\d{1,2}[/.]\d{1,2})(?:\s*[~-]\s*(\d{1,2}(?:[/.]\d{1,2})?))?\s*(?:\(([^)]+)\))?\s*(.*)$/);
 
       if (dateMatch) {
         if (current) entries.push(current);
 
         current = {
           label: dateMatch[2] ? `${dateMatch[1]}~${dateMatch[2]}` : dateMatch[1],
-          sortKey: toSortKey(dateMatch[2] || dateMatch[1]),
+          // 기간 표기(05/20~21)는 종료일이 아닌 시작일(05/20)을 정렬 기준으로 사용합니다.
+          sortKey: toSortKey(dateMatch[1]),
           type: dateMatch[3] || '',
           executor: fallbackExecutor || '',
           content: [],
@@ -802,12 +817,25 @@ function parseTimelineEntries(value, fallbackExecutor) {
 
   if (current) entries.push(current);
 
-  return entries
+  const normalizedEntries = entries
     .map((entry) => ({
       ...entry,
       content: entry.content.filter(Boolean),
+      // 프로젝트 종료가 포함된 내역은 날짜와 관계없이 항상 최상단에 표시합니다.
+      projectClosed: entry.content.some((item) => /\[프로젝트\s*종료\]|\[종료\]/.test(item)),
     }))
     .filter((entry) => entry.label || entry.content.length);
+
+  // 원문은 최신 날짜부터 작성됩니다. 아래로 내려가며 월/일이 커지면 연도가 바뀐 것으로 봅니다.
+  let year = Number(text(createdAt).slice(0, 4)) || new Date().getFullYear();
+  let previousMonthDay = null;
+
+  return normalizedEntries.map((entry) => {
+    if (!entry.sortKey) return entry;
+    if (previousMonthDay !== null && entry.sortKey > previousMonthDay) year -= 1;
+    previousMonthDay = entry.sortKey;
+    return { ...entry, year, sortKey: year * 10000 + entry.sortKey };
+  });
 }
 
 function DetailSectionTitle({ children, color = 'text-blue-400' }) {
@@ -870,12 +898,25 @@ function DetailPanel({ rowId, detail, row, type, colSpan, keyword = '' }) {
   if (row) {
     const isProject = type === 'PROJECT';
     const timelineEntries = (isProject && row.projectLogSources?.length
-      ? row.projectLogSources.flatMap((source) => parseTimelineEntries(source.progressLogs, source.executor))
-      : parseTimelineEntries(row.progressIssues, row.executors?.join(', ')))
-      .sort((a, b) => b.sortKey - a.sortKey);
+      ? row.projectLogSources.flatMap((source) => parseTimelineEntries(source.progressLogs, source.executor, source.createdAt))
+      : parseTimelineEntries(row.progressIssues, text(row.mainDev), row.createdAt))
+      .sort((a, b) => Number(b.projectClosed) - Number(a.projectClosed) || b.sortKey - a.sortKey);
     const issueLines = splitDetailLines(isProject ? row.remainingIssues : row.remarks);
-    const totalMd = number(row.md).toFixed(1);
     const people = row.executors?.length ? row.executors : splitPeople([row.mainDev, row.subDev].filter(Boolean).join(','));
+    const maintenanceOwners = splitPeople(row.mainDev);
+    const projectPersonStats = new Map();
+
+    if (isProject) {
+      (row.projectLogSources || []).forEach((source) => {
+        splitPeople(source.executor).forEach((person) => {
+          const current = projectPersonStats.get(person) || { visits: 0, md: 0 };
+          projectPersonStats.set(person, {
+            visits: current.visits + number(source.visits),
+            md: current.md + number(source.md),
+          });
+        });
+      });
+    }
 
     return (
       <tr className="bg-slate-50">
@@ -910,17 +951,35 @@ function DetailPanel({ rowId, detail, row, type, colSpan, keyword = '' }) {
                   <div className="whitespace-pre-wrap font-bold leading-6">
                     {isProject
                       ? highlightText(text(row.scope) || row.infraTypes?.join('\n') || '-', keyword)
-                      : highlightText([`SMS(${text(row.smsStatus) || '-'})`, `NMS(${text(row.nmsStatus) || '-'})`].join('\n'), keyword)}
+                      : highlightText(maintenanceSupportScope(row), keyword)}
                   </div>
                 </StatBox>
                 <StatBox title="인원별 지원 횟수 / MD">
                   <div className="space-y-2">
-                    {people.length ? people.map((person) => (
-                      <div key={person} className="flex items-center justify-between gap-4">
-                        <span className="font-bold text-slate-700">{highlightText(person, keyword)}</span>
-                        <span className="font-mono font-black text-slate-900">1회&nbsp; / &nbsp;{totalMd}MD</span>
-                      </div>
-                    )) : <div className="text-slate-500">-</div>}
+                    {isProject && people.length ? people.map((person) => {
+                      const stats = projectPersonStats.get(person);
+                      const visits = stats?.visits;
+                      const md = stats?.md;
+
+                      return (
+                        <div key={person} className="flex items-center justify-between gap-4">
+                          <span className="font-bold text-slate-700">{highlightText(person, keyword)}</span>
+                          <span className="font-mono font-black text-slate-900">
+                            {formatMetric(visits)}회&nbsp; / &nbsp;{formatMetric(md)}MD
+                          </span>
+                        </div>
+                      );
+                    }) : null}
+                    {!isProject && maintenanceOwners.length ? maintenanceOwners.map((person) => (
+                        <div key={person} className="flex items-center justify-between gap-4">
+                          <span className="font-bold text-slate-700">{highlightText(person, keyword)}</span>
+                          <span className="font-mono font-black text-slate-900">
+                            {formatMetric(row.visits)}회&nbsp; / &nbsp;{formatMetric(row.md)}MD
+                          </span>
+                        </div>
+                    )) : null}
+                    {!isProject && !maintenanceOwners.length ? <div className="text-slate-500">-</div> : null}
+                    {isProject && !people.length ? <div className="text-slate-500">-</div> : null}
                   </div>
                 </StatBox>
               </div>
@@ -976,7 +1035,7 @@ const ProjectTableRow = React.memo(function ProjectTableRow({ row, open, onToggl
             </div>
             <DetailPopupButton
               disabled={!row.detailId}
-              onOpen={() => openWorkIssueHistoryDetailWindow('PROJECT', row.detailId)}
+              onOpen={() => openWorkIssueHistoryDetailWindow('PROJECT', row)}
             />
           </div>
           <div className="mt-0.5 text-xs text-slate-500">{highlightText(row.projectType || '-', keyword)}</div>
@@ -1083,13 +1142,13 @@ const MaintenanceTableRow = React.memo(function MaintenanceTableRow({ row, open,
             </div>
             <DetailPopupButton
               disabled={!row.detailId}
-              onOpen={() => openWorkIssueHistoryDetailWindow('MAINTENANCE', row.detailId)}
+              onOpen={() => openWorkIssueHistoryDetailWindow('MAINTENANCE', row)}
             />
           </div>
           <div className="mt-0.5 text-xs text-slate-500">{highlightText(row.projectType || '-', keyword)}</div>
         </td>
         <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.salesRep}>{highlightText(row.salesRep || '-', keyword)}</td>
-        <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.executors.join(', ')}>{highlightText(row.executors.join(', ') || '-', keyword)}</td>
+        <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={maintenanceAssigneeText(row)}>{highlightText(maintenanceAssigneeText(row), keyword)}</td>
         <td className="px-4 py-4 whitespace-nowrap font-mono text-slate-600">{highlightText(row.contractEnd || '-', keyword)}</td>
         <td className="px-4 py-4 text-slate-700">{highlightText(row.latestIssue, keyword)}</td>
         <td className="whitespace-pre-line px-4 py-4 text-slate-700">{highlightText(row.inspection, keyword)}</td>
@@ -1176,20 +1235,6 @@ function MaintenanceTable({ rows, keyword }) {
 }
 
 function SearchResultList({ projectRows, maintenanceRows, keyword }) {
-  if (!keyword.trim()) {
-    return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-16 text-center">
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
-          <SearchIcon />
-        </div>
-        <div className="font-semibold text-slate-900">통합 검색 시스템</div>
-        <p className="mt-2 text-sm text-slate-500">
-          고객사, 수행인원, 작업내역, 인프라 유형 기준으로 프로젝트와 유지보수 데이터를 함께 검색합니다.
-        </p>
-      </div>
-    );
-  }
-
   const results = [
     ...projectRows.map((row) => ({ ...row, category: '프로젝트', workHistoryType: 'PROJECT' })),
     ...maintenanceRows.map((row) => ({ ...row, category: '유지보수', workHistoryType: 'MAINTENANCE' })),
@@ -1209,18 +1254,20 @@ function SearchResultList({ projectRows, maintenanceRows, keyword }) {
             </span>
             <DetailPopupButton
               disabled={!row.detailId}
-              onOpen={() => openWorkIssueHistoryDetailWindow(row.workHistoryType, row.detailId)}
+              onOpen={() => openWorkIssueHistoryDetailWindow(row.workHistoryType, row)}
             />
           </div>
           <p className="text-sm text-slate-700">{highlightText(getSearchPreview(row, keyword), keyword)}</p>
           <p className="mt-2 text-xs text-slate-500">영업대표: {highlightText(row.salesRep || '-', keyword)}</p>
-          <p className="mt-2 text-xs text-slate-500">수행인원: {highlightText(row.executors.join(', ') || '-', keyword)}</p>
+          <p className="mt-2 text-xs text-slate-500">
+            수행인원: {highlightText(row.workHistoryType === 'MAINTENANCE' ? maintenanceAssigneeText(row) : row.executors.join(', ') || '-', keyword)}
+          </p>
         </div>
       ))}
 
       {results.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white px-4 py-16 text-center text-sm text-slate-500">
-          검색 결과가 없습니다.
+          표시할 프로젝트 및 유지보수 항목이 없습니다.
         </div>
       ) : null}
     </div>
@@ -1389,13 +1436,14 @@ export default function WorkIssueHistoryPage() {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveInnerTab(tab.key)}
-                  className={`rounded-xl border px-5 py-2.5 text-sm font-bold transition ${
+                  className={`flex min-h-[42px] flex-col items-center justify-center rounded-xl border px-5 py-2 text-sm font-bold leading-tight transition ${
                     active
                       ? 'border-blue-600 bg-blue-50 text-blue-600 shadow-sm'
                       : 'border-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                 >
-                  {tab.label}
+                  <span>{tab.label}</span>
+                  {tab.subLabel ? <span className="mt-0.5 text-[11px] font-semibold">{tab.subLabel}</span> : null}
                 </button>
               );
             })}
