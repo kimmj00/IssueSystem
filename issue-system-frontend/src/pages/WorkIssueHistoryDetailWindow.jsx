@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import MaintenanceSupportScope from '../components/workIssue/MaintenanceSupportScope';
 import { API_BASE } from '../constants/patchHistoryOptions';
+import { parseTimelineDateHeader } from '../utils/timelineDates';
 
 const text = (value) => (value == null ? '' : String(value).trim());
 const lines = (value) => text(value)
@@ -14,14 +16,6 @@ const formatMetric = (value) => {
   const numeric = number(value);
   return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(1).replace(/\.0$/, '');
 };
-const maintenanceSupportScope = (item) => [
-  ['SMS', text(item.smsStatus)],
-  ['NMS', text(item.nmsStatus)],
-]
-  .filter(([, status]) => status && status.toUpperCase() !== 'X')
-  .map(([name, status]) => `${name}(${status})`)
-  .join('\n') || '-';
-
 function endpointFor(type, id) {
   return type === 'MAINTENANCE'
     ? `${API_BASE}/api/work-issue-histories/maintenance/${id}`
@@ -41,16 +35,16 @@ function parseTimeline(value, fallbackExecutor = '', createdAt = '') {
   };
 
   text(value).split('\n').map((line) => line.trim()).filter(Boolean).forEach((line) => {
-    const header = line.match(/^(\d{1,2}[/.]\d{1,2})(?:\s*[~-]\s*(\d{1,2}(?:[/.]\d{1,2})?))?\s*(?:\(([^)]+)\))?\s*(.*)$/);
+    const header = parseTimelineDateHeader(line);
 
     if (header) {
       if (current) entries.push(current);
       current = {
-        date: header[2] ? `${header[1]}~${header[2]}` : header[1],
-        sortKey: sortKey(header[1]),
-        type: text(header[3]),
+        date: header.label,
+        sortKey: sortKey(header.label),
+        type: text(header.type),
         executor: fallbackExecutor,
-        content: header[4] ? [header[4].replace(/^[\s\-–·>▶□]+/, '').trim()] : [],
+        content: header.content ? [header.content.replace(/^[\s\-–·>▶□]+/, '').trim()] : [],
       };
       return;
     }
@@ -239,9 +233,7 @@ export default function WorkIssueHistoryDetailWindow({ headerAction = null }) {
       : splitPeople(item.executors);
     return parseTimeline(maintenance ? item.progressIssues : item.progressLogs, authors.join(', '), item.createdAt);
   }).sort((a, b) => Number(b.projectClosed) - Number(a.projectClosed) || b.sortKey - a.sortKey);
-  const scope = maintenance
-    ? maintenanceSupportScope(detail)
-    : [...new Set(details.map((item) => text(item.scope)).filter(Boolean))].join('\n') || '-';
+  const scope = [...new Set(details.map((item) => text(item.scope)).filter(Boolean))].join('\n') || '-';
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -289,7 +281,11 @@ export default function WorkIssueHistoryDetailWindow({ headerAction = null }) {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <StatBox title={maintenance ? '지원 범위' : '구축 범위'}>
-              <div className="whitespace-pre-wrap font-bold leading-7">{scope}</div>
+              {maintenance ? (
+                <MaintenanceSupportScope smsStatus={detail.smsStatus} nmsStatus={detail.nmsStatus} />
+              ) : (
+                <div className="whitespace-pre-wrap font-bold leading-7">{scope}</div>
+              )}
             </StatBox>
             <StatBox title="인원별 지원 횟수 / MD">
               <div className="space-y-2">

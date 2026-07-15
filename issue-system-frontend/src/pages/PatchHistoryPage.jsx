@@ -521,9 +521,6 @@ export default function PatchHistoryPage() {
     fetchFilterOptions([]);
     fetchPatchHistories(0, 5);
     fetchPatchHistories(page, size);
-    if (isDetailSearchOpen) {
-      fetchDeploymentVersions(detailType);
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

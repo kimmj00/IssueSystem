@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import SectionCard from '../components/common/SectionCard';
 import LabeledInput from '../components/common/LabeledInput';
 import SaveScreenButton from '../components/common/SaveScreenButton';
+import MaintenanceSupportScope from '../components/workIssue/MaintenanceSupportScope';
 import { API_BASE } from '../constants/patchHistoryOptions';
 import { getMaintenancePopupFeatures } from '../utils/maintenancePopup';
+import { parseTimelineDateHeader } from '../utils/timelineDates';
 
 // 작업 및 이슈이력 API 기본 경로입니다.
 // 프론트는 엑셀 파일만 전송하고, 실제 파싱/DB 저장은 Spring Boot에서 처리합니다.
@@ -186,17 +188,8 @@ function getKeywordTerms(keyword) {
     .filter(Boolean);
 }
 
-function isCodeKeyword(term) {
-  return /^[a-z0-9]+$/i.test(term);
-}
-
 function keywordPattern(term) {
   const escaped = escapeRegExp(term);
-
-  if (isCodeKeyword(term)) {
-    return new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, 'i');
-  }
-
   return new RegExp(escaped, 'i');
 }
 
@@ -214,7 +207,7 @@ function highlightText(value, keyword) {
 
   const pattern = new RegExp(
     `(${terms
-      .map((term) => (isCodeKeyword(term) ? `(?<![a-z0-9])${escapeRegExp(term)}(?![a-z0-9])` : escapeRegExp(term)))
+      .map((term) => escapeRegExp(term))
       .join('|')})`,
     'gi'
   );
@@ -244,16 +237,6 @@ function number(value) {
 function formatMetric(value) {
   const numeric = number(value);
   return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(1).replace(/\.0$/, '');
-}
-
-function maintenanceSupportScope(row) {
-  return [
-    ['SMS', text(row.smsStatus)],
-    ['NMS', text(row.nmsStatus)],
-  ]
-    .filter(([, status]) => status && status.toUpperCase() !== 'X')
-    .map(([name, status]) => `${name}(${status})`)
-    .join('\n') || '-';
 }
 
 function maintenanceAssigneeText(row) {
@@ -395,8 +378,13 @@ function mergeUniqueList(...lists) {
 }
 
 function projectGroupKey(row) {
-  const siteKey = row.siteCode || row.customerName;
-  return [row.customerName, siteKey].map((value) => text(value).toLowerCase()).join('|');
+  const siteCode = text(row.siteCode).toLowerCase();
+
+  if (siteCode && siteCode !== '-') {
+    return `site:${siteCode}`;
+  }
+
+  return `name:${text(row.customerName).toLowerCase()}`;
 }
 
 function groupProjectRows(rows) {
@@ -516,6 +504,47 @@ function matchAllKeywords(row, keyword) {
     .toLowerCase();
 
   return words.every((word) => includesKeyword(target, word));
+}
+
+function getSearchRankValues(row) {
+  return [
+    row.no,
+    row.customerName,
+    row.siteCode,
+    row.salesRep,
+    row.projectType,
+    ...(row.executors || []),
+    row.startDate,
+    row.contractEnd,
+    row.latestIssue,
+    row.inspection,
+    ...(row.infraTypes || []),
+    ...(row.detail || []),
+  ]
+    .map((value) => text(value).toLowerCase().replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
+
+function getSearchMatchScore(row, keyword) {
+  const terms = getKeywordTerms(keyword).map((term) => term.toLowerCase());
+  if (terms.length === 0) return 0;
+
+  const query = terms.join(' ');
+  const values = getSearchRankValues(row);
+  const exactQuery = values.some((value) => value === query) ? 1 : 0;
+  const consecutiveQuery = values.some((value) => value.includes(query)) ? 1 : 0;
+  const allTermsInOneValue = values.some((value) => terms.every((term) => includesKeyword(value, term))) ? 1 : 0;
+  const exactTermCount = terms.filter((term) => values.some((value) => value === term)).length;
+  const matchedValueCount = terms.reduce(
+    (count, term) => count + values.filter((value) => includesKeyword(value, term)).length,
+    0,
+  );
+
+  return (exactQuery * 1_000_000)
+    + (consecutiveQuery * 100_000)
+    + (allTermsInOneValue * 10_000)
+    + (exactTermCount * 1_000)
+    + matchedValueCount;
 }
 
 function includesKeywordTerms(value, terms, requireAll = true) {
@@ -788,22 +817,22 @@ function parseTimelineEntries(value, fallbackExecutor, createdAt) {
     .map((line) => line.trim())
     .filter(Boolean)
     .forEach((line) => {
-      const dateMatch = line.match(/^(\d{1,2}[/.]\d{1,2})(?:\s*[~-]\s*(\d{1,2}(?:[/.]\d{1,2})?))?\s*(?:\(([^)]+)\))?\s*(.*)$/);
+      const dateHeader = parseTimelineDateHeader(line);
 
-      if (dateMatch) {
+      if (dateHeader) {
         if (current) entries.push(current);
 
         current = {
-          label: dateMatch[2] ? `${dateMatch[1]}~${dateMatch[2]}` : dateMatch[1],
+          label: dateHeader.label,
           // 기간 표기(05/20~21)는 종료일이 아닌 시작일(05/20)을 정렬 기준으로 사용합니다.
-          sortKey: toSortKey(dateMatch[1]),
-          type: dateMatch[3] || '',
+          sortKey: toSortKey(dateHeader.label),
+          type: dateHeader.type,
           executor: fallbackExecutor || '',
           content: [],
         };
 
-        if (dateMatch[4]) {
-          current.content.push(dateMatch[4].replace(/^[\s\-•·]+/, '').trim());
+        if (dateHeader.content) {
+          current.content.push(dateHeader.content.replace(/^[\s\-•·]+/, '').trim());
         }
         return;
       }
@@ -954,11 +983,17 @@ function DetailPanel({ rowId, detail, row, type, colSpan, keyword = '' }) {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <StatBox title={isProject ? '구축 범위' : '지원 범위'}>
-                  <div className="whitespace-pre-wrap font-bold leading-6">
-                    {isProject
-                      ? highlightText(text(row.scope) || row.infraTypes?.join('\n') || '-', keyword)
-                      : highlightText(maintenanceSupportScope(row), keyword)}
-                  </div>
+                  {isProject ? (
+                    <div className="whitespace-pre-wrap font-bold leading-6">
+                      {highlightText(text(row.scope) || row.infraTypes?.join('\n') || '-', keyword)}
+                    </div>
+                  ) : (
+                    <MaintenanceSupportScope
+                      smsStatus={row.smsStatus}
+                      nmsStatus={row.nmsStatus}
+                      renderValue={(value) => highlightText(value, keyword)}
+                    />
+                  )}
                 </StatBox>
                 <StatBox title="인원별 지원 횟수 / MD">
                   <div className="space-y-2">
@@ -1142,16 +1177,16 @@ const MaintenanceTableRow = React.memo(function MaintenanceTableRow({ row, open,
           <div className="flex min-w-0 items-center gap-2">
             <div
               className="min-w-0 truncate font-bold text-slate-900"
-              title={`${row.customerName}${row.siteCode ? `(${row.siteCode})` : ''}`}
+              title={row.customerName}
             >
-              {highlightText(`${row.customerName}${row.siteCode ? `(${row.siteCode})` : ''}`, keyword)}
+              {highlightText(row.customerName, keyword)}
             </div>
             <DetailPopupButton
               disabled={!row.detailId}
               onOpen={() => openWorkIssueHistoryDetailWindow('MAINTENANCE', row)}
             />
           </div>
-          <div className="mt-0.5 text-xs text-slate-500">{highlightText(row.projectType || '-', keyword)}</div>
+          <div className="mt-0.5 text-xs text-slate-500">{highlightText(row.siteCode || '-', keyword)}</div>
         </td>
         <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={row.salesRep}>{highlightText(row.salesRep || '-', keyword)}</td>
         <td className="px-4 py-4 truncate whitespace-nowrap text-slate-700" title={maintenanceAssigneeText(row)}>{highlightText(maintenanceAssigneeText(row), keyword)}</td>
@@ -1244,7 +1279,10 @@ function SearchResultList({ projectRows, maintenanceRows, keyword }) {
   const results = [
     ...projectRows.map((row) => ({ ...row, category: '프로젝트', workHistoryType: 'PROJECT' })),
     ...maintenanceRows.map((row) => ({ ...row, category: '유지보수', workHistoryType: 'MAINTENANCE' })),
-  ];
+  ]
+    .map((row, index) => ({ row, index, score: getSearchMatchScore(row, keyword) }))
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .map(({ row }) => row);
 
   return (
     <div className="space-y-3">
