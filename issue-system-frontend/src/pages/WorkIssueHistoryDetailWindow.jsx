@@ -257,7 +257,10 @@ export default function WorkIssueHistoryDetailWindow({ headerAction = null }) {
             <div className="mt-1 text-xs text-slate-500">{maintenance ? '유지보수' : text(detail.projectScale) || '-'}</div>
           </div>
 
-          <div className="grid min-w-0 w-full grid-cols-4 items-center text-center">
+          <div
+            className="grid min-w-0 w-full grid-cols-4 items-center text-center"
+            style={{ transform: 'translateX(3ch)' }}
+          >
             <span className="w-full min-w-0 break-words">{text(detail.siteCode) || '-'}</span>
             <span className="w-full min-w-0 break-words">{executorText}</span>
             <span className="w-full min-w-0 break-words">{maintenance ? text(detail.contractEnd) || '-' : text(detail.startDate) || '-'}</span>

@@ -3,6 +3,7 @@ import SectionCard from '../components/common/SectionCard';
 import LabeledInput from '../components/common/LabeledInput';
 import SaveScreenButton from '../components/common/SaveScreenButton';
 import { API_BASE } from '../constants/patchHistoryOptions';
+import { getMaintenancePopupFeatures } from '../utils/maintenancePopup';
 
 // 작업 및 이슈이력 API 기본 경로입니다.
 // 프론트는 엑셀 파일만 전송하고, 실제 파싱/DB 저장은 Spring Boot에서 처리합니다.
@@ -128,9 +129,14 @@ function openWorkIssueHistoryDetailWindow(type, row) {
   const resolvedType = type === 'MAINTENANCE' ? 'MAINTENANCE' : 'PROJECT';
   const encodedIds = encodeURIComponent(ids.join(','));
   const url = `${window.location.origin}${window.location.pathname}?popup=work-issue-history-detail&type=${resolvedType}&ids=${encodedIds}`;
-  const features = 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
+  const features = resolvedType === 'MAINTENANCE'
+    ? getMaintenancePopupFeatures()
+    : 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
+  const windowName = resolvedType === 'MAINTENANCE'
+    ? '_blank'
+    : `work-issue-history-detail-${resolvedType}-${ids.join('-')}`;
 
-  window.open(url, `work-issue-history-detail-${resolvedType}-${ids.join('-')}`, features);
+  window.open(url, windowName, features);
 }
 
 // 백엔드 ApiResponse 형식({ success, data, message })에서 data만 꺼냅니다.
