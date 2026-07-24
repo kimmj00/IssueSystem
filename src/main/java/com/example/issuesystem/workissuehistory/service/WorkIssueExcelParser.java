@@ -12,6 +12,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -102,37 +103,56 @@ public class WorkIssueExcelParser {
                 continue;
             }
 
-            String clientName = cell(row, 2);
-            String projectScale = cell(row, 9);
+            String directClientName = cell(row, 2);
+
+            // 프로젝트 기본 정보가 세로 병합된 경우에도 현재 수행인원 행이 속한 값을 읽습니다.
+            String clientName = cell(sheet, rowIndex, 2);
+            String projectScale = cell(sheet, rowIndex, 9);
 
             // 기존 주간보고 소스의 조건: 고객사와 PJT 규모가 있는 행만 프로젝트 데이터로 저장합니다.
             if (isBlank(clientName) || isBlank(projectScale)) {
                 continue;
             }
 
+            // 병합된 프로젝트 영역의 끝에 남은 빈 행은 수행 이력으로 저장하지 않습니다.
+            if (isBlank(directClientName) && isProjectActivityBlank(row)) {
+                continue;
+            }
+
             projects.add(WorkProjectHistory.builder()
                     .upload(upload)
                     .rowNo(rowIndex + 1)
-                    .no(cell(row, 0))
-                    .salesRep(cell(row, 1))
+                    .no(cell(sheet, rowIndex, 0))
+                    .salesRep(cell(sheet, rowIndex, 1))
                     .clientName(clientName)
-                    .scope(cell(row, 3))
-                    .oz(defaultIfBlank(cell(row, 4), "X"))
-                    .dashboard(defaultIfBlank(cell(row, 5), "X"))
-                    .apm(defaultIfBlank(cell(row, 6), "X"))
-                    .location(cell(row, 7))
-                    .startDate(cell(row, 8))
+                    .scope(cell(sheet, rowIndex, 3))
+                    .oz(defaultIfBlank(cell(sheet, rowIndex, 4), "X"))
+                    .dashboard(defaultIfBlank(cell(sheet, rowIndex, 5), "X"))
+                    .apm(defaultIfBlank(cell(sheet, rowIndex, 6), "X"))
+                    .location(cell(sheet, rowIndex, 7))
+                    .startDate(cell(sheet, rowIndex, 8))
                     .projectScale(projectScale)
                     .executors(cell(row, 10))
                     .visits(parseDouble(cell(row, 11)))
                     .md(parseDouble(cell(row, 12)))
                     .progressLogs(cell(row, 13))
                     .remainingIssues(cell(row, 14))
-                    .siteCode(cell(row, 15))
+                    .siteCode(cell(sheet, rowIndex, 15))
                     .build());
         }
 
         return projects;
+    }
+
+    /** 수행인원, 지원 횟수/MD, 진행사항 및 잔여 이슈가 모두 비어 있는 행인지 확인합니다. */
+    private boolean isProjectActivityBlank(Row row) {
+        for (int cellIndex = 10; cellIndex <= 14; cellIndex++) {
+            if (!isBlank(cell(row, cellIndex))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /** 02_유지보수 시트를 유지보수 현황 테이블 데이터로 변환합니다. */
@@ -236,6 +256,32 @@ public class WorkIssueExcelParser {
         }
 
         return dataFormatter.formatCellValue(cell).trim();
+    }
+
+    /**
+     * 세로 병합 셀의 내부 행에서는 실제 셀이 비어 있으므로 병합 영역의 첫 행 값을 대신 읽습니다.
+     * 프로젝트 기본 정보는 수행인원별 여러 행에 걸쳐 병합되는 경우가 많습니다.
+     */
+    private String cell(Sheet sheet, int rowIndex, int cellIndex) {
+        Row row = sheet.getRow(rowIndex);
+        String value = row == null ? "" : cell(row, cellIndex);
+
+        if (!isBlank(value)) {
+            return value;
+        }
+
+        for (CellRangeAddress mergedRegion : sheet.getMergedRegions()) {
+            if (mergedRegion.getFirstColumn() != cellIndex
+                    || mergedRegion.getLastColumn() != cellIndex
+                    || !mergedRegion.isInRange(rowIndex, cellIndex)) {
+                continue;
+            }
+
+            Row anchorRow = sheet.getRow(mergedRegion.getFirstRow());
+            return anchorRow == null ? "" : cell(anchorRow, mergedRegion.getFirstColumn());
+        }
+
+        return "";
     }
 
     /** 숫자 문자열을 Double로 변환합니다. 0,3 같은 표기도 0.3으로 처리합니다. */
