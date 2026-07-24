@@ -217,6 +217,32 @@ public interface PatchHistoryRepository extends JpaRepository<PatchHistory, Long
                 coalesce(i.category, '') = any(string_to_array(:categoriesCsv, :filterDelimiter)))
             and (:deploymentVersionsCsv is null or
                 coalesce(i.deployment_version, '') = any(string_to_array(:deploymentVersionsCsv, :filterDelimiter)))
+            and (
+                :versionRelation = 'ALL'
+                or (
+                    :useReferenceCompletedDateComparison = true
+                    and cast(:versionReferenceCompletedDate as date) is not null
+                    and (
+                        (:versionRelation = 'BEFORE'
+                            and i.completed_date <= cast(:versionReferenceCompletedDate as date))
+                        or (:versionRelation = 'AFTER'
+                            and i.completed_date >= cast(:versionReferenceCompletedDate as date))
+                    )
+                )
+                or (
+                    :useReferenceCompletedDateComparison = false
+                    and :referenceVersionNumber is not null
+                    and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '') is not null
+                    and (
+                        (:versionRelation = 'BEFORE'
+                            and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                                <= cast(:referenceVersionNumber as numeric))
+                        or (:versionRelation = 'AFTER'
+                            and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                                >= cast(:referenceVersionNumber as numeric))
+                    )
+                )
+            )
             and i.created_at >= :startDate
             and i.created_at < :endDate
         order by
@@ -287,6 +313,18 @@ public interface PatchHistoryRepository extends JpaRepository<PatchHistory, Long
                         similarity(left(lower(coalesce(i.symptom_detail, '')), 1000), lower(btrim(:keyword))) * 8
                     ))::int
             end desc,
+            case
+                when :versionRelation = 'BEFORE'
+                    then nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                else null
+            end desc nulls last,
+            case when :versionRelation = 'BEFORE' then i.deployment_version else null end desc nulls last,
+            case
+                when :versionRelation = 'AFTER'
+                    then nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                else null
+            end asc nulls last,
+            case when :versionRelation = 'AFTER' then i.deployment_version else null end asc nulls last,
             i.id desc
         """,
             countQuery = """
@@ -458,6 +496,32 @@ public interface PatchHistoryRepository extends JpaRepository<PatchHistory, Long
                 coalesce(i.category, '') = any(string_to_array(:categoriesCsv, :filterDelimiter)))
             and (:deploymentVersionsCsv is null or
                 coalesce(i.deployment_version, '') = any(string_to_array(:deploymentVersionsCsv, :filterDelimiter)))
+            and (
+                :versionRelation = 'ALL'
+                or (
+                    :useReferenceCompletedDateComparison = true
+                    and cast(:versionReferenceCompletedDate as date) is not null
+                    and (
+                        (:versionRelation = 'BEFORE'
+                            and i.completed_date <= cast(:versionReferenceCompletedDate as date))
+                        or (:versionRelation = 'AFTER'
+                            and i.completed_date >= cast(:versionReferenceCompletedDate as date))
+                    )
+                )
+                or (
+                    :useReferenceCompletedDateComparison = false
+                    and :referenceVersionNumber is not null
+                    and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '') is not null
+                    and (
+                        (:versionRelation = 'BEFORE'
+                            and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                                <= cast(:referenceVersionNumber as numeric))
+                        or (:versionRelation = 'AFTER'
+                            and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                                >= cast(:referenceVersionNumber as numeric))
+                    )
+                )
+            )
             and i.created_at >= :startDate
             and i.created_at < :endDate
         """,
@@ -473,6 +537,10 @@ public interface PatchHistoryRepository extends JpaRepository<PatchHistory, Long
             @Param("categoriesCsv") String categoriesCsv,
             @Param("deploymentVersionsCsv") String deploymentVersionsCsv,
             @Param("filterDelimiter") String filterDelimiter,
+            @Param("versionRelation") String versionRelation,
+            @Param("referenceVersionNumber") String referenceVersionNumber,
+            @Param("useReferenceCompletedDateComparison") boolean useReferenceCompletedDateComparison,
+            @Param("versionReferenceCompletedDate") LocalDate versionReferenceCompletedDate,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate,
             Pageable pageable

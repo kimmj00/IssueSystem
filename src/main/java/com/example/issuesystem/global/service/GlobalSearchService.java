@@ -76,6 +76,8 @@ public class GlobalSearchService {
                 null,
                 null,
                 null,
+                null,
+                null,
                 startDate,
                 endDate,
                 safePatchHistoryPage,

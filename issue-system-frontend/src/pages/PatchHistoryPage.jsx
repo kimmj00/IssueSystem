@@ -60,6 +60,14 @@ function formatDate(value) {
   return String(value).slice(0, 10);
 }
 
+function formatAuthorName(value) {
+  if (!value) {
+    return '-';
+  }
+
+  return String(value).trim().toLowerCase() === 'excel-upload' ? 'excel' : value;
+}
+
 // 검색 영역에서 반복되는 input 스타일입니다.
 const searchInputClass =
   'h-9 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none ring-0 focus:border-slate-500';
@@ -69,6 +77,12 @@ const toolbarButtonClass =
   'h-9 shrink-0 rounded-lg px-3 text-sm font-semibold shadow-sm transition';
 
 const AUTO_SEARCH_DELAY_MS = 350;
+
+const patchHistoryRelationOptions = [
+  { value: 'ALL', label: '전체' },
+  { value: 'BEFORE', label: '이전' },
+  { value: 'AFTER', label: '이후' },
+];
 
 // 패치이력 메인 페이지
 // 검색, 엑셀 업로드 버튼, 추가 버튼, 목록, 새창 상세보기를 담당합니다.
@@ -252,7 +266,16 @@ export default function PatchHistoryPage() {
   const [infraFilter, setInfraFilter] = useState(() => getInitialSearchParam('infraType', 'ALL'));
   const statusFilter = 'ALL';
   const [selectedCategories, setSelectedCategories] = useState([]);
-  const [selectedDeploymentVersions, setSelectedDeploymentVersions] = useState([]);
+  const [selectedDeploymentVersions, setSelectedDeploymentVersions] = useState(
+    () => initialParams.getAll('deploymentVersions')
+  );
+  const [patchHistoryRelation, setPatchHistoryRelation] = useState(() => {
+    const initialRelation = initialParams.get('patchHistoryRelation');
+    const hasSingleReferenceVersion = initialParams.getAll('deploymentVersions').length === 1;
+    return hasSingleReferenceVersion && ['BEFORE', 'AFTER'].includes(initialRelation)
+      ? initialRelation
+      : 'ALL';
+  });
   const [categoryOptions, setCategoryOptions] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState(initialParams.get('category') || '');
   const [deploymentVersionFilter, setDeploymentVersionFilter] = useState(initialParams.get('deploymentVersion') || '');
@@ -268,9 +291,9 @@ export default function PatchHistoryPage() {
   const [endDateFilter] = useState('');
 
   // 페이징 상태
-  // 기본 표시 개수는 5개로 유지하되, 사용자가 select로 변경할 수 있게 합니다.
+  // 기본 표시 개수는 50개이며, 사용자가 select로 변경할 수 있게 합니다.
   const [page, setPage] = useState(Number(initialParams.get('page') || 0));
-  const [size, setSize] = useState(Number(initialParams.get('size') || 5));
+  const [size, setSize] = useState(Number(initialParams.get('size') || 50));
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [hasNext, setHasNext] = useState(false);
@@ -323,7 +346,12 @@ export default function PatchHistoryPage() {
       if (customerFilter.trim()) params.append('customerName', customerFilter.trim());
       selectedInfraTypes.forEach((infraType) => params.append('infraTypes', infraType));
       selectedCategories.forEach((category) => params.append('categories', category));
-      selectedDeploymentVersions.forEach((version) => params.append('deploymentVersions', version));
+      if (patchHistoryRelation === 'ALL') {
+        selectedDeploymentVersions.forEach((version) => params.append('deploymentVersions', version));
+      } else if (selectedDeploymentVersions.length === 1) {
+        params.append('referenceDeploymentVersion', selectedDeploymentVersions[0]);
+        params.append('versionRelation', patchHistoryRelation);
+      }
       if (statusFilter !== 'ALL') params.append('status', statusFilter);
       // 기간 조건이 있을 때만 전송한다.
       // 값이 없으면 백엔드에서 전체 기간으로 조회한다.
@@ -385,6 +413,10 @@ export default function PatchHistoryPage() {
     if (infraFilter !== 'ALL') params.set('infraType', infraFilter);
     if (categoryFilter.trim()) params.set('category', categoryFilter.trim());
     if (deploymentVersionFilter.trim()) params.set('deploymentVersion', deploymentVersionFilter.trim());
+    selectedDeploymentVersions.forEach((version) => params.append('deploymentVersions', version));
+    if (patchHistoryRelation !== 'ALL' && selectedDeploymentVersions.length === 1) {
+      params.set('patchHistoryRelation', patchHistoryRelation);
+    }
     if (isDetailSearchOpen) {
       params.set('detailSearch', 'true');
       if (detailInfraFilter.trim()) params.set('detailInfraType', detailInfraFilter.trim());
@@ -519,7 +551,6 @@ export default function PatchHistoryPage() {
   // 최초 진입 시 목록을 1회 조회합니다.
   useEffect(() => {
     fetchFilterOptions([]);
-    fetchPatchHistories(0, 5);
     fetchPatchHistories(page, size);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -546,6 +577,7 @@ export default function PatchHistoryPage() {
     selectedInfraTypes,
     selectedCategories,
     selectedDeploymentVersions,
+    patchHistoryRelation,
   ]);
 
   return (
@@ -594,9 +626,35 @@ export default function PatchHistoryPage() {
                 label="배포버전"
                 options={deploymentVersionOptions}
                 selectedValues={selectedDeploymentVersions}
-                onChange={setSelectedDeploymentVersions}
+                onChange={(nextValues) => {
+                  setSelectedDeploymentVersions(nextValues);
+                  if (nextValues.length !== 1) {
+                    setPatchHistoryRelation('ALL');
+                  }
+                }}
                 disabled={loadingFilterOptions}
               />
+            </div>
+
+            <div className="w-full sm:w-[140px]">
+              <LabeledInput label="패치이력" compact>
+                <select
+                  className={searchInputClass}
+                  value={patchHistoryRelation}
+                  onChange={(e) => setPatchHistoryRelation(e.target.value)}
+                  disabled={loadingFilterOptions}
+                >
+                  {patchHistoryRelationOptions.map((option) => (
+                    <option
+                      key={option.value}
+                      value={option.value}
+                      disabled={option.value !== 'ALL' && selectedDeploymentVersions.length !== 1}
+                    >
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </LabeledInput>
             </div>
 
             <div className="ml-auto flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
@@ -679,7 +737,7 @@ export default function PatchHistoryPage() {
         >
           <div className="overflow-hidden rounded-2xl border border-slate-200">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1400px] divide-y divide-slate-200 text-sm">
+              <table className="w-full min-w-[1400px] table-fixed divide-y divide-slate-200 text-sm">
                 <thead className="bg-slate-100">
                   <tr>
                     <th className="w-[7%] px-4 py-3 text-left font-semibold">INFRA</th>
@@ -689,7 +747,7 @@ export default function PatchHistoryPage() {
                     <th className="w-[19%] px-4 py-3 text-left font-semibold">제목</th>
                     <th className="w-[25%] px-4 py-3 text-left font-semibold">내용</th>
                     <th className="w-[10%] px-4 py-3 text-left font-semibold">등록일</th>
-                    <th className="w-[7%] px-4 py-3 text-left font-semibold">작성자</th>
+                    <th className="w-[7%] px-4 py-3 text-center font-semibold">작성자</th>
                   </tr>
                 </thead>
 
@@ -714,7 +772,9 @@ export default function PatchHistoryPage() {
                         className="cursor-pointer transition hover:bg-slate-50"
                       >
                         <td className="px-4 py-3">
-                          {patchHistory.infraType || '-'}
+                          <div className="truncate" title={patchHistory.infraType || '-'}>
+                            {patchHistory.infraType || '-'}
+                          </div>
                         </td>
 
                         <td className="px-4 py-3 text-slate-700">
@@ -747,8 +807,10 @@ export default function PatchHistoryPage() {
                           {formatDateTime(patchHistory.createdAt)}
                         </td>
 
-                        <td className="px-4 py-3">
-                          {patchHistory.authorName || '-'}
+                        <td className="px-4 py-3 text-center">
+                          <div className="truncate" title={formatAuthorName(patchHistory.authorName)}>
+                            {formatAuthorName(patchHistory.authorName)}
+                          </div>
                         </td>
                       </tr>
                     ))

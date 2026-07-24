@@ -144,6 +144,8 @@ public class PatchHistoryService {
             List<String> categories,
             String deploymentVersion,
             List<String> deploymentVersions,
+            String referenceDeploymentVersion,
+            String versionRelation,
             String detailType,
             String detailDeploymentVersion,
             String detailVersionRelation,
@@ -153,7 +155,7 @@ public class PatchHistoryService {
             int size
     ) {
         int safePage = Math.max(page, 0);
-        int safeSize = size <= 0 ? 5 : size;
+        int safeSize = size <= 0 ? 50 : size;
 
         // PostgreSQL native query의 날짜 파라미터 타입 추론 오류 방지를 위해 null 대신 기본 범위를 넣는다.
         LocalDateTime startDateTime = startDate != null
@@ -167,7 +169,20 @@ public class PatchHistoryService {
         String normalizedDetailType = normalizeDetailType(detailType);
         String infraTypesCsv = joinInfraTypes(infraTypes);
         String categoriesCsv = joinValues(expandCategoryFilters(categories));
-        String deploymentVersionsCsv = joinValues(deploymentVersions);
+        String normalizedVersionRelation = normalizePatchHistoryRelation(versionRelation);
+        String normalizedReferenceDeploymentVersion = blankToNull(referenceDeploymentVersion);
+        if ("ALL".equals(normalizedVersionRelation)) {
+            normalizedReferenceDeploymentVersion = null;
+        }
+        String deploymentVersionsCsv = normalizedReferenceDeploymentVersion == null
+                ? joinValues(deploymentVersions)
+                : null;
+        String referenceVersionNumber = extractVersionNumber(normalizedReferenceDeploymentVersion);
+        boolean useReferenceCompletedDateComparison = isDateAlphaVersion(normalizedReferenceDeploymentVersion);
+        LocalDate versionReferenceCompletedDate =
+                useReferenceCompletedDateComparison && normalizedReferenceDeploymentVersion != null
+                        ? patchHistoryRepository.findReferenceCompletedDate(normalizedReferenceDeploymentVersion)
+                        : null;
         String normalizedRelation = normalizeVersionRelation(detailVersionRelation);
         String normalizedDetailDeploymentVersion = blankToNull(detailDeploymentVersion);
         if ("ALL".equals(normalizedRelation)) {
@@ -192,6 +207,10 @@ public class PatchHistoryService {
                         categoriesCsv,
                         deploymentVersionsCsv,
                         FILTER_DELIMITER,
+                        normalizedVersionRelation,
+                        referenceVersionNumber,
+                        useReferenceCompletedDateComparison,
+                        versionReferenceCompletedDate,
                         startDateTime,
                         endDateTime,
                         PageRequest.of(safePage, safeSize)
@@ -294,6 +313,18 @@ public class PatchHistoryService {
         return switch (normalized) {
             case "ALL", "SAME", "BEFORE", "AFTER" -> normalized;
             default -> "SAME";
+        };
+    }
+
+    private String normalizePatchHistoryRelation(String relation) {
+        if (relation == null) {
+            return "ALL";
+        }
+
+        return switch (relation.trim().toUpperCase()) {
+            case "BEFORE" -> "BEFORE";
+            case "AFTER" -> "AFTER";
+            default -> "ALL";
         };
     }
 
