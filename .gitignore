@@ -57,3 +57,4 @@ Thumbs.db
 # uploads
 uploads/
 /src/main/resources/static/*
+gradle.properties
