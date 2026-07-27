@@ -58,3 +58,4 @@ Thumbs.db
 uploads/
 /src/main/resources/static/*
 gradle.properties
+issue-system-frontend/package-lock.json
