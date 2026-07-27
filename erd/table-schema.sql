@@ -171,6 +171,53 @@ CREATE TABLE IF NOT EXISTS work_maintenance_history (
         REFERENCES work_report_upload (id)
 );
 
+-- 기존 DB에 이미 테이블이 있는 경우 CREATE TABLE IF NOT EXISTS만으로는 신규 컬럼이 추가되지 않는다.
+-- 아래 보강 섹션은 과거 패치로 추가된 컬럼/제약을 같은 파일 재실행만으로 반영하기 위한 idempotent migration이다.
+
+BEGIN;
+
+ALTER TABLE issue_case
+    ADD COLUMN IF NOT EXISTS category VARCHAR(50);
+
+ALTER TABLE issue_case
+    ADD COLUMN IF NOT EXISTS deployment_version VARCHAR(50);
+
+ALTER TABLE issue_case
+    ADD COLUMN IF NOT EXISTS completed_date DATE;
+
+ALTER TABLE knowledge_share
+    ADD COLUMN IF NOT EXISTS created_by_account_id BIGINT;
+
+ALTER TABLE knowledge_share
+    ADD COLUMN IF NOT EXISTS view_count BIGINT DEFAULT 0;
+
+UPDATE knowledge_share
+SET view_count = 0
+WHERE view_count IS NULL;
+
+ALTER TABLE knowledge_share
+    ALTER COLUMN view_count SET DEFAULT 0;
+
+ALTER TABLE knowledge_share
+    ALTER COLUMN view_count SET NOT NULL;
+
+COMMIT;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_knowledge_share_account'
+          AND conrelid = 'knowledge_share'::regclass
+    ) THEN
+        ALTER TABLE knowledge_share
+            ADD CONSTRAINT fk_knowledge_share_account
+            FOREIGN KEY (created_by_account_id)
+            REFERENCES account (id);
+    END IF;
+END $$;
+
 -- 아래 trigram 인덱스는 데이터가 많아졌을 때 ILIKE/유사도 검색 속도를 보완한다.
 -- pg_trgm은 앱의 similarity() 검색에도 필요하므로 생성되지 않으면 위 블록에서 스크립트를 중단한다.
 

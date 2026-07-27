@@ -163,7 +163,6 @@ function RichTextEditor({ value, onChange }) {
 
   const syncContent = () => {
     onChange(editorRef.current?.innerHTML || '');
-    updateActiveFormats();
   };
 
   const updateActiveFormats = () => {
@@ -185,12 +184,7 @@ function RichTextEditor({ value, onChange }) {
     }
 
     selectedRangeRef.current = selection.getRangeAt(0).cloneRange();
-    if (selection.isCollapsed) {
-      updateActiveFormats();
-    } else {
-      // 드래그 선택은 범위만 보존하고 어떤 서식도 자동 활성화하지 않는다.
-      setActiveFormats({ bold: false, italic: false, underline: false });
-    }
+    setActiveFormats({ bold: false, italic: false, underline: false });
   };
 
   const handleSelectionStart = () => {
@@ -217,10 +211,11 @@ function RichTextEditor({ value, onChange }) {
     const selection = window.getSelection();
     const draggedText = selection && !selection.isCollapsed;
 
-    if (editor && draggedText && editor.innerHTML !== selectionStartHtmlRef.current) {
+    if (editor && editor.innerHTML !== selectionStartHtmlRef.current) {
       editor.innerHTML = selectionStartHtmlRef.current;
       onChange(editor.innerHTML);
       selectedRangeRef.current = null;
+      setActiveFormats({ bold: false, italic: false, underline: false });
     } else {
       saveSelection();
     }
@@ -272,6 +267,17 @@ function RichTextEditor({ value, onChange }) {
       selectedRangeRef.current = selected.selection.getRangeAt(0).cloneRange();
     }
     updateActiveFormats();
+  };
+
+  const handleKeyDown = (event) => {
+    const key = event.key.toLowerCase();
+    const isFormatShortcut = (event.ctrlKey || event.metaKey) && ['b', 'i', 'u'].includes(key);
+
+    if (isFormatShortcut) {
+      event.preventDefault();
+      const command = { b: 'bold', i: 'italic', u: 'underline' }[key];
+      runCommand(command);
+    }
   };
 
   const insertImages = (files) => {
@@ -493,6 +499,7 @@ function RichTextEditor({ value, onChange }) {
               suppressContentEditableWarning
               onClick={(event) => event.currentTarget.focus({ preventScroll: true })}
               onInput={syncContent}
+              onKeyDown={handleKeyDown}
               onMouseDown={handleSelectionStart}
               onMouseMove={handleSelectionMove}
               onMouseUp={handleSelectionEnd}
