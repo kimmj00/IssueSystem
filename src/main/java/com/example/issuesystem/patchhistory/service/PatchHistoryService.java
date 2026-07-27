@@ -194,10 +194,15 @@ public class PatchHistoryService {
         LocalDate referenceCompletedDate = useCompletedDateComparison && normalizedDetailDeploymentVersion != null
                 ? patchHistoryRepository.findReferenceCompletedDate(normalizedDetailDeploymentVersion)
                 : null;
+        boolean searchSecurityByKeyword = "SECURITY".equals(normalizedDetailType)
+                && normalizedDetailDeploymentVersion == null;
+        String effectiveKeyword = searchSecurityByKeyword && blankToNull(keyword) == null
+                ? CATEGORY_SECURITY
+                : keyword;
 
-        Page<Long> idPage = normalizedDetailType == null
+        Page<Long> idPage = normalizedDetailType == null || searchSecurityByKeyword
                 ? patchHistoryRepository.searchIds(
-                        keyword,
+                        effectiveKeyword,
                         infraType != null ? infraType.name() : null,
                         status != null ? status.name() : null,
                         customerName,
