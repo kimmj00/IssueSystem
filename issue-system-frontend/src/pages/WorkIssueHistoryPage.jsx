@@ -6,6 +6,7 @@ import MaintenanceSupportScope from '../components/workIssue/MaintenanceSupportS
 import { API_BASE } from '../constants/patchHistoryOptions';
 import { getMaintenancePopupFeatures } from '../utils/maintenancePopup';
 import { parseTimelineDateHeader } from '../utils/timelineDates';
+import { shouldIgnoreGlobalSearchTransfer } from '../utils/globalSearchTransfer';
 
 // 작업 및 이슈이력 API 기본 경로입니다.
 // 프론트는 엑셀 파일만 전송하고, 실제 파싱/DB 저장은 Spring Boot에서 처리합니다.
@@ -51,11 +52,19 @@ const searchInputClass =
   'h-9 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none ring-0 focus:border-slate-500';
 
 function getInitialSearchParam(name, fallback = '') {
+  if (shouldIgnoreGlobalSearchTransfer()) {
+    return fallback;
+  }
+
   const params = new URLSearchParams(window.location.search);
   return params.get(name) || fallback;
 }
 
 function getInitialWorkIssueTab() {
+  if (shouldIgnoreGlobalSearchTransfer()) {
+    return 'search';
+  }
+
   const params = new URLSearchParams(window.location.search);
   const tab = params.get('tab');
   const workIssueType = params.get('workIssueType');

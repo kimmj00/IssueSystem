@@ -5,6 +5,10 @@ import CreateKnowledgeModal from '../components/modal/CreateKnowledgeModal';
 import PageTitle from '../components/common/PageTitle';
 import SaveScreenButton from '../components/common/SaveScreenButton';
 import { API_BASE } from '../constants/patchHistoryOptions';
+import {
+  shouldApplyGlobalSearchTransfer,
+  shouldIgnoreGlobalSearchTransfer,
+} from '../utils/globalSearchTransfer';
 
 // 지식공유 인프라 검색/등록 옵션
 const infraOptions = [
@@ -126,13 +130,16 @@ function toggleSelectedValue(values, value) {
 }
 
 function getInitialSearchParam(name, fallback = '') {
+  if (shouldIgnoreGlobalSearchTransfer()) {
+    return fallback;
+  }
+
   const params = new URLSearchParams(window.location.search);
   return params.get(name) || fallback;
 }
 
 function isFromGlobalSearch() {
-  const params = new URLSearchParams(window.location.search);
-  return params.get('fromGlobalSearch') === '1';
+  return shouldApplyGlobalSearchTransfer();
 }
 
 export default function KnowledgePage({ authUser }) {

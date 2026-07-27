@@ -6,6 +6,7 @@ import ExcelUploadModal from '../components/modal/ExcelUploadModal';
 import { API_BASE, emptyForm, infraOptions } from '../constants/patchHistoryOptions';
 import PageTitle from '../components/common/PageTitle';
 import SaveScreenButton from '../components/common/SaveScreenButton';
+import { shouldIgnoreGlobalSearchTransfer } from '../utils/globalSearchTransfer';
 
 // 페이지 버튼 목록을 만듭니다.
 // 전체 페이지가 많을 때는 첫 페이지, 마지막 페이지, 현재 페이지 주변만 보여주고 중간은 ... 처리합니다.
@@ -230,6 +231,10 @@ function MultiSelectDropdown({
 }
 
 function getInitialSearchParam(name, fallback = '') {
+  if (shouldIgnoreGlobalSearchTransfer()) {
+    return fallback;
+  }
+
   const params = new URLSearchParams(window.location.search);
   return params.get(name) || fallback;
 }

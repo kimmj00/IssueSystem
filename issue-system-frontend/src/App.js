@@ -16,6 +16,10 @@ import {
   SAVED_SCREEN_DRAG_END_EVENT,
   SAVED_SCREEN_DRAG_START_EVENT,
 } from './utils/savedScreens';
+import {
+  GLOBAL_SEARCH_TRANSFER_KEYS,
+  GLOBAL_SEARCH_TRANSFER_PARAM,
+} from './utils/globalSearchTransfer';
 
 // 메뉴 키는 화면 의미에 맞게 정리했습니다.
 // 기존 ISSUE 메뉴는 실제 패치리스트 기능이므로 PATCH_HISTORY로 변경했습니다.
@@ -93,6 +97,21 @@ function getDefaultSplitColumns(mode) {
   return [50, 50];
 }
 
+function buildCleanMenuUrl(menuKey) {
+  const currentParams = new URLSearchParams(window.location.search);
+  const nextParams = new URLSearchParams();
+
+  ['embedded', 'splitIndex'].forEach((paramName) => {
+    if (currentParams.has(paramName)) {
+      nextParams.set(paramName, currentParams.get(paramName));
+    }
+  });
+
+  nextParams.set('menu', menuKey);
+
+  return `${window.location.pathname}?${nextParams.toString()}`;
+}
+
 // 앱 최상위 컴포넌트
 // 상세보기 새 창과 일반 메인 화면 레이아웃을 분리해서 처리한다.
 export default function App() {
@@ -107,6 +126,7 @@ export default function App() {
   // KNOWLEDGE: 지식공유
   // WORK_ISSUE_HISTORY: 작업 및 이슈이력
   const [activeMenu, setActiveMenu] = useState(getInitialMenu);
+  const [menuNavigationKey, setMenuNavigationKey] = useState(0);
   const [splitSettings, setSplitSettings] = useState(getSplitSettings);
   const [splitScreens, setSplitScreens] = useState([]);
   const [splitColumns, setSplitColumns] = useState([50, 50]);
@@ -150,6 +170,23 @@ export default function App() {
       window.history.replaceState(null, '', `${window.location.pathname}?${nextParams.toString()}`);
     }
   }, [activeMenu, authUser, popupType]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    if (
+      popupType
+      || activeMenu === 'GLOBAL_SEARCH'
+      || params.get(GLOBAL_SEARCH_TRANSFER_PARAM) !== '1'
+    ) {
+      return;
+    }
+
+    GLOBAL_SEARCH_TRANSFER_KEYS.forEach((key) => params.delete(key));
+    params.set('menu', activeMenu);
+
+    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  }, [activeMenu, popupType]);
 
   useEffect(() => {
     const syncSplitSettings = () => {
@@ -211,6 +248,7 @@ export default function App() {
 
   const handleMenuChange = (menuKey) => {
     setActiveMenu(menuKey);
+    setMenuNavigationKey((prev) => prev + 1);
     localStorage.setItem('activeMenu', menuKey);
 
     const params = new URLSearchParams(window.location.search);
@@ -218,10 +256,7 @@ export default function App() {
     // 상세보기 새창용 popup 파라미터가 있을 때는 건드리지 않는다.
     // 일반 메인 화면에서만 menu 파라미터를 갱신한다.
     if (!params.get('popup')) {
-      params.set('menu', menuKey);
-
-      const nextUrl = `${window.location.pathname}?${params.toString()}`;
-      window.history.replaceState(null, '', nextUrl);
+      window.history.replaceState(null, '', buildCleanMenuUrl(menuKey));
     }
   };
 
@@ -280,11 +315,11 @@ export default function App() {
 
   const renderActivePage = () => (
     <>
-      {activeMenu === 'GLOBAL_SEARCH' && <GlobalSearchPage />}
-      {activeMenu === 'PATCH_HISTORY' && <PatchHistoryPage />}
-      {activeMenu === 'KNOWLEDGE' && <KnowledgePage authUser={authUser} />}
-      {activeMenu === 'WORK_ISSUE_HISTORY' && <WorkIssueHistoryPage />}
-      {activeMenu === 'ADMIN_ACCOUNTS' && authUser.role === 'ADMIN' && <AdminAccountsPage />}
+      {activeMenu === 'GLOBAL_SEARCH' && <GlobalSearchPage key={`GLOBAL_SEARCH-${menuNavigationKey}`} />}
+      {activeMenu === 'PATCH_HISTORY' && <PatchHistoryPage key={`PATCH_HISTORY-${menuNavigationKey}`} />}
+      {activeMenu === 'KNOWLEDGE' && <KnowledgePage key={`KNOWLEDGE-${menuNavigationKey}`} authUser={authUser} />}
+      {activeMenu === 'WORK_ISSUE_HISTORY' && <WorkIssueHistoryPage key={`WORK_ISSUE_HISTORY-${menuNavigationKey}`} />}
+      {activeMenu === 'ADMIN_ACCOUNTS' && authUser.role === 'ADMIN' && <AdminAccountsPage key={`ADMIN_ACCOUNTS-${menuNavigationKey}`} />}
     </>
   );
 
