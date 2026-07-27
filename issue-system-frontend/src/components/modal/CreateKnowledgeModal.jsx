@@ -151,6 +151,8 @@ function RichTextEditor({ value, onChange }) {
   const selectedRangeRef = useRef(null);
   const selectionStartHtmlRef = useRef('');
   const selectingTextRef = useRef(false);
+  const mouseDownRef = useRef({ x: 0, y: 0 });
+  const allowFormatCommandRef = useRef(false);
   const [dragging, setDragging] = useState(false);
   const [showColorPalette, setShowColorPalette] = useState(false);
   const [activeFormats, setActiveFormats] = useState({ bold: false, italic: false, underline: false });
@@ -165,6 +167,22 @@ function RichTextEditor({ value, onChange }) {
     onChange(editorRef.current?.innerHTML || '');
   };
 
+  const clearActiveFormats = () => {
+    setActiveFormats({ bold: false, italic: false, underline: false });
+  };
+
+  const isSelectionInsideEditor = (selection) => {
+    const editor = editorRef.current;
+    return !!(
+        selection?.rangeCount &&
+        editor &&
+        selection.anchorNode &&
+        selection.focusNode &&
+        editor.contains(selection.anchorNode) &&
+        editor.contains(selection.focusNode)
+    );
+  };
+
   const updateActiveFormats = () => {
     try {
       setActiveFormats({
@@ -173,55 +191,73 @@ function RichTextEditor({ value, onChange }) {
         underline: document.queryCommandState('underline'),
       });
     } catch {
-      setActiveFormats({ bold: false, italic: false, underline: false });
+      clearActiveFormats();
     }
   };
 
   const saveSelection = () => {
     const selection = window.getSelection();
-    if (!selection?.rangeCount || !editorRef.current?.contains(selection.anchorNode)) {
+    if (!isSelectionInsideEditor(selection)) {
       return;
     }
 
-    selectedRangeRef.current = selection.getRangeAt(0).cloneRange();
-    setActiveFormats({ bold: false, italic: false, underline: false });
+    const range = selection.getRangeAt(0);
+    selectedRangeRef.current = range.collapsed ? null : range.cloneRange();
+    clearActiveFormats();
   };
 
-  const handleSelectionStart = () => {
+  const handleSelectionStart = (event) => {
+    event.currentTarget.focus({ preventScroll: true });
     selectingTextRef.current = true;
     selectionStartHtmlRef.current = editorRef.current?.innerHTML || '';
-    setActiveFormats({ bold: false, italic: false, underline: false });
+    mouseDownRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+    };
+    clearActiveFormats();
   };
 
   const handleSelectionMove = () => {
     if (selectingTextRef.current) {
-      setActiveFormats({ bold: false, italic: false, underline: false });
+      clearActiveFormats();
     }
   };
 
   const keepDraggedSelectionUnformatted = () => {
     const selection = window.getSelection();
-    if (selection && !selection.isCollapsed && editorRef.current?.contains(selection.anchorNode)) {
-      setActiveFormats({ bold: false, italic: false, underline: false });
+    if (selection && !selection.isCollapsed && isSelectionInsideEditor(selection)) {
+      clearActiveFormats();
     }
   };
 
-  const handleSelectionEnd = () => {
+  const handleSelectionEnd = (event) => {
     const editor = editorRef.current;
     const selection = window.getSelection();
     const draggedText = selection && !selection.isCollapsed;
+    const mouseDown = mouseDownRef.current;
+    const moved =
+        Math.abs(event.clientX - mouseDown.x) > 3 ||
+        Math.abs(event.clientY - mouseDown.y) > 3;
+    const plainClick = !moved && !event.shiftKey && event.detail <= 1;
 
     if (editor && editor.innerHTML !== selectionStartHtmlRef.current) {
       editor.innerHTML = selectionStartHtmlRef.current;
       onChange(editor.innerHTML);
       selectedRangeRef.current = null;
-      setActiveFormats({ bold: false, italic: false, underline: false });
+      clearActiveFormats();
+    } else if (plainClick) {
+      selectedRangeRef.current = null;
+      selection?.removeAllRanges();
+      clearActiveFormats();
+      window.requestAnimationFrame(() => {
+        placeCaretFromPoint(event.clientX, event.clientY);
+      });
     } else {
       saveSelection();
     }
 
-    if (draggedText) {
-      setActiveFormats({ bold: false, italic: false, underline: false });
+    if (draggedText && !plainClick) {
+      clearActiveFormats();
       window.requestAnimationFrame(keepDraggedSelectionUnformatted);
     }
     selectingTextRef.current = false;
@@ -233,9 +269,13 @@ function RichTextEditor({ value, onChange }) {
 
   const restoreSelection = () => {
     const selection = window.getSelection();
-    if (selection && selectedRangeRef.current) {
-      selection.removeAllRanges();
-      selection.addRange(selectedRangeRef.current);
+    if (selection && selectedRangeRef.current && editorRef.current?.contains(selectedRangeRef.current.commonAncestorContainer)) {
+      try {
+        selection.removeAllRanges();
+        selection.addRange(selectedRangeRef.current);
+      } catch {
+        selectedRangeRef.current = null;
+      }
     }
     return selection;
   };
@@ -261,12 +301,46 @@ function RichTextEditor({ value, onChange }) {
       return;
     }
 
-    document.execCommand(command, false, value);
+    allowFormatCommandRef.current = true;
+    try {
+      document.execCommand(command, false, value);
+    } finally {
+      allowFormatCommandRef.current = false;
+    }
     syncContent();
     if (selected.selection.rangeCount) {
       selectedRangeRef.current = selected.selection.getRangeAt(0).cloneRange();
     }
     updateActiveFormats();
+  };
+
+  const runToolbarCommand = (event, command) => {
+    event.preventDefault();
+    runCommand(command);
+  };
+
+  const handleToolbarClick = (event, command) => {
+    if (event.detail === 0) {
+      event.preventDefault();
+      runCommand(command);
+    }
+  };
+
+  const handleBeforeInput = (event) => {
+    const inputType = event.nativeEvent?.inputType || '';
+    if (inputType.startsWith('format') && !allowFormatCommandRef.current) {
+      event.preventDefault();
+    }
+  };
+
+  const handleEditorClick = (event) => {
+    event.currentTarget.focus({ preventScroll: true });
+
+    const selection = window.getSelection();
+    if (!isSelectionInsideEditor(selection) || selection.isCollapsed) {
+      selectedRangeRef.current = null;
+      clearActiveFormats();
+    }
   };
 
   const handleKeyDown = (event) => {
@@ -303,11 +377,13 @@ function RichTextEditor({ value, onChange }) {
 
   const placeCaretFromPoint = (x, y) => {
     const selection = window.getSelection();
+    const editor = editorRef.current;
 
-    if (!selection) {
+    if (!selection || !editor) {
       return;
     }
 
+    editor.focus({ preventScroll: true });
     let range = null;
 
     if (document.caretRangeFromPoint) {
@@ -319,6 +395,14 @@ function RichTextEditor({ value, onChange }) {
         range = document.createRange();
         range.setStart(position.offsetNode, position.offset);
       }
+    }
+
+    if (!range || !editor.contains(range.commonAncestorContainer)) {
+      range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+    } else {
+      range.collapse(true);
     }
 
     if (range) {
@@ -352,8 +436,13 @@ function RichTextEditor({ value, onChange }) {
       return;
     }
 
-    document.execCommand('styleWithCSS', false, true);
-    document.execCommand(command, false, color);
+    allowFormatCommandRef.current = true;
+    try {
+      document.execCommand('styleWithCSS', false, true);
+      document.execCommand(command, false, color);
+    } finally {
+      allowFormatCommandRef.current = false;
+    }
     syncContent();
     if (selected.selection.rangeCount) {
       selectedRangeRef.current = selected.selection.getRangeAt(0).cloneRange();
@@ -389,8 +478,8 @@ function RichTextEditor({ value, onChange }) {
         <div className="relative flex flex-wrap items-center gap-0.5 rounded-t-xl border border-b-0 border-slate-300 bg-slate-100 px-2 py-1.5">
           <button
               type="button"
-              onMouseDown={preventToolbarFocus}
-              onClick={() => runCommand('bold')}
+              onMouseDown={(event) => runToolbarCommand(event, 'bold')}
+              onClick={(event) => handleToolbarClick(event, 'bold')}
               title="볼드체 (Ctrl+B)"
               className={`h-8 min-w-8 rounded px-2 text-base font-bold ${activeFormats.bold ? 'bg-slate-300 text-slate-900' : 'text-slate-700 hover:bg-slate-200'}`}
           >
@@ -398,8 +487,8 @@ function RichTextEditor({ value, onChange }) {
           </button>
           <button
               type="button"
-              onMouseDown={preventToolbarFocus}
-              onClick={() => runCommand('italic')}
+              onMouseDown={(event) => runToolbarCommand(event, 'italic')}
+              onClick={(event) => handleToolbarClick(event, 'italic')}
               title="기울기 (Ctrl+I)"
               className={`h-8 min-w-8 rounded px-2 text-base font-semibold italic ${activeFormats.italic ? 'bg-slate-300 text-slate-900' : 'text-slate-700 hover:bg-slate-200'}`}
           >
@@ -407,8 +496,8 @@ function RichTextEditor({ value, onChange }) {
           </button>
           <button
               type="button"
-              onMouseDown={preventToolbarFocus}
-              onClick={() => runCommand('underline')}
+              onMouseDown={(event) => runToolbarCommand(event, 'underline')}
+              onClick={(event) => handleToolbarClick(event, 'underline')}
               title="밑줄 (Ctrl+U)"
               className={`h-8 min-w-8 rounded px-2 text-base font-semibold underline underline-offset-2 ${activeFormats.underline ? 'bg-slate-300 text-slate-900' : 'text-slate-700 hover:bg-slate-200'}`}
           >
@@ -497,7 +586,8 @@ function RichTextEditor({ value, onChange }) {
               ref={editorRef}
               contentEditable
               suppressContentEditableWarning
-              onClick={(event) => event.currentTarget.focus({ preventScroll: true })}
+              onBeforeInput={handleBeforeInput}
+              onClick={handleEditorClick}
               onInput={syncContent}
               onKeyDown={handleKeyDown}
               onMouseDown={handleSelectionStart}
