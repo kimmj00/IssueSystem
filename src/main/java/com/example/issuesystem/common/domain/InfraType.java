@@ -24,5 +24,6 @@ public enum InfraType {
     K8S,
     TRMS,
     NPM,
-    BRMS
+    BRMS,
+    기타
 }

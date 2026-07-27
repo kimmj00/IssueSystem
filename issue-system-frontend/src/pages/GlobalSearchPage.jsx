@@ -40,6 +40,18 @@ function normalizeList(value) {
   return [value];
 }
 
+function stripHtml(value) {
+  let text = String(value || '');
+
+  for (let index = 0; index < 2; index += 1) {
+    const template = document.createElement('template');
+    template.innerHTML = text;
+    text = template.content.textContent || '';
+  }
+
+  return text.replace(/\s+/g, ' ').trim();
+}
+
 function rowClass(level) {
   switch (level) {
     case 'VERY_HIGH':
@@ -808,7 +820,7 @@ export default function GlobalSearchPage() {
                             <TruncateCell value={item.title} strong />
                           </td>
                           <td className="min-w-0 px-2 py-3 text-slate-700">
-                            <TruncateCell value={item.summary || item.detail} />
+                            <TruncateCell value={stripHtml(item.summary || item.detail)} />
                           </td>
                           <td className="min-w-0 px-2 py-3 text-slate-700">
                             <TruncateCell value={normalizeList(item.infraTypes).join(', ')} />

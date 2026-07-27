@@ -7,6 +7,7 @@ import com.example.issuesystem.knowledge.dto.KnowledgeShareCreateRequest;
 import com.example.issuesystem.knowledge.dto.KnowledgeShareResponse;
 import com.example.issuesystem.knowledge.service.KnowledgeShareService;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -35,6 +36,8 @@ import java.util.List;
 @RequestMapping("/api/knowledge-shares")
 public class KnowledgeShareController {
 
+    private static final String SESSION_ACCOUNT_ID = "accountId";
+
     private final KnowledgeShareService knowledgeShareService;
 
     /**
@@ -46,9 +49,10 @@ public class KnowledgeShareController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<Long> create(
             @Valid @RequestPart("request") KnowledgeShareCreateRequest request,
-            @RequestPart(value = "files", required = false) List<MultipartFile> files
+            @RequestPart(value = "files", required = false) List<MultipartFile> files,
+            HttpSession session
     ) {
-        return ApiResponse.ok(knowledgeShareService.create(request, files));
+        return ApiResponse.ok(knowledgeShareService.create(request, files, requireAccountId(session)));
     }
 
     /**
@@ -58,9 +62,40 @@ public class KnowledgeShareController {
      */
     @PostMapping("/json")
     public ApiResponse<Long> createJson(
-            @Valid @RequestBody KnowledgeShareCreateRequest request
+            @Valid @RequestBody KnowledgeShareCreateRequest request,
+            HttpSession session
     ) {
-        return ApiResponse.ok(knowledgeShareService.create(request, null));
+        return ApiResponse.ok(knowledgeShareService.create(request, null, requireAccountId(session)));
+    }
+
+    /** 지식공유 수정 - 첨부파일 추가 포함 */
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<Void> update(
+            @PathVariable Long id,
+            @Valid @RequestPart("request") KnowledgeShareCreateRequest request,
+            @RequestPart(value = "files", required = false) List<MultipartFile> files,
+            @RequestParam(value = "deleteAttachmentIds", required = false) List<Long> deleteAttachmentIds,
+            HttpSession session
+    ) {
+        knowledgeShareService.update(id, request, files, deleteAttachmentIds, requireAccountId(session));
+        return ApiResponse.okMessage("수정되었습니다.");
+    }
+
+    /** 지식공유 수정 - JSON 전용 */
+    @PutMapping("/{id}/json")
+    public ApiResponse<Void> updateJson(
+            @PathVariable Long id,
+            @Valid @RequestBody KnowledgeShareCreateRequest request,
+            HttpSession session
+    ) {
+        knowledgeShareService.update(id, request, null, null, requireAccountId(session));
+        return ApiResponse.okMessage("수정되었습니다.");
+    }
+
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> delete(@PathVariable Long id, HttpSession session) {
+        knowledgeShareService.delete(id, requireAccountId(session));
+        return ApiResponse.okMessage("삭제되었습니다.");
     }
 
     /**
@@ -128,5 +163,13 @@ public class KnowledgeShareController {
                 .contentLength(downloadFile.fileSize())
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(downloadFile.resource());
+    }
+
+    private Long requireAccountId(HttpSession session) {
+        Object accountId = session.getAttribute(SESSION_ACCOUNT_ID);
+        if (!(accountId instanceof Long value)) {
+            throw new IllegalArgumentException("로그인이 필요합니다.");
+        }
+        return value;
     }
 }

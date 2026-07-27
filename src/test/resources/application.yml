@@ -1,0 +1,25 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:issue_system_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: false
+    open-in-view: false
+
+logging:
+  level:
+    org.hibernate.SQL: off
+
+app:
+  file:
+    upload-dir: build/test-uploads
+  crypto:
+    file-secret-key: test-file-secret-key-32-bytes-long

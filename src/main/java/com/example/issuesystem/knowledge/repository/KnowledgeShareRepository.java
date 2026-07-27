@@ -4,6 +4,7 @@ import com.example.issuesystem.knowledge.domain.KnowledgeShare;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -11,6 +12,15 @@ import java.time.LocalDateTime;
 
 /** 지식공유 Repository */
 public interface KnowledgeShareRepository extends JpaRepository<KnowledgeShare, Long> {
+
+    /** 동시에 상세 조회가 발생해도 누락되지 않도록 조회수를 DB에서 직접 증가시킨다. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            update knowledge_share
+               set view_count = view_count + 1
+             where id = :id
+            """, nativeQuery = true)
+    int incrementViewCount(@Param("id") Long id);
 
     /**
      * 지식공유 검색

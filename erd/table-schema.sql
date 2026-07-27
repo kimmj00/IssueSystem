@@ -4,6 +4,16 @@
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
+CREATE TABLE IF NOT EXISTS account (
+    id BIGSERIAL PRIMARY KEY,
+    user_id VARCHAR(20) NOT NULL UNIQUE,
+    password_hash VARCHAR(100) NOT NULL,
+    name VARCHAR(50) NOT NULL,
+    role VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP(6) NOT NULL,
+    updated_at TIMESTAMP(6) NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS issue_case (
     id BIGSERIAL PRIMARY KEY,
     title VARCHAR(200) NOT NULL,
@@ -30,10 +40,15 @@ CREATE TABLE IF NOT EXISTS knowledge_share (
     title VARCHAR(200) NOT NULL,
     customer_name VARCHAR(100),
     author_name VARCHAR(100) NOT NULL,
+    created_by_account_id BIGINT,
     attachment_name VARCHAR(255),
     content TEXT NOT NULL,
+    view_count BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP(6) NOT NULL,
-    updated_at TIMESTAMP(6) NOT NULL
+    updated_at TIMESTAMP(6) NOT NULL,
+    CONSTRAINT fk_knowledge_share_account
+        FOREIGN KEY (created_by_account_id)
+        REFERENCES account (id)
 );
 
 CREATE TABLE IF NOT EXISTS knowledge_share_infra (

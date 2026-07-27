@@ -9,7 +9,6 @@ import { API_BASE } from '../constants/patchHistoryOptions';
 // 지식공유 인프라 검색/등록 옵션
 const infraOptions = [
   'EMS',
-  'GPM',
   'ERMS',
   'SMS',
   'NMS',
@@ -31,6 +30,9 @@ const infraOptions = [
   'TRMS',
   'NPM',
   'BRMS',
+  'GPM',
+  '운영관리',
+  '기타',
 ];
 
 // 페이지당 표시 개수 옵션
@@ -110,7 +112,7 @@ function stripHtml(value) {
   }
 
   return String(value)
-      .replace(/<img\b[^>]*>/gi, ' [이미지] ')
+      .replace(/<img\b[^>]*>/gi, ' ')
       .replace(/<[^>]*>/g, ' ')
       .replace(/&nbsp;/g, ' ')
       .replace(/\s+/g, ' ')
@@ -133,7 +135,7 @@ function isFromGlobalSearch() {
   return params.get('fromGlobalSearch') === '1';
 }
 
-export default function KnowledgePage() {
+export default function KnowledgePage({ authUser }) {
   const initialParams = new URLSearchParams(window.location.search);
   // 검색 조건 상태
   // const [keyword, setKeyword] = useState('');
@@ -143,7 +145,7 @@ export default function KnowledgePage() {
   // const [endDate, setEndDate] = useState(getDefaultEndDate);
   const [keyword, setKeyword] = useState(() => getInitialSearchParam('keyword'));
   const [customerName, setCustomerName] = useState(() => getInitialSearchParam('customerName'));
-  const [infraType, setInfraType] = useState(() => getInitialSearchParam('infraType', 'ALL'));
+  const infraType = getInitialSearchParam('infraType', 'ALL');
   const [startDate, setStartDate] = useState(() => getInitialSearchParam('startDate'));
   const [endDate, setEndDate] = useState(() =>
       getInitialSearchParam('endDate', isFromGlobalSearch() ? '' : getDefaultEndDate())
@@ -283,7 +285,7 @@ export default function KnowledgePage() {
       const request = {
         title: payload.title,
         customerName: payload.customerName,
-        authorName: payload.authorName,
+        authorName: authUser.name,
 
         // 실제 첨부파일 정보는 knowledge_share_attachment 테이블에 저장
         // attachmentName 컬럼은 길이 제한이 있으므로 빈 값 처리
@@ -308,6 +310,7 @@ export default function KnowledgePage() {
 
       const res = await fetch(`${API_BASE}/api/knowledge-shares`, {
         method: 'POST',
+        credentials: 'include',
         body: formData,
       });
 
@@ -497,13 +500,16 @@ export default function KnowledgePage() {
                         고객사
                       </th>
                       <th className="w-[9%] px-4 py-3 text-left font-semibold">
-                        담당자
+                        작성자
                       </th>
                       <th className="w-[12%] px-4 py-3 text-left font-semibold">
                         등록일
                       </th>
-                      <th className="w-[17%] px-4 py-3 text-left font-semibold">
+                      <th className="w-[12%] px-4 py-3 text-left font-semibold">
                         첨부파일
+                      </th>
+                      <th className="w-[5%] whitespace-nowrap px-4 py-3 text-center font-semibold">
+                        조회수
                       </th>
                     </tr>
                   </thead>
@@ -511,9 +517,9 @@ export default function KnowledgePage() {
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {loading ? (
                       <tr>
-                        {/* 컬럼이 7개이므로 colSpan도 7 */}
+                        {/* 컬럼이 8개이므로 colSpan도 8 */}
                         <td
-                          colSpan={7}
+                          colSpan={8}
                           className="px-4 py-8 text-center text-slate-500"
                         >
                           불러오는 중...
@@ -521,9 +527,9 @@ export default function KnowledgePage() {
                       </tr>
                     ) : items.length === 0 ? (
                       <tr>
-                        {/* 컬럼이 7개이므로 colSpan도 7 */}
+                        {/* 컬럼이 8개이므로 colSpan도 8 */}
                         <td
-                          colSpan={7}
+                          colSpan={8}
                           className="px-4 py-8 text-center text-slate-500"
                         >
                           등록된 지식공유 글이 없습니다.
@@ -560,7 +566,7 @@ export default function KnowledgePage() {
                             {item.customerName || '-'}
                           </td>
 
-                          {/* 담당자 */}
+                          {/* 작성자 */}
                           <td className="px-4 py-3 text-slate-700">
                             {item.authorName || '-'}
                           </td>
@@ -574,7 +580,7 @@ export default function KnowledgePage() {
                           <td className="px-4 py-3">
                             {item.attachments && item.attachments.length > 0 ? (
                               <div className="space-y-1">
-                                {item.attachments.map((file) => (
+                                {item.attachments.slice(0, 2).map((file) => (
                                   <a
                                     key={file.id}
                                     href={downloadUrl(file.id)}
@@ -584,10 +590,20 @@ export default function KnowledgePage() {
                                     {file.originalFileName}
                                   </a>
                                 ))}
+                                {item.attachments.length > 2 && (
+                                  <span className="block text-xs font-semibold text-slate-500">
+                                    외 {item.attachments.length - 2}개
+                                  </span>
+                                )}
                               </div>
                             ) : (
                               <span className="text-slate-400">-</span>
                             )}
+                          </td>
+
+                          {/* 조회수 */}
+                          <td className="whitespace-nowrap px-4 py-3 text-center tabular-nums text-slate-700">
+                            {(item.viewCount ?? 0).toLocaleString()}
                           </td>
                         </tr>
                       ))
@@ -688,6 +704,8 @@ export default function KnowledgePage() {
                 saving={saving}
                 onClose={() => setIsCreateModalOpen(false)}
                 onSubmit={handleCreate}
+                initialValues={{ authorName: authUser.name }}
+                lockAuthor
             />
         )}
       </>

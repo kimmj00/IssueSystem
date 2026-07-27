@@ -130,6 +130,30 @@ public class SupabaseKnowledgeFileStorageService implements KnowledgeFileStorage
         }
     }
 
+    @Override
+    public void delete(String storedPath) {
+        try {
+            String deleteUrl = supabaseUrl
+                    + "/storage/v1/object/"
+                    + urlEncodePath(bucketName)
+                    + "/"
+                    + urlEncodePath(storedPath);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(deleteUrl))
+                    .header("Authorization", "Bearer " + serviceRoleKey)
+                    .header("apikey", serviceRoleKey)
+                    .DELETE()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException("Supabase Storage 삭제 실패. status=" + response.statusCode());
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("Supabase Storage 삭제 중 오류가 발생했습니다.", e);
+        }
+    }
+
     /**
      * 원본 파일을 GZIP 압축 후 AES-GCM 암호화해서 byte[]로 만든다.
      */

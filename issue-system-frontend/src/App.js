@@ -9,6 +9,9 @@ import KnowledgeDetailWindow from './pages/KnowledgeDetailWindow';
 import WorkIssueHistoryDetailWindow from './pages/WorkIssueHistoryDetailWindow';
 import SplitScreenEdgePanel from './components/layout/SplitScreenEdgePanel';
 import SaveScreenButton from './components/common/SaveScreenButton';
+import LoginPage from './pages/LoginPage';
+import AdminAccountsPage from './pages/AdminAccountsPage';
+import { API_BASE } from './constants/issueOptions';
 import {
   SAVED_SCREEN_DRAG_END_EVENT,
   SAVED_SCREEN_DRAG_START_EVENT,
@@ -17,7 +20,7 @@ import {
 // 메뉴 키는 화면 의미에 맞게 정리했습니다.
 // 기존 ISSUE 메뉴는 실제 패치리스트 기능이므로 PATCH_HISTORY로 변경했습니다.
 // 기존 PATCH_HISTORY 빈 페이지는 작업 및 이슈이력 메뉴로 변경했습니다.
-const menuKeys = ['GLOBAL_SEARCH', 'PATCH_HISTORY', 'KNOWLEDGE', 'WORK_ISSUE_HISTORY'];
+const menuKeys = ['GLOBAL_SEARCH', 'PATCH_HISTORY', 'KNOWLEDGE', 'WORK_ISSUE_HISTORY', 'ADMIN_ACCOUNTS'];
 
 const DEFAULT_MENU = 'GLOBAL_SEARCH'
 const SPLIT_SETTINGS_EVENT = 'issue-system:split-settings-change';
@@ -110,6 +113,43 @@ export default function App() {
   const [splitRows, setSplitRows] = useState([50, 50]);
   const [draggingSavedScreen, setDraggingSavedScreen] = useState(false);
   const splitContainerRef = useRef(null);
+  const [authUser, setAuthUser] = useState(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('tc-bank:user'));
+    } catch {
+      return null;
+    }
+  });
+
+  const handleLogin = (user) => {
+    sessionStorage.setItem('tc-bank:user', JSON.stringify(user));
+    setAuthUser(user);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE}/api/accounts/logout`, { method: 'POST', credentials: 'include' });
+    } catch {
+      // 서버 연결이 끊겨도 로컬 로그인 상태는 제거합니다.
+    }
+    sessionStorage.removeItem('tc-bank:user');
+    setAuthUser(null);
+  };
+
+  useEffect(() => {
+    if (!authUser || authUser.role === 'ADMIN' || activeMenu !== 'ADMIN_ACCOUNTS') {
+      return;
+    }
+
+    setActiveMenu(DEFAULT_MENU);
+    localStorage.setItem('activeMenu', DEFAULT_MENU);
+
+    if (!popupType) {
+      const nextParams = new URLSearchParams(window.location.search);
+      nextParams.set('menu', DEFAULT_MENU);
+      window.history.replaceState(null, '', `${window.location.pathname}?${nextParams.toString()}`);
+    }
+  }, [activeMenu, authUser, popupType]);
 
   useEffect(() => {
     const syncSplitSettings = () => {
@@ -185,6 +225,10 @@ export default function App() {
     }
   };
 
+  if (!authUser) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
   if (popupType === 'patch-history-detail') {
     if (embedded) {
       return <PatchHistoryDetailWindow />;
@@ -238,8 +282,9 @@ export default function App() {
     <>
       {activeMenu === 'GLOBAL_SEARCH' && <GlobalSearchPage />}
       {activeMenu === 'PATCH_HISTORY' && <PatchHistoryPage />}
-      {activeMenu === 'KNOWLEDGE' && <KnowledgePage />}
+      {activeMenu === 'KNOWLEDGE' && <KnowledgePage authUser={authUser} />}
       {activeMenu === 'WORK_ISSUE_HISTORY' && <WorkIssueHistoryPage />}
+      {activeMenu === 'ADMIN_ACCOUNTS' && authUser.role === 'ADMIN' && <AdminAccountsPage />}
     </>
   );
 
@@ -392,7 +437,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       {!splitSettings.enabled && (
-        <Sidebar activeMenu={activeMenu} setActiveMenu={handleMenuChange} />
+        <Sidebar activeMenu={activeMenu} setActiveMenu={handleMenuChange} userName={authUser.name} userRole={authUser.role} onLogout={handleLogout} />
       )}
 
       <main className={`screen-capture-source w-full ${splitSettings.enabled ? 'h-screen p-3' : 'mx-auto max-w-[1720px] px-4 py-6 sm:px-6 lg:px-8'}`}>
@@ -439,7 +484,7 @@ export default function App() {
                   </div>
                 ) : index === 0 ? (
                   <div className="min-h-full">
-                    <Sidebar activeMenu={activeMenu} setActiveMenu={handleMenuChange} />
+                    <Sidebar activeMenu={activeMenu} setActiveMenu={handleMenuChange} userName={authUser.name} userRole={authUser.role} onLogout={handleLogout} />
                     <div className="p-3">
                       {renderActivePage()}
                     </div>

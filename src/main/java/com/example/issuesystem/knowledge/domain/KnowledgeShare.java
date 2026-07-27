@@ -38,6 +38,10 @@ public class KnowledgeShare extends BaseTimeEntity {
     @Column(nullable = false, length = 100)
     private String authorName;
 
+    /** 지식공유를 등록한 계정 ID. 기존 데이터는 null일 수 있다. */
+    @Column(name = "created_by_account_id")
+    private Long createdByAccountId;
+
     /**
      * 기존 화면 호환용 필드.
      * 실제 첨부파일은 knowledge_share_attachment에 저장한다.
@@ -48,6 +52,10 @@ public class KnowledgeShare extends BaseTimeEntity {
     /** 지식공유 내용 */
     @Column(columnDefinition = "text", nullable = false)
     private String content;
+
+    /** 게시글 상세 조회수 */
+    @Column(name = "view_count", nullable = false)
+    private Long viewCount = 0L;
 
     /**
      * 등록 시 체크박스로 여러 인프라를 선택한다.
@@ -75,6 +83,7 @@ public class KnowledgeShare extends BaseTimeEntity {
             String title,
             String customerName,
             String authorName,
+            Long createdByAccountId,
             String attachmentName,
             String content,
             Set<InfraType> infraTypes
@@ -82,11 +91,30 @@ public class KnowledgeShare extends BaseTimeEntity {
         this.title = title;
         this.customerName = customerName;
         this.authorName = authorName;
+        this.createdByAccountId = createdByAccountId;
         this.attachmentName = attachmentName;
         this.content = content;
 
         if (infraTypes != null) {
             this.infraTypes = infraTypes;
+        }
+    }
+
+    public void update(
+            String title,
+            String customerName,
+            String attachmentName,
+            String content,
+            Set<InfraType> infraTypes
+    ) {
+        this.title = title;
+        this.customerName = customerName;
+        this.attachmentName = attachmentName;
+        this.content = content;
+
+        this.infraTypes.clear();
+        if (infraTypes != null) {
+            this.infraTypes.addAll(infraTypes);
         }
     }
 }

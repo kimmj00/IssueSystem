@@ -1,6 +1,9 @@
 package com.example.issuesystem.knowledge.service;
 
 import com.example.issuesystem.common.PageResponse;
+import com.example.issuesystem.account.domain.Account;
+import com.example.issuesystem.account.domain.AccountRole;
+import com.example.issuesystem.account.repository.AccountRepository;
 import com.example.issuesystem.common.domain.InfraType;
 import com.example.issuesystem.knowledge.domain.KnowledgeShare;
 import com.example.issuesystem.knowledge.domain.KnowledgeShareAttachment;
@@ -20,7 +23,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /** 지식공유 서비스 */
 @Service
@@ -32,6 +38,7 @@ public class KnowledgeShareService {
     private final KnowledgeShareRepository knowledgeShareRepository;
     private final KnowledgeShareAttachmentRepository attachmentRepository;
     private final KnowledgeFileStorageService fileStorageService;
+    private final AccountRepository accountRepository;
 
     /**
      * 지식공유 등록
@@ -41,11 +48,15 @@ public class KnowledgeShareService {
      * 3. 첨부파일 압축/암호화 저장 후 attachment 테이블 기록
      */
     @Transactional
-    public Long create(KnowledgeShareCreateRequest request, List<MultipartFile> files) {
+    public Long create(KnowledgeShareCreateRequest request, List<MultipartFile> files, Long accountId) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new IllegalArgumentException("로그인 계정을 찾을 수 없습니다."));
+
         KnowledgeShare knowledgeShare = KnowledgeShare.builder()
                 .title(request.getTitle())
                 .customerName(request.getCustomerName())
-                .authorName(request.getAuthorName())
+                .authorName(account.getName())
+                .createdByAccountId(account.getId())
                 .attachmentName(request.getAttachmentName())
                 .content(request.getContent())
                 .infraTypes(request.getInfraTypes())
@@ -73,6 +84,100 @@ public class KnowledgeShareService {
         }
 
         return saved.getId();
+    }
+
+    /** 지식공유 수정 */
+    @Transactional
+    public void update(Long id, KnowledgeShareCreateRequest request, List<MultipartFile> files, List<Long> deleteAttachmentIds, Long accountId) {
+        KnowledgeShare knowledgeShare = knowledgeShareRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("지식공유 글을 찾을 수 없습니다."));
+
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new IllegalArgumentException("로그인 계정을 찾을 수 없습니다."));
+        if (account.getRole() != AccountRole.ADMIN
+                && (knowledgeShare.getCreatedByAccountId() == null || !knowledgeShare.getCreatedByAccountId().equals(accountId))) {
+            throw new IllegalArgumentException("지식을 등록한 사용자만 수정할 수 있습니다.");
+        }
+
+        knowledgeShare.update(
+                request.getTitle(),
+                request.getCustomerName(),
+                request.getAttachmentName(),
+                request.getContent(),
+                request.getInfraTypes()
+        );
+
+        List<KnowledgeShareAttachment> existingAttachments = attachmentRepository.findByKnowledgeShareId(id);
+        Set<Long> deleteIds = new HashSet<>(deleteAttachmentIds == null ? List.of() : deleteAttachmentIds);
+        if (existingAttachments.stream().filter(attachment -> deleteIds.contains(attachment.getId())).count() != deleteIds.size()) {
+            throw new IllegalArgumentException("해당 지식에 등록된 첨부파일만 삭제할 수 있습니다.");
+        }
+
+        Set<String> retainedFileNames = new HashSet<>();
+        existingAttachments.stream()
+                .filter(attachment -> !deleteIds.contains(attachment.getId()))
+                .map(attachment -> attachment.getOriginalFileName().toLowerCase(Locale.ROOT))
+                .forEach(retainedFileNames::add);
+
+        for (MultipartFile file : emptyIfNull(files)) {
+            if (file == null || file.isEmpty()) {
+                continue;
+            }
+            String fileName = normalizedFileName(file.getOriginalFilename()).toLowerCase(Locale.ROOT);
+            if (!retainedFileNames.add(fileName)) {
+                throw new IllegalArgumentException("동일한 이름의 첨부파일은 중복으로 추가할 수 없습니다: " + fileName);
+            }
+        }
+
+        for (KnowledgeShareAttachment attachment : existingAttachments) {
+            if (!deleteIds.contains(attachment.getId())) {
+                continue;
+            }
+            if (!attachment.getKnowledgeShare().getId().equals(id)) {
+                throw new IllegalArgumentException("해당 지식에 등록된 첨부파일만 삭제할 수 있습니다.");
+            }
+            fileStorageService.delete(attachment.getStoredPath());
+            attachmentRepository.delete(attachment);
+        }
+
+        for (MultipartFile file : emptyIfNull(files)) {
+            if (file == null || file.isEmpty()) {
+                continue;
+            }
+
+            KnowledgeFileStorageService.StoredFileInfo stored =
+                    fileStorageService.store(file, knowledgeShare.getId());
+
+            KnowledgeShareAttachment attachment = KnowledgeShareAttachment.builder()
+                    .knowledgeShare(knowledgeShare)
+                    .originalFileName(stored.originalFileName())
+                    .storedFileName(stored.storedFileName())
+                    .storedPath(stored.storedPath())
+                    .fileSize(stored.fileSize())
+                    .build();
+
+            attachmentRepository.save(attachment);
+        }
+    }
+
+    /** 작성자 본인 또는 관리자의 지식공유 삭제 */
+    @Transactional
+    public void delete(Long id, Long accountId) {
+        KnowledgeShare knowledgeShare = knowledgeShareRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("지식공유 글을 찾을 수 없습니다."));
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new IllegalArgumentException("로그인 계정을 찾을 수 없습니다."));
+
+        boolean owner = knowledgeShare.getCreatedByAccountId() != null
+                && knowledgeShare.getCreatedByAccountId().equals(accountId);
+        if (!owner && account.getRole() != AccountRole.ADMIN) {
+            throw new IllegalArgumentException("지식을 등록한 사용자 또는 관리자만 삭제할 수 있습니다.");
+        }
+
+        List<KnowledgeShareAttachment> attachments = attachmentRepository.findByKnowledgeShareId(id);
+        attachments.forEach(attachment -> fileStorageService.delete(attachment.getStoredPath()));
+        attachmentRepository.deleteAll(attachments);
+        knowledgeShareRepository.delete(knowledgeShare);
     }
 
     /**
@@ -136,6 +241,10 @@ public class KnowledgeShareService {
      */
     @Transactional
     public KnowledgeShareResponse get(Long id) {
+        if (knowledgeShareRepository.incrementViewCount(id) == 0) {
+            throw new IllegalArgumentException("지식공유 글을 찾을 수 없습니다.");
+        }
+
         KnowledgeShare knowledgeShare = knowledgeShareRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("지식공유 글을 찾을 수 없습니다."));
 
@@ -170,7 +279,6 @@ public class KnowledgeShareService {
         return files == null ? Collections.emptyList() : files;
     }
 
-    /** 다운로드 응답에 필요한 파일 정보 */
     private String joinInfraTypes(List<InfraType> values) {
         if (values == null || values.isEmpty()) {
             return null;
@@ -186,6 +294,15 @@ public class KnowledgeShareService {
         return joined.isEmpty() ? null : joined;
     }
 
+    private String normalizedFileName(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return "unknown-file";
+        }
+        String normalized = fileName.replace("\\", "/");
+        return normalized.substring(normalized.lastIndexOf('/') + 1);
+    }
+
+    /** 다운로드 응답에 필요한 파일 정보 */
     public record DownloadFile(
             Resource resource,
             String originalFileName,

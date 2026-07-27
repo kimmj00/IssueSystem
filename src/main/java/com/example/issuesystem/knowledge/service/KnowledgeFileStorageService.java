@@ -36,6 +36,9 @@ public interface KnowledgeFileStorageService {
      */
     InputStream decryptToInputStream(String storedPath);
 
+    /** 저장된 첨부파일을 삭제한다. */
+    void delete(String storedPath);
+
     /**
      * 저장된 파일 정보
      *

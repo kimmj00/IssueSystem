@@ -126,6 +126,19 @@ public class LocalKnowledgeFileStorageService implements KnowledgeFileStorageSer
         }
     }
 
+    @Override
+    public void delete(String storedPath) {
+        try {
+            Path target = Paths.get(storedPath).toAbsolutePath().normalize();
+            if (!target.startsWith(uploadRoot)) {
+                throw new IllegalArgumentException("삭제할 첨부파일 경로가 올바르지 않습니다.");
+            }
+            Files.deleteIfExists(target);
+        } catch (Exception e) {
+            throw new IllegalStateException("첨부파일 삭제에 실패했습니다.", e);
+        }
+    }
+
     /**
      * 원본 파일을 GZIP 압축 후 AES-GCM 암호화해서 로컬 파일로 저장한다.
      */

@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { API_BASE } from '../constants/patchHistoryOptions';
+import CreateKnowledgeModal from '../components/modal/CreateKnowledgeModal';
 
 function formatDateTime(value) {
     if (!value) {
@@ -26,6 +27,7 @@ function sanitizeContentHtml(value) {
         'OL',
         'P',
         'STRONG',
+        'SPAN',
         'U',
         'UL',
     ]);
@@ -51,6 +53,19 @@ function sanitizeContentHtml(value) {
                 node.remove();
             }
 
+            return;
+        }
+
+        if (node.tagName === 'SPAN') {
+            const color = node.style.color || '';
+            const backgroundColor = node.style.backgroundColor || '';
+            node.getAttributeNames().forEach((name) => node.removeAttribute(name));
+            if (/^(#[0-9a-f]{3,8}|rgba?\([\d\s,.%]+\))$/i.test(color)) {
+                node.style.color = color;
+            }
+            if (/^(#[0-9a-f]{3,8}|rgba?\([\d\s,.%]+\))$/i.test(backgroundColor)) {
+                node.style.backgroundColor = backgroundColor;
+            }
             return;
         }
 
@@ -97,12 +112,26 @@ function DetailBlock({ title, value }) {
 }
 
 export default function KnowledgeDetailWindow({ headerAction = null }) {
+    const detailLoadedRef = useRef(false);
     const [knowledge, setKnowledge] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [isEditOpen, setIsEditOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [message, setMessage] = useState('');
 
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id');
+    let currentAccountId = null;
+    let currentAccountRole = null;
+    try {
+        const currentUser = JSON.parse(sessionStorage.getItem('tc-bank:user'));
+        currentAccountId = currentUser?.id ?? null;
+        currentAccountRole = currentUser?.role ?? null;
+    } catch {
+        currentAccountId = null;
+    }
     const handleClose = () => {
         if (params.get('embedded') === '1' && window.parent && window.parent !== window) {
             window.parent.postMessage(
@@ -144,6 +173,10 @@ export default function KnowledgeDetailWindow({ headerAction = null }) {
     };
 
     useEffect(() => {
+        if (detailLoadedRef.current) {
+            return;
+        }
+        detailLoadedRef.current = true;
         fetchDetail();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -152,29 +185,120 @@ export default function KnowledgeDetailWindow({ headerAction = null }) {
         return `${API_BASE}/api/knowledge-shares/attachments/${attachmentId}/download`;
     };
 
+    const handleUpdate = async (payload) => {
+        setSaving(true);
+        setError('');
+        setMessage('');
+
+        try {
+            const formData = new FormData();
+            const request = {
+                title: payload.title,
+                customerName: payload.customerName,
+                authorName: payload.authorName,
+                attachmentName: '',
+                content: payload.content,
+                infraTypes: payload.infraTypes,
+            };
+
+            formData.append('request', new Blob([JSON.stringify(request)], { type: 'application/json' }));
+            payload.files.forEach((file) => formData.append('files', file));
+            payload.removedAttachmentIds.forEach((attachmentId) => formData.append('deleteAttachmentIds', String(attachmentId)));
+
+            const response = await fetch(`${API_BASE}/api/knowledge-shares/${id}`, {
+                method: 'PUT',
+                credentials: 'include',
+                body: formData,
+            });
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || '지식공유 수정에 실패했습니다.');
+            }
+
+            setIsEditOpen(false);
+            setMessage('지식공유가 수정되었습니다.');
+            await fetchDetail();
+        } catch (e) {
+            setError(e.message || '지식공유 수정 중 오류가 발생했습니다.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!window.confirm('이 지식을 삭제하시겠습니까? 삭제된 내용은 복구할 수 없습니다.')) {
+            return;
+        }
+
+        setDeleting(true);
+        setError('');
+        try {
+            const response = await fetch(`${API_BASE}/api/knowledge-shares/${id}`, {
+                method: 'DELETE',
+                credentials: 'include',
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || '지식공유 삭제에 실패했습니다.');
+            }
+            handleClose();
+        } catch (e) {
+            setError(e.message || '지식공유 삭제 중 오류가 발생했습니다.');
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900">
-            <header className="sticky top-0 z-10 border-b border-slate-200 bg-slate-950 px-6 py-4 text-white">
+            <header className="sticky top-0 z-10 border-b border-sky-100 bg-sky-50 px-6 py-4 text-slate-900 shadow-sm">
                 <div className="flex items-center justify-between">
                     <div>
-                        <div className="text-sm text-slate-300">지식공유 DB</div>
+                        <div className="text-sm text-sky-600">지식공유 DB</div>
                         <div className="mt-1 flex items-center gap-2">
                             <h1 className="text-xl font-semibold">지식공유 상세보기</h1>
                             {headerAction}
                         </div>
                     </div>
 
+                    <div className="flex items-center gap-2">
+                        {knowledge && (knowledge.createdByAccountId === currentAccountId || currentAccountRole === 'ADMIN') && (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsEditOpen(true)}
+                                    className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
+                                >
+                                    수정
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDelete}
+                                    disabled={deleting}
+                                    className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                >
+                                    {deleting ? '삭제 중...' : '삭제'}
+                                </button>
+                            </>
+                        )}
                         <button
                             type="button"
                             onClick={handleClose}
-                            className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-white hover:bg-slate-800"
+                            className="rounded-lg border border-sky-200 bg-white px-4 py-2 text-sm text-slate-600 hover:bg-sky-100 hover:text-sky-700"
                         >
                         창 닫기
-                    </button>
+                        </button>
+                    </div>
                 </div>
             </header>
 
             <main className="px-6 py-5">
+                {message && (
+                    <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                        {message}
+                    </div>
+                )}
                 {loading ? (
                     <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-slate-500">
                         상세 정보를 불러오는 중입니다.
@@ -208,7 +332,7 @@ export default function KnowledgeDetailWindow({ headerAction = null }) {
                             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
                                 <InfoBox label="ID" value={knowledge.id} />
                                 <InfoBox label="고객사" value={knowledge.customerName} />
-                                <InfoBox label="담당자" value={knowledge.authorName} />
+                                <InfoBox label="작성자" value={knowledge.authorName} />
                                 <InfoBox label="등록일" value={formatDateTime(knowledge.createdAt)} />
                             </div>
                         </section>
@@ -241,6 +365,18 @@ export default function KnowledgeDetailWindow({ headerAction = null }) {
                     </div>
                 )}
             </main>
+
+            {isEditOpen && knowledge && (
+                <CreateKnowledgeModal
+                    open={isEditOpen}
+                    saving={saving}
+                    onClose={() => setIsEditOpen(false)}
+                    onSubmit={handleUpdate}
+                    initialValues={knowledge}
+                    mode="edit"
+                    lockAuthor
+                />
+            )}
         </div>
     );
 }

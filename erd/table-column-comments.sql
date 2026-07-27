@@ -4,6 +4,15 @@
 
 BEGIN;
 
+COMMENT ON TABLE account IS 'TC Bank 사용자 계정 테이블';
+COMMENT ON COLUMN account.id IS '계정 고유 ID';
+COMMENT ON COLUMN account.user_id IS '로그인 ID';
+COMMENT ON COLUMN account.password_hash IS 'BCrypt 해시 비밀번호';
+COMMENT ON COLUMN account.name IS '사용자 이름';
+COMMENT ON COLUMN account.role IS '계정 권한(USER, ADMIN)';
+COMMENT ON COLUMN account.created_at IS '가입 일시';
+COMMENT ON COLUMN account.updated_at IS '마지막 수정 일시';
+
 COMMENT ON TABLE issue_case IS '이슈/패치 이력 공통 저장 테이블';
 COMMENT ON COLUMN issue_case.id IS '이슈/패치 이력 고유 ID';
 COMMENT ON COLUMN issue_case.title IS '이슈 또는 패치 이력 제목';
@@ -28,8 +37,10 @@ COMMENT ON COLUMN knowledge_share.id IS '지식공유 게시글 고유 ID';
 COMMENT ON COLUMN knowledge_share.title IS '지식공유 제목';
 COMMENT ON COLUMN knowledge_share.customer_name IS '고객사명';
 COMMENT ON COLUMN knowledge_share.author_name IS '담당자 또는 작성자명';
+COMMENT ON COLUMN knowledge_share.created_by_account_id IS '지식을 등록한 계정 ID';
 COMMENT ON COLUMN knowledge_share.attachment_name IS '기존 화면 호환용 첨부파일명';
 COMMENT ON COLUMN knowledge_share.content IS '지식공유 본문 내용';
+COMMENT ON COLUMN knowledge_share.view_count IS '게시글 상세 조회수';
 COMMENT ON COLUMN knowledge_share.created_at IS '최초 생성 일시';
 COMMENT ON COLUMN knowledge_share.updated_at IS '마지막 수정 일시';
 
