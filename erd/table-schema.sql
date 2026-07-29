@@ -247,6 +247,9 @@ CREATE INDEX IF NOT EXISTS idx_issue_case_completed_date
 
 -- 기존 예방점검 인프라 값을 GPM으로 정규화한다. 새 DB에서는 영향이 없다.
 
+ALTER TABLE knowledge_share_infra
+    DROP CONSTRAINT IF EXISTS knowledge_share_infra_infra_type_check;
+
 BEGIN;
 
 UPDATE issue_case
@@ -267,6 +270,17 @@ SET infra_type = 'GPM'
 WHERE infra_type IN ('예방점검', '예방 점검');
 
 COMMIT;
+
+ALTER TABLE knowledge_share_infra
+    ADD CONSTRAINT knowledge_share_infra_infra_type_check
+    CHECK (
+        infra_type IN (
+            'EMS', 'ERMS', 'SMS', 'NMS', 'GPM', '운영관리',
+            'DBMS', 'FMS', 'IMS', 'SYSLOG', 'TRAP', 'TMS',
+            'APM', 'BMS', 'STMS', 'RTMS', 'VMS', 'OAM',
+            'WNMS', 'CMS', 'K8S', 'TRMS', 'NPM', 'BRMS', '기타'
+        )
+    );
 
 -- PostgreSQL table/column comments.
 -- 실행 효과: 테이블/컬럼 설명 메타데이터만 갱신하며 데이터와 컬럼 구조는 변경하지 않는다.
