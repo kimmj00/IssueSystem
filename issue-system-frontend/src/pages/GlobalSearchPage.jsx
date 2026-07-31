@@ -3,6 +3,7 @@ import SectionCard from '../components/common/SectionCard';
 import LabeledInput from '../components/common/LabeledInput';
 import SaveScreenButton from '../components/common/SaveScreenButton';
 import { API_BASE, infraOptions } from '../constants/patchHistoryOptions';
+import { stripHtml } from '../utils/htmlText';
 import { getMaintenancePopupFeatures } from '../utils/maintenancePopup';
 
 const searchInputClass =
@@ -38,18 +39,6 @@ function normalizeList(value) {
     return value;
   }
   return [value];
-}
-
-function stripHtml(value) {
-  let text = String(value || '');
-
-  for (let index = 0; index < 2; index += 1) {
-    const template = document.createElement('template');
-    template.innerHTML = text;
-    text = template.content.textContent || '';
-  }
-
-  return text.replace(/\s+/g, ' ').trim();
 }
 
 function rowClass(level) {

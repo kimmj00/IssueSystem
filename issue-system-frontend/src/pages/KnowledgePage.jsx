@@ -9,6 +9,7 @@ import {
   shouldApplyGlobalSearchTransfer,
   shouldIgnoreGlobalSearchTransfer,
 } from '../utils/globalSearchTransfer';
+import { stripHtml } from '../utils/htmlText';
 
 // 지식공유 인프라 검색/등록 옵션
 const infraOptions = [
@@ -108,19 +109,6 @@ function buildPageItems(currentPage, totalPages) {
   });
 
   return items;
-}
-
-function stripHtml(value) {
-  if (!value) {
-    return '';
-  }
-
-  return String(value)
-      .replace(/<img\b[^>]*>/gi, ' ')
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
 }
 
 function toggleSelectedValue(values, value) {
