@@ -35,6 +35,8 @@ public class GlobalSearchController {
     @GetMapping
     public ApiResponse<GlobalSearchResponse> search(
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String titleKeyword,
+            @RequestParam(required = false) String contentKeyword,
             @RequestParam(required = false) InfraType infraType,
             @RequestParam(required = false) String customerName,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -72,6 +74,8 @@ public class GlobalSearchController {
         return ApiResponse.ok(
                 globalSearchService.search(
                         keyword,
+                        titleKeyword,
+                        contentKeyword,
                         infraType,
                         customerName,
                         startDate,

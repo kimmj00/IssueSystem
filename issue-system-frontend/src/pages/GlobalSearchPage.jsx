@@ -42,6 +42,13 @@ function normalizeList(value) {
   return [value];
 }
 
+function combineKeywords(titleKeyword, contentKeyword) {
+  return [titleKeyword, contentKeyword]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
 function rowClass(level) {
   switch (level) {
     case 'TITLE_EXACT':
@@ -93,7 +100,8 @@ function buildPageItems(currentPage, totalPages) {
 }
 
 function buildSearchParams({
-  keyword,
+  titleKeyword,
+  contentKeyword,
   infraType,
   customerName,
   startDate,
@@ -107,9 +115,16 @@ function buildSearchParams({
   workIssueType,
 }) {
   const params = new URLSearchParams();
+  const combinedKeyword = combineKeywords(titleKeyword, contentKeyword);
 
-  if (keyword.trim()) {
-    params.append('keyword', keyword.trim());
+  if (combinedKeyword) {
+    params.append('keyword', combinedKeyword);
+  }
+  if (titleKeyword.trim()) {
+    params.append('titleKeyword', titleKeyword.trim());
+  }
+  if (contentKeyword.trim()) {
+    params.append('contentKeyword', contentKeyword.trim());
   }
   if (customerName.trim()) {
     params.append('customerName', customerName.trim());
@@ -170,12 +185,16 @@ function TruncateCell({ value, className = '', strong = false, keyword = '' }) {
 
 export default function GlobalSearchPage() {
   const initialParams = new URLSearchParams(window.location.search);
-  const [keyword, setKeyword] = useState(() => initialParams.get('keyword') || '');
+  const [titleKeyword, setTitleKeyword] = useState(
+    () => initialParams.get('titleKeyword') || initialParams.get('keyword') || ''
+  );
+  const [contentKeyword, setContentKeyword] = useState(() => initialParams.get('contentKeyword') || '');
   const [infraType, setInfraType] = useState(() => initialParams.get('infraType') || 'ALL');
   const [customerName, setCustomerName] = useState(() => initialParams.get('customerName') || '');
   const [workIssueType, setWorkIssueType] = useState(() => initialParams.get('workIssueType') || 'ALL');
   const [startDate, setStartDate] = useState(() => initialParams.get('startDate') || '');
   const [endDate, setEndDate] = useState(() => initialParams.get('endDate') || getDefaultEndDate());
+  const keyword = combineKeywords(titleKeyword, contentKeyword);
 
   const [patchHistoryRows, setPatchHistoryRows] = useState([]);
   const [knowledgeRows, setKnowledgeRows] = useState([]);
@@ -235,7 +254,8 @@ export default function GlobalSearchPage() {
 
     try {
       const params = buildSearchParams({
-        keyword,
+        titleKeyword,
+        contentKeyword,
         infraType,
         customerName,
         startDate,
@@ -352,7 +372,7 @@ export default function GlobalSearchPage() {
 
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyword, infraType, customerName, startDate, endDate]);
+  }, [titleKeyword, contentKeyword, infraType, customerName, startDate, endDate]);
 
   const handleSearch = () => {
     setPatchHistoryPage(0);
@@ -371,7 +391,8 @@ export default function GlobalSearchPage() {
 
   const buildSavedScreenUrl = () => {
     const params = buildSearchParams({
-      keyword,
+      titleKeyword,
+      contentKeyword,
       infraType,
       customerName,
       startDate,
@@ -533,6 +554,8 @@ export default function GlobalSearchPage() {
   const moveToResultPage = (menuKey) => {
     const params = new URLSearchParams();
     const trimmedKeyword = keyword.trim();
+    const trimmedTitleKeyword = titleKeyword.trim();
+    const trimmedContentKeyword = contentKeyword.trim();
     const hasSearchCondition = Boolean(
       trimmedKeyword
       || customerName.trim()
@@ -545,6 +568,12 @@ export default function GlobalSearchPage() {
 
     if (trimmedKeyword) {
       params.set('keyword', trimmedKeyword);
+    }
+    if (trimmedTitleKeyword) {
+      params.set('titleKeyword', trimmedTitleKeyword);
+    }
+    if (trimmedContentKeyword) {
+      params.set('contentKeyword', trimmedContentKeyword);
     }
 
     if (hasSearchCondition) {
@@ -588,13 +617,24 @@ export default function GlobalSearchPage() {
       <div className="space-y-5">
         <SectionCard className="p-3">
           <div className="flex flex-wrap items-end gap-2 xl:flex-nowrap">
-            <div className="w-full sm:w-[220px]">
-              <LabeledInput label="검색어" compact>
+            <div className="w-full sm:w-[170px]">
+              <LabeledInput label="제목 검색어" compact>
                 <input
                   className={searchInputClass}
-                  value={keyword}
-                  onChange={(e) => setKeyword(e.target.value)}
-                  placeholder="제목, 내용, 담당자, 태그"
+                  value={titleKeyword}
+                  onChange={(e) => setTitleKeyword(e.target.value)}
+                  placeholder="제목"
+                />
+              </LabeledInput>
+            </div>
+
+            <div className="w-full sm:w-[190px]">
+              <LabeledInput label="내용 검색어" compact>
+                <input
+                  className={searchInputClass}
+                  value={contentKeyword}
+                  onChange={(e) => setContentKeyword(e.target.value)}
+                  placeholder="내용"
                 />
               </LabeledInput>
             </div>

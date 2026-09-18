@@ -227,6 +227,15 @@ CREATE INDEX IF NOT EXISTS idx_issue_case_title_trgm
 CREATE INDEX IF NOT EXISTS idx_issue_case_symptom_summary_trgm
     ON issue_case USING gin ((lower(symptom_summary)) gin_trgm_ops);
 
+CREATE INDEX IF NOT EXISTS idx_issue_case_symptom_detail_trgm
+    ON issue_case USING gin ((lower(symptom_detail)) gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS idx_issue_case_action_detail_trgm
+    ON issue_case USING gin ((lower(coalesce(action_detail, ''))) gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS idx_issue_case_cause_detail_trgm
+    ON issue_case USING gin ((lower(coalesce(cause_detail, ''))) gin_trgm_ops);
+
 CREATE INDEX IF NOT EXISTS idx_issue_case_tags_trgm
     ON issue_case USING gin ((lower(coalesce(tags, ''))) gin_trgm_ops);
 
@@ -236,6 +245,9 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_share_title_trgm
 CREATE INDEX IF NOT EXISTS idx_knowledge_share_content_trgm
     ON knowledge_share USING gin ((left(lower(content), 1000)) gin_trgm_ops);
 
+CREATE INDEX IF NOT EXISTS idx_knowledge_share_content_full_trgm
+    ON knowledge_share USING gin ((lower(content)) gin_trgm_ops);
+
 CREATE INDEX IF NOT EXISTS idx_issue_case_category
     ON issue_case (category);
 
@@ -244,6 +256,12 @@ CREATE INDEX IF NOT EXISTS idx_issue_case_deployment_version
 
 CREATE INDEX IF NOT EXISTS idx_issue_case_completed_date
     ON issue_case (completed_date);
+
+CREATE INDEX IF NOT EXISTS idx_issue_case_created_at
+    ON issue_case (created_at);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_share_created_at
+    ON knowledge_share (created_at);
 
 -- 기존 예방점검 인프라 값을 GPM으로 정규화한다. 새 DB에서는 영향이 없다.
 

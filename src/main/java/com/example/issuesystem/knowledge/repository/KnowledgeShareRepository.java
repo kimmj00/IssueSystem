@@ -544,4 +544,123 @@ public interface KnowledgeShareRepository extends JpaRepository<KnowledgeShare, 
             @Param("endDate") LocalDateTime endDate,
             Pageable pageable
     );
+
+    @Query(
+            value = """
+                select ks.*
+                from knowledge_share ks
+                where
+                    (
+                        :titleKeyword is null
+                        or btrim(:titleKeyword) = ''
+                        or lower(ks.title) like concat('%', lower(btrim(:titleKeyword)), '%')
+                        or replace(lower(ks.title), ' ', '')
+                            like concat('%', replace(lower(btrim(:titleKeyword)), ' ', ''), '%')
+                    )
+                    and (
+                        :contentKeyword is null
+                        or btrim(:contentKeyword) = ''
+                        or lower(ks.content) like concat('%', lower(btrim(:contentKeyword)), '%')
+                        or replace(lower(ks.content), ' ', '')
+                            like concat('%', replace(lower(btrim(:contentKeyword)), ' ', ''), '%')
+                    )
+                    and (
+                        :customerName is null
+                        or :customerName = ''
+                        or lower(coalesce(ks.customer_name, '')) like lower(concat('%', :customerName, '%'))
+                    )
+                    and (
+                        :infraType is null
+                        or exists (
+                            select 1
+                            from knowledge_share_infra ksi
+                            where ksi.knowledge_share_id = ks.id
+                              and ksi.infra_type = cast(:infraType as varchar)
+                        )
+                    )
+                    and (
+                        :infraTypesCsv is null
+                        or exists (
+                            select 1
+                            from knowledge_share_infra ksi
+                            where ksi.knowledge_share_id = ks.id
+                              and ksi.infra_type = any(string_to_array(:infraTypesCsv, :filterDelimiter))
+                        )
+                    )
+                    and ks.created_at >= :startDate
+                    and ks.created_at < :endDate
+                order by
+                    case
+                        when :titleKeyword is null or btrim(:titleKeyword) = '' then 0
+                        when lower(ks.title) like concat('%', lower(btrim(:titleKeyword)), '%') then 100000
+                        when replace(lower(ks.title), ' ', '')
+                            like concat('%', replace(lower(btrim(:titleKeyword)), ' ', ''), '%') then 90000
+                        else 0
+                    end desc,
+                    case
+                        when :contentKeyword is null or btrim(:contentKeyword) = '' then 0
+                        when lower(ks.content) like concat('%', lower(btrim(:contentKeyword)), '%') then 50000
+                        when replace(lower(ks.content), ' ', '')
+                            like concat('%', replace(lower(btrim(:contentKeyword)), ' ', ''), '%') then 45000
+                        else 0
+                    end desc,
+                    ks.id desc
+            """,
+            countQuery = """
+                select count(*)
+                from knowledge_share ks
+                where
+                    (
+                        :titleKeyword is null
+                        or btrim(:titleKeyword) = ''
+                        or lower(ks.title) like concat('%', lower(btrim(:titleKeyword)), '%')
+                        or replace(lower(ks.title), ' ', '')
+                            like concat('%', replace(lower(btrim(:titleKeyword)), ' ', ''), '%')
+                    )
+                    and (
+                        :contentKeyword is null
+                        or btrim(:contentKeyword) = ''
+                        or lower(ks.content) like concat('%', lower(btrim(:contentKeyword)), '%')
+                        or replace(lower(ks.content), ' ', '')
+                            like concat('%', replace(lower(btrim(:contentKeyword)), ' ', ''), '%')
+                    )
+                    and (
+                        :customerName is null
+                        or :customerName = ''
+                        or lower(coalesce(ks.customer_name, '')) like lower(concat('%', :customerName, '%'))
+                    )
+                    and (
+                        :infraType is null
+                        or exists (
+                            select 1
+                            from knowledge_share_infra ksi
+                            where ksi.knowledge_share_id = ks.id
+                              and ksi.infra_type = cast(:infraType as varchar)
+                        )
+                    )
+                    and (
+                        :infraTypesCsv is null
+                        or exists (
+                            select 1
+                            from knowledge_share_infra ksi
+                            where ksi.knowledge_share_id = ks.id
+                              and ksi.infra_type = any(string_to_array(:infraTypesCsv, :filterDelimiter))
+                        )
+                    )
+                    and ks.created_at >= :startDate
+                    and ks.created_at < :endDate
+            """,
+            nativeQuery = true
+    )
+    Page<KnowledgeShare> searchBySeparatedKeywords(
+            @Param("titleKeyword") String titleKeyword,
+            @Param("contentKeyword") String contentKeyword,
+            @Param("customerName") String customerName,
+            @Param("infraType") String infraType,
+            @Param("infraTypesCsv") String infraTypesCsv,
+            @Param("filterDelimiter") String filterDelimiter,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            Pageable pageable
+    );
 }

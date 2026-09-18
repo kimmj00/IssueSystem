@@ -58,6 +58,8 @@ public class GlobalSearchService {
     @Transactional
     public GlobalSearchResponse search(
             String keyword,
+            String titleKeyword,
+            String contentKeyword,
             InfraType infraType,
             String customerName,
             LocalDate startDate,
@@ -78,9 +80,12 @@ public class GlobalSearchService {
         int safePatchHistorySize = normalizeSize(patchHistorySize, 10);
         int safeKnowledgeSize = normalizeSize(knowledgeSize, 10);
         int safeWorkIssueSize = normalizeSize(workIssueSize, 7);
+        String highlightKeyword = resolveHighlightKeyword(keyword, titleKeyword, contentKeyword);
 
         PageResponse<PatchHistoryResponse> patchHistoryPageResult = patchHistoryService.search(
                 keyword,
+                titleKeyword,
+                contentKeyword,
                 infraType,
                 null,
                 null,
@@ -102,6 +107,8 @@ public class GlobalSearchService {
 
         PageResponse<KnowledgeShareResponse> knowledgePageResult = knowledgeShareService.search(
                 keyword,
+                titleKeyword,
+                contentKeyword,
                 customerName,
                 infraType,
                 null,
@@ -112,12 +119,12 @@ public class GlobalSearchService {
         );
 
         List<GlobalSearchItemResponse> patchHistories = patchHistoryPageResult.getContent().stream()
-                .map(patchHistory -> toPatchHistoryItem(patchHistory, keyword, infraType, customerName))
+                .map(patchHistory -> toPatchHistoryItem(patchHistory, highlightKeyword, infraType, customerName))
                 .sorted(matchScoreComparator())
                 .toList();
 
         List<GlobalSearchItemResponse> knowledgeShares = knowledgePageResult.getContent().stream()
-                .map(item -> toKnowledgeItem(item, keyword, infraType, customerName))
+                .map(item -> toKnowledgeItem(item, highlightKeyword, infraType, customerName))
                 .sorted(matchScoreComparator())
                 .toList();
 
@@ -128,7 +135,7 @@ public class GlobalSearchService {
                 ? endDate.plusDays(1).atStartOfDay()
                 : LocalDateTime.of(9999, 12, 31, 0, 0);
         WorkIssueSearchResult workIssueResult = searchWorkIssueHistories(
-                keyword,
+                highlightKeyword,
                 customerName,
                 startDateTime,
                 endDateTime,
@@ -990,5 +997,19 @@ public class GlobalSearchService {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim().toLowerCase();
+    }
+
+    private String resolveHighlightKeyword(String keyword, String titleKeyword, String contentKeyword) {
+        String separatedKeyword = String.join(
+                " ",
+                normalizeForDisplay(titleKeyword),
+                normalizeForDisplay(contentKeyword)
+        ).trim();
+
+        return separatedKeyword.isBlank() ? normalizeForDisplay(keyword) : separatedKeyword;
+    }
+
+    private String normalizeForDisplay(String value) {
+        return value == null ? "" : value.trim();
     }
 }

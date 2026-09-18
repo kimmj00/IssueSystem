@@ -7,7 +7,18 @@ const UNSAFE_SCRIPT_PROTOCOL = `java${'script'}:`;
 function buildSearchDescription(url) {
   try {
     const params = new URL(url, window.location.href).searchParams;
+    const titleKeyword = params.get('titleKeyword')?.trim();
+    const contentKeyword = params.get('contentKeyword')?.trim();
     const keyword = params.get('keyword')?.trim();
+    const separatedKeywords = [
+      titleKeyword ? `제목 : ${titleKeyword}` : '',
+      contentKeyword ? `내용 : ${contentKeyword}` : '',
+    ].filter(Boolean);
+
+    if (separatedKeywords.length > 0) {
+      return separatedKeywords.join(' / ');
+    }
+
     return keyword ? `검색어 : ${keyword}` : '';
   } catch (e) {
     return '';

@@ -71,6 +71,13 @@ function formatAuthorName(value) {
   return String(value).trim().toLowerCase() === 'excel-upload' ? 'excel' : value;
 }
 
+function combineKeywords(titleKeyword, contentKeyword) {
+  return [titleKeyword, contentKeyword]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
 // 검색 영역에서 반복되는 input 스타일입니다.
 const searchInputClass =
   'h-9 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none ring-0 focus:border-slate-500';
@@ -267,7 +274,11 @@ export default function PatchHistoryPage() {
   const [error, setError] = useState('');
 
   // 검색 조건 상태
-  const [searchKeyword, setSearchKeyword] = useState(() => getInitialSearchParam('keyword'));
+  const [titleKeyword, setTitleKeyword] = useState(
+    () => getInitialSearchParam('titleKeyword', getInitialSearchParam('keyword'))
+  );
+  const [contentKeyword, setContentKeyword] = useState(() => getInitialSearchParam('contentKeyword'));
+  const searchKeyword = combineKeywords(titleKeyword, contentKeyword);
   const customerFilter = '';
   const [selectedInfraTypes, setSelectedInfraTypes] = useState([]);
   const [infraFilter, setInfraFilter] = useState(() => getInitialSearchParam('infraType', 'ALL'));
@@ -350,6 +361,8 @@ export default function PatchHistoryPage() {
       const params = new URLSearchParams();
 
       if (searchKeyword.trim()) params.append('keyword', searchKeyword.trim());
+      if (titleKeyword.trim()) params.append('titleKeyword', titleKeyword.trim());
+      if (contentKeyword.trim()) params.append('contentKeyword', contentKeyword.trim());
       if (customerFilter.trim()) params.append('customerName', customerFilter.trim());
       selectedInfraTypes.forEach((infraType) => params.append('infraTypes', infraType));
       selectedCategories.forEach((category) => params.append('categories', category));
@@ -419,6 +432,8 @@ export default function PatchHistoryPage() {
     const params = new URLSearchParams();
     params.set('menu', 'PATCH_HISTORY');
     if (searchKeyword.trim()) params.set('keyword', searchKeyword.trim());
+    if (titleKeyword.trim()) params.set('titleKeyword', titleKeyword.trim());
+    if (contentKeyword.trim()) params.set('contentKeyword', contentKeyword.trim());
     if (infraFilter !== 'ALL') params.set('infraType', infraFilter);
     if (categoryFilter.trim()) params.set('category', categoryFilter.trim());
     if (deploymentVersionFilter.trim()) params.set('deploymentVersion', deploymentVersionFilter.trim());
@@ -582,7 +597,8 @@ export default function PatchHistoryPage() {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    searchKeyword,
+    titleKeyword,
+    contentKeyword,
     selectedInfraTypes,
     selectedCategories,
     selectedDeploymentVersions,
@@ -609,13 +625,24 @@ export default function PatchHistoryPage() {
       <div className="space-y-5">
         <SectionCard className="p-3">
           <div className="flex flex-wrap items-end gap-2">
-            <div className="w-full sm:w-[280px]">
-              <LabeledInput label="검색어" compact>
+            <div className="w-full sm:w-[170px]">
+              <LabeledInput label="제목 검색어" compact>
                 <input
                   className={searchInputClass}
-                  value={searchKeyword}
-                  onChange={(e) => setSearchKeyword(e.target.value)}
-                  placeholder="제목, 내용"
+                  value={titleKeyword}
+                  onChange={(e) => setTitleKeyword(e.target.value)}
+                  placeholder="제목"
+                />
+              </LabeledInput>
+            </div>
+
+            <div className="w-full sm:w-[190px]">
+              <LabeledInput label="내용 검색어" compact>
+                <input
+                  className={searchInputClass}
+                  value={contentKeyword}
+                  onChange={(e) => setContentKeyword(e.target.value)}
+                  placeholder="내용"
                 />
               </LabeledInput>
             </div>

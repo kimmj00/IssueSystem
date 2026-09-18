@@ -77,6 +77,8 @@ public class PatchHistoryController {
     @GetMapping("/search")
     public ApiResponse<PageResponse<PatchHistoryResponse>> search(
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String titleKeyword,
+            @RequestParam(required = false) String contentKeyword,
             @RequestParam(required = false) InfraType infraType,
             @RequestParam(required = false) List<InfraType> infraTypes,
             @RequestParam(required = false) PatchStatus status,
@@ -98,6 +100,8 @@ public class PatchHistoryController {
         return ApiResponse.ok(
                 patchHistoryService.search(
                         keyword,
+                        titleKeyword,
+                        contentKeyword,
                         infraType,
                         infraTypes,
                         status,

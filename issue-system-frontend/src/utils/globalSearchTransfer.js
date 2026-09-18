@@ -3,6 +3,8 @@ export const GLOBAL_SEARCH_TRANSFER_PARAM = 'fromGlobalSearch';
 export const GLOBAL_SEARCH_TRANSFER_KEYS = [
   GLOBAL_SEARCH_TRANSFER_PARAM,
   'keyword',
+  'titleKeyword',
+  'contentKeyword',
   'customerName',
   'customer',
   'infraType',

@@ -136,6 +136,8 @@ public class PatchHistoryService {
     @Transactional
     public PageResponse<PatchHistoryResponse> search(
             String keyword,
+            String titleKeyword,
+            String contentKeyword,
             InfraType infraType,
             List<InfraType> infraTypes,
             PatchStatus status,
@@ -199,9 +201,32 @@ public class PatchHistoryService {
         String effectiveKeyword = searchSecurityByKeyword && blankToNull(keyword) == null
                 ? CATEGORY_SECURITY
                 : keyword;
+        boolean separatedKeywordSearch = hasText(titleKeyword) || hasText(contentKeyword);
 
-        Page<Long> idPage = normalizedDetailType == null || searchSecurityByKeyword
-                ? patchHistoryRepository.searchIds(
+        Page<Long> idPage;
+        if (separatedKeywordSearch && normalizedDetailType == null && !searchSecurityByKeyword) {
+            idPage = patchHistoryRepository.searchIdsBySeparatedKeywords(
+                    titleKeyword,
+                    contentKeyword,
+                    infraType != null ? infraType.name() : null,
+                    status != null ? status.name() : null,
+                    customerName,
+                    category,
+                    deploymentVersion,
+                    infraTypesCsv,
+                    categoriesCsv,
+                    deploymentVersionsCsv,
+                    FILTER_DELIMITER,
+                    normalizedVersionRelation,
+                    referenceVersionNumber,
+                    useReferenceCompletedDateComparison,
+                    versionReferenceCompletedDate,
+                    startDateTime,
+                    endDateTime,
+                    PageRequest.of(safePage, safeSize)
+            );
+        } else if (normalizedDetailType == null || searchSecurityByKeyword) {
+            idPage = patchHistoryRepository.searchIds(
                         effectiveKeyword,
                         infraType != null ? infraType.name() : null,
                         status != null ? status.name() : null,
@@ -219,8 +244,9 @@ public class PatchHistoryService {
                         startDateTime,
                         endDateTime,
                         PageRequest.of(safePage, safeSize)
-                )
-                : patchHistoryRepository.detailSearchIds(
+                );
+        } else {
+            idPage = patchHistoryRepository.detailSearchIds(
                         keyword,
                         infraType != null ? infraType.name() : null,
                         status != null ? status.name() : null,
@@ -241,6 +267,7 @@ public class PatchHistoryService {
                         endDateTime,
                         PageRequest.of(safePage, safeSize)
                 );
+        }
 
         List<Long> ids = idPage.getContent();
 
@@ -339,6 +366,10 @@ public class PatchHistoryService {
         }
 
         return value.trim();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private String joinInfraTypes(List<InfraType> values) {

@@ -189,6 +189,8 @@ public class KnowledgeShareService {
     @Transactional
     public PageResponse<KnowledgeShareResponse> search(
             String keyword,
+            String titleKeyword,
+            String contentKeyword,
             String customerName,
             InfraType infraType,
             List<InfraType> infraTypes,
@@ -209,20 +211,35 @@ public class KnowledgeShareService {
                 ? endDate.plusDays(1).atStartOfDay()
                 : LocalDateTime.of(9999, 12, 31, 0, 0);
 
-        Page<KnowledgeShare> pageResult = knowledgeShareRepository.search(
-                keyword,
-                customerName,
+        String infraTypeValue = infraType != null ? infraType.name() : null;
+        String infraTypesCsv = joinInfraTypes(infraTypes);
+        PageRequest pageRequest = PageRequest.of(safePage, safeSize);
+        Page<KnowledgeShare> pageResult = hasText(titleKeyword) || hasText(contentKeyword)
+                ? knowledgeShareRepository.searchBySeparatedKeywords(
+                        titleKeyword,
+                        contentKeyword,
+                        customerName,
+                        infraTypeValue,
+                        infraTypesCsv,
+                        FILTER_DELIMITER,
+                        startDateTime,
+                        endDateTime,
+                        pageRequest
+                )
+                : knowledgeShareRepository.search(
+                        keyword,
+                        customerName,
 
-                // KnowledgeShareRepository가 nativeQuery로 변경되었기 때문에
-                // Enum 객체가 아니라 DB에 저장된 문자열 값을 전달한다.
-                infraType != null ? infraType.name() : null,
-                joinInfraTypes(infraTypes),
-                FILTER_DELIMITER,
+                        // KnowledgeShareRepository가 nativeQuery로 변경되었기 때문에
+                        // Enum 객체가 아니라 DB에 저장된 문자열 값을 전달한다.
+                        infraTypeValue,
+                        infraTypesCsv,
+                        FILTER_DELIMITER,
 
-                startDateTime,
-                endDateTime,
-                PageRequest.of(safePage, safeSize)
-        );
+                        startDateTime,
+                        endDateTime,
+                        pageRequest
+                );
 
         Page<KnowledgeShareResponse> responsePage = pageResult.map(knowledgeShare -> {
             List<KnowledgeShareAttachment> attachments =
@@ -300,6 +317,10 @@ public class KnowledgeShareService {
         }
         String normalized = fileName.replace("\\", "/");
         return normalized.substring(normalized.lastIndexOf('/') + 1);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     /** 다운로드 응답에 필요한 파일 정보 */

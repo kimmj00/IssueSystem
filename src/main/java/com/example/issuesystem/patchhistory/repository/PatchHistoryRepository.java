@@ -714,6 +714,187 @@ public interface PatchHistoryRepository extends JpaRepository<PatchHistory, Long
             Pageable pageable
     );
 
+    @Query(value = """
+            select i.id
+            from issue_case i
+            where
+                (
+                    :titleKeyword is null
+                    or btrim(:titleKeyword) = ''
+                    or lower(i.title) like concat('%', lower(btrim(:titleKeyword)), '%')
+                    or replace(lower(i.title), ' ', '')
+                        like concat('%', replace(lower(btrim(:titleKeyword)), ' ', ''), '%')
+                )
+                and (
+                    :contentKeyword is null
+                    or btrim(:contentKeyword) = ''
+                    or lower(i.symptom_summary) like concat('%', lower(btrim(:contentKeyword)), '%')
+                    or lower(i.symptom_detail) like concat('%', lower(btrim(:contentKeyword)), '%')
+                    or lower(coalesce(i.action_detail, '')) like concat('%', lower(btrim(:contentKeyword)), '%')
+                    or lower(coalesce(i.cause_detail, '')) like concat('%', lower(btrim(:contentKeyword)), '%')
+                    or replace(lower(concat_ws(' ',
+                        i.symptom_summary,
+                        i.symptom_detail,
+                        i.action_detail,
+                        i.cause_detail
+                    )), ' ', '') like concat('%', replace(lower(btrim(:contentKeyword)), ' ', ''), '%')
+                )
+                and (:infraType is null or i.infra_type = cast(:infraType as varchar))
+                and (:status is null or i.status = cast(:status as varchar))
+                and (:customerName is null or :customerName = '' or
+                    coalesce(i.customer_name, '') ilike concat('%', :customerName, '%'))
+                and (:category is null or :category = '' or
+                    coalesce(i.category, '') ilike concat('%', :category, '%'))
+                and (:deploymentVersion is null or :deploymentVersion = '' or
+                    coalesce(i.deployment_version, '') ilike concat('%', :deploymentVersion, '%'))
+                and (:infraTypesCsv is null or
+                    coalesce(i.infra_type, '') = any(string_to_array(:infraTypesCsv, :filterDelimiter)))
+                and (:categoriesCsv is null or
+                    coalesce(i.category, '') = any(string_to_array(:categoriesCsv, :filterDelimiter)))
+                and (:deploymentVersionsCsv is null or
+                    coalesce(i.deployment_version, '') = any(string_to_array(:deploymentVersionsCsv, :filterDelimiter)))
+                and (
+                    :versionRelation = 'ALL'
+                    or (
+                        :useReferenceCompletedDateComparison = true
+                        and cast(:versionReferenceCompletedDate as date) is not null
+                        and (
+                            (:versionRelation = 'BEFORE'
+                                and i.completed_date <= cast(:versionReferenceCompletedDate as date))
+                            or (:versionRelation = 'AFTER'
+                                and i.completed_date >= cast(:versionReferenceCompletedDate as date))
+                        )
+                    )
+                    or (
+                        :useReferenceCompletedDateComparison = false
+                        and :referenceVersionNumber is not null
+                        and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '') is not null
+                        and (
+                            (:versionRelation = 'BEFORE'
+                                and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                                    <= cast(:referenceVersionNumber as numeric))
+                            or (:versionRelation = 'AFTER'
+                                and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                                    >= cast(:referenceVersionNumber as numeric))
+                        )
+                    )
+                )
+                and i.created_at >= :startDate
+                and i.created_at < :endDate
+            order by
+                case
+                    when :titleKeyword is null or btrim(:titleKeyword) = '' then 0
+                    when lower(i.title) like concat('%', lower(btrim(:titleKeyword)), '%') then 100000
+                    when replace(lower(i.title), ' ', '')
+                        like concat('%', replace(lower(btrim(:titleKeyword)), ' ', ''), '%') then 90000
+                    else 0
+                end desc,
+                case
+                    when :contentKeyword is null or btrim(:contentKeyword) = '' then 0
+                    when lower(i.symptom_summary) like concat('%', lower(btrim(:contentKeyword)), '%') then 50000
+                    when lower(i.symptom_detail) like concat('%', lower(btrim(:contentKeyword)), '%') then 45000
+                    when lower(coalesce(i.action_detail, '')) like concat('%', lower(btrim(:contentKeyword)), '%') then 40000
+                    when lower(coalesce(i.cause_detail, '')) like concat('%', lower(btrim(:contentKeyword)), '%') then 35000
+                    when replace(lower(concat_ws(' ',
+                        i.symptom_summary,
+                        i.symptom_detail,
+                        i.action_detail,
+                        i.cause_detail
+                    )), ' ', '') like concat('%', replace(lower(btrim(:contentKeyword)), ' ', ''), '%') then 30000
+                    else 0
+                end desc,
+                i.id desc
+            """,
+            countQuery = """
+            select count(*)
+            from issue_case i
+            where
+                (
+                    :titleKeyword is null
+                    or btrim(:titleKeyword) = ''
+                    or lower(i.title) like concat('%', lower(btrim(:titleKeyword)), '%')
+                    or replace(lower(i.title), ' ', '')
+                        like concat('%', replace(lower(btrim(:titleKeyword)), ' ', ''), '%')
+                )
+                and (
+                    :contentKeyword is null
+                    or btrim(:contentKeyword) = ''
+                    or lower(i.symptom_summary) like concat('%', lower(btrim(:contentKeyword)), '%')
+                    or lower(i.symptom_detail) like concat('%', lower(btrim(:contentKeyword)), '%')
+                    or lower(coalesce(i.action_detail, '')) like concat('%', lower(btrim(:contentKeyword)), '%')
+                    or lower(coalesce(i.cause_detail, '')) like concat('%', lower(btrim(:contentKeyword)), '%')
+                    or replace(lower(concat_ws(' ',
+                        i.symptom_summary,
+                        i.symptom_detail,
+                        i.action_detail,
+                        i.cause_detail
+                    )), ' ', '') like concat('%', replace(lower(btrim(:contentKeyword)), ' ', ''), '%')
+                )
+                and (:infraType is null or i.infra_type = cast(:infraType as varchar))
+                and (:status is null or i.status = cast(:status as varchar))
+                and (:customerName is null or :customerName = '' or
+                    coalesce(i.customer_name, '') ilike concat('%', :customerName, '%'))
+                and (:category is null or :category = '' or
+                    coalesce(i.category, '') ilike concat('%', :category, '%'))
+                and (:deploymentVersion is null or :deploymentVersion = '' or
+                    coalesce(i.deployment_version, '') ilike concat('%', :deploymentVersion, '%'))
+                and (:infraTypesCsv is null or
+                    coalesce(i.infra_type, '') = any(string_to_array(:infraTypesCsv, :filterDelimiter)))
+                and (:categoriesCsv is null or
+                    coalesce(i.category, '') = any(string_to_array(:categoriesCsv, :filterDelimiter)))
+                and (:deploymentVersionsCsv is null or
+                    coalesce(i.deployment_version, '') = any(string_to_array(:deploymentVersionsCsv, :filterDelimiter)))
+                and (
+                    :versionRelation = 'ALL'
+                    or (
+                        :useReferenceCompletedDateComparison = true
+                        and cast(:versionReferenceCompletedDate as date) is not null
+                        and (
+                            (:versionRelation = 'BEFORE'
+                                and i.completed_date <= cast(:versionReferenceCompletedDate as date))
+                            or (:versionRelation = 'AFTER'
+                                and i.completed_date >= cast(:versionReferenceCompletedDate as date))
+                        )
+                    )
+                    or (
+                        :useReferenceCompletedDateComparison = false
+                        and :referenceVersionNumber is not null
+                        and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '') is not null
+                        and (
+                            (:versionRelation = 'BEFORE'
+                                and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                                    <= cast(:referenceVersionNumber as numeric))
+                            or (:versionRelation = 'AFTER'
+                                and nullif(regexp_replace(coalesce(i.deployment_version, ''), '\\D', '', 'g'), '')::numeric
+                                    >= cast(:referenceVersionNumber as numeric))
+                        )
+                    )
+                )
+                and i.created_at >= :startDate
+                and i.created_at < :endDate
+            """,
+            nativeQuery = true)
+    Page<Long> searchIdsBySeparatedKeywords(
+            @Param("titleKeyword") String titleKeyword,
+            @Param("contentKeyword") String contentKeyword,
+            @Param("infraType") String infraType,
+            @Param("status") String status,
+            @Param("customerName") String customerName,
+            @Param("category") String category,
+            @Param("deploymentVersion") String deploymentVersion,
+            @Param("infraTypesCsv") String infraTypesCsv,
+            @Param("categoriesCsv") String categoriesCsv,
+            @Param("deploymentVersionsCsv") String deploymentVersionsCsv,
+            @Param("filterDelimiter") String filterDelimiter,
+            @Param("versionRelation") String versionRelation,
+            @Param("referenceVersionNumber") String referenceVersionNumber,
+            @Param("useReferenceCompletedDateComparison") boolean useReferenceCompletedDateComparison,
+            @Param("versionReferenceCompletedDate") LocalDate versionReferenceCompletedDate,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            Pageable pageable
+    );
+
     /** ID 목록으로 패치이력 엔티티 재조회 */
     List<PatchHistory> findByIdIn(List<Long> ids);
 

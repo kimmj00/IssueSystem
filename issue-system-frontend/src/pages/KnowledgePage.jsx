@@ -118,6 +118,13 @@ function toggleSelectedValue(values, value) {
       : [...values, value];
 }
 
+function combineKeywords(titleKeyword, contentKeyword) {
+  return [titleKeyword, contentKeyword]
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .join(' ');
+}
+
 function getInitialSearchParam(name, fallback = '') {
   if (shouldIgnoreGlobalSearchTransfer()) {
     return fallback;
@@ -139,7 +146,11 @@ export default function KnowledgePage({ authUser }) {
   const [selectedInfraTypes, setSelectedInfraTypes] = useState([]);
   // const [startDate, setStartDate] = useState('');
   // const [endDate, setEndDate] = useState(getDefaultEndDate);
-  const [keyword, setKeyword] = useState(() => getInitialSearchParam('keyword'));
+  const [titleKeyword, setTitleKeyword] = useState(
+      () => getInitialSearchParam('titleKeyword', getInitialSearchParam('keyword'))
+  );
+  const [contentKeyword, setContentKeyword] = useState(() => getInitialSearchParam('contentKeyword'));
+  const keyword = combineKeywords(titleKeyword, contentKeyword);
   const [customerName, setCustomerName] = useState(() => getInitialSearchParam('customerName'));
   const infraType = getInitialSearchParam('infraType', 'ALL');
   const [startDate, setStartDate] = useState(() => getInitialSearchParam('startDate'));
@@ -185,6 +196,12 @@ export default function KnowledgePage({ authUser }) {
 
       if (keyword.trim()) {
         params.append('keyword', keyword.trim());
+      }
+      if (titleKeyword.trim()) {
+        params.append('titleKeyword', titleKeyword.trim());
+      }
+      if (contentKeyword.trim()) {
+        params.append('contentKeyword', contentKeyword.trim());
       }
 
       if (customerName.trim()) {
@@ -250,7 +267,7 @@ export default function KnowledgePage({ authUser }) {
 
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyword, customerName, selectedInfraTypes, startDate, endDate]);
+  }, [titleKeyword, contentKeyword, customerName, selectedInfraTypes, startDate, endDate]);
 
   // 페이지당 표시 개수 변경
   const handleSizeChange = (e) => {
@@ -354,6 +371,8 @@ export default function KnowledgePage({ authUser }) {
     const params = new URLSearchParams();
     params.set('menu', 'KNOWLEDGE');
     if (keyword.trim()) params.set('keyword', keyword.trim());
+    if (titleKeyword.trim()) params.set('titleKeyword', titleKeyword.trim());
+    if (contentKeyword.trim()) params.set('contentKeyword', contentKeyword.trim());
     if (customerName.trim()) params.set('customerName', customerName.trim());
     if (infraType !== 'ALL') params.set('infraType', infraType);
     if (startDate) params.set('startDate', startDate);
@@ -388,12 +407,23 @@ export default function KnowledgePage({ authUser }) {
           <SectionCard className="p-3">
             <div className="flex flex-wrap items-end gap-2">
               <div className="w-full sm:w-[170px]">
-                <LabeledInput label="검색어" compact>
+                <LabeledInput label="제목 검색어" compact>
                   <input
                       className={searchInputClass}
-                      value={keyword}
-                      onChange={(e) => setKeyword(e.target.value)}
-                      placeholder="제목, 내용 검색"
+                      value={titleKeyword}
+                      onChange={(e) => setTitleKeyword(e.target.value)}
+                      placeholder="제목"
+                  />
+                </LabeledInput>
+              </div>
+
+              <div className="w-full sm:w-[190px]">
+                <LabeledInput label="내용 검색어" compact>
+                  <input
+                      className={searchInputClass}
+                      value={contentKeyword}
+                      onChange={(e) => setContentKeyword(e.target.value)}
+                      placeholder="내용"
                   />
                 </LabeledInput>
               </div>
