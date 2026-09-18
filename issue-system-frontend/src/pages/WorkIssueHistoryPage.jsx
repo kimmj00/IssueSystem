@@ -7,6 +7,13 @@ import { API_BASE } from '../constants/patchHistoryOptions';
 import { getMaintenancePopupFeatures } from '../utils/maintenancePopup';
 import { parseTimelineDateHeader } from '../utils/timelineDates';
 import { shouldIgnoreGlobalSearchTransfer } from '../utils/globalSearchTransfer';
+import {
+  calculateStructuredFuzzyMatchScore,
+  getKeywordTerms,
+  includesKeyword,
+  matchesFuzzyKeyword,
+} from '../utils/fuzzySearch';
+import { highlightText } from '../utils/highlightText';
 
 // 작업 및 이슈이력 API 기본 경로입니다.
 // 프론트는 엑셀 파일만 전송하고, 실제 파싱/DB 저장은 Spring Boot에서 처리합니다.
@@ -130,7 +137,7 @@ function DetailPopupButton({ disabled, onOpen }) {
   );
 }
 
-function openWorkIssueHistoryDetailWindow(type, row) {
+function openWorkIssueHistoryDetailWindow(type, row, keyword = '') {
   const ids = row?.sourceIds?.length ? row.sourceIds : [row?.detailId].filter(Boolean);
 
   if (ids.length === 0) {
@@ -138,8 +145,17 @@ function openWorkIssueHistoryDetailWindow(type, row) {
   }
 
   const resolvedType = type === 'MAINTENANCE' ? 'MAINTENANCE' : 'PROJECT';
-  const encodedIds = encodeURIComponent(ids.join(','));
-  const url = `${window.location.origin}${window.location.pathname}?popup=work-issue-history-detail&type=${resolvedType}&ids=${encodedIds}`;
+  const params = new URLSearchParams({
+    popup: 'work-issue-history-detail',
+    type: resolvedType,
+    ids: ids.join(','),
+  });
+
+  if (keyword.trim()) {
+    params.set('keyword', keyword.trim());
+  }
+
+  const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
   const features = resolvedType === 'MAINTENANCE'
     ? getMaintenancePopupFeatures()
     : 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
@@ -184,58 +200,6 @@ function uniqueUploadList(uploadList) {
   });
 
   return Array.from(uniqueUploads.values());
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function getKeywordTerms(keyword) {
-  return text(keyword)
-    .split(/\s+/)
-    .map((word) => word.trim())
-    .filter(Boolean);
-}
-
-function keywordPattern(term) {
-  const escaped = escapeRegExp(term);
-  return new RegExp(escaped, 'i');
-}
-
-function includesKeyword(value, term) {
-  return keywordPattern(term).test(text(value));
-}
-
-function highlightText(value, keyword) {
-  const source = text(value);
-  const terms = getKeywordTerms(keyword);
-
-  if (!source || terms.length === 0) {
-    return source;
-  }
-
-  const pattern = new RegExp(
-    `(${terms
-      .map((term) => escapeRegExp(term))
-      .join('|')})`,
-    'gi'
-  );
-  return source.split(pattern).map((part, index) => {
-    const matched = terms.some((term) => includesKeyword(part, term));
-
-    if (!matched) {
-      return part;
-    }
-
-    return (
-      <mark
-        key={`${part}-${index}`}
-        className="rounded bg-yellow-100 px-0.5 text-yellow-900 ring-1 ring-yellow-200"
-      >
-        {part}
-      </mark>
-    );
-  });
 }
 
 function number(value) {
@@ -484,16 +448,8 @@ function normalizeMaintenance(item) {
   };
 }
 
-// 공백 기준으로 입력한 검색어가 모두 포함될 때만 통과시키는 AND 검색입니다.
+// 검색어 전체 일치 결과를 우선하고, 없으면 문자 단위 포함 결과까지 통과시킵니다.
 function matchAllKeywords(row, keyword) {
-  const words = keyword
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (words.length === 0) return true;
-
   const target = [
     row.no,
     row.customerName,
@@ -509,51 +465,27 @@ function matchAllKeywords(row, keyword) {
     row.detail.join(' '),
   ]
     .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
+    .join(' ');
 
-  return words.every((word) => includesKeyword(target, word));
-}
-
-function getSearchRankValues(row) {
-  return [
-    row.no,
-    row.customerName,
-    row.siteCode,
-    row.salesRep,
-    row.projectType,
-    ...(row.executors || []),
-    row.startDate,
-    row.contractEnd,
-    row.latestIssue,
-    row.inspection,
-    ...(row.infraTypes || []),
-    ...(row.detail || []),
-  ]
-    .map((value) => text(value).toLowerCase().replace(/\s+/g, ' ').trim())
-    .filter(Boolean);
+  return matchesFuzzyKeyword(target, keyword);
 }
 
 function getSearchMatchScore(row, keyword) {
-  const terms = getKeywordTerms(keyword).map((term) => term.toLowerCase());
-  if (terms.length === 0) return 0;
-
-  const query = terms.join(' ');
-  const values = getSearchRankValues(row);
-  const exactQuery = values.some((value) => value === query) ? 1 : 0;
-  const consecutiveQuery = values.some((value) => value.includes(query)) ? 1 : 0;
-  const allTermsInOneValue = values.some((value) => terms.every((term) => includesKeyword(value, term))) ? 1 : 0;
-  const exactTermCount = terms.filter((term) => values.some((value) => value === term)).length;
-  const matchedValueCount = terms.reduce(
-    (count, term) => count + values.filter((value) => includesKeyword(value, term)).length,
-    0,
-  );
-
-  return (exactQuery * 1_000_000)
-    + (consecutiveQuery * 100_000)
-    + (allTermsInOneValue * 10_000)
-    + (exactTermCount * 1_000)
-    + matchedValueCount;
+  return calculateStructuredFuzzyMatchScore({
+    titleValues: [row.customerName],
+    bodyValues: [row.latestIssue, ...(row.detail || [])],
+    auxiliaryValues: [
+      row.no,
+      row.siteCode,
+      row.salesRep,
+      row.projectType,
+      ...(row.executors || []),
+      row.startDate,
+      row.contractEnd,
+      row.inspection,
+      ...(row.infraTypes || []),
+    ],
+  }, keyword);
 }
 
 function includesKeywordTerms(value, terms, requireAll = true) {
@@ -565,7 +497,7 @@ function includesKeywordTerms(value, terms, requireAll = true) {
 
   return requireAll
     ? terms.every((term) => includesKeyword(target, term))
-    : terms.some((term) => includesKeyword(target, term));
+    : matchesFuzzyKeyword(target, terms.join(' '));
 }
 
 function getSearchPreview(row, keyword) {
@@ -592,7 +524,7 @@ function getSearchPreview(row, keyword) {
 }
 
 function getFilteredRows(rows, { keyword, salesRep, executor, customer, infraTypes }) {
-  return rows.filter((row) => {
+  const filteredRows = rows.filter((row) => {
     const keywordMatched = matchAllKeywords(row, keyword);
     const salesRepMatched = !salesRep || row.salesRep === salesRep;
     const executorMatched = !executor || row.executors.includes(executor);
@@ -601,6 +533,15 @@ function getFilteredRows(rows, { keyword, salesRep, executor, customer, infraTyp
 
     return keywordMatched && salesRepMatched && executorMatched && customerMatched && infraMatched;
   });
+
+  if (!text(keyword)) {
+    return filteredRows;
+  }
+
+  return filteredRows
+    .map((row, index) => ({ row, index, score: getSearchMatchScore(row, keyword) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map(({ row }) => row);
 }
 
 function WorkIssueFilterBar({
@@ -1085,7 +1026,7 @@ const ProjectTableRow = React.memo(function ProjectTableRow({ row, open, onToggl
             </div>
             <DetailPopupButton
               disabled={!row.detailId}
-              onOpen={() => openWorkIssueHistoryDetailWindow('PROJECT', row)}
+              onOpen={() => openWorkIssueHistoryDetailWindow('PROJECT', row, keyword)}
             />
           </div>
           <div className="mt-0.5 text-xs text-slate-500">{highlightText(row.projectType || '-', keyword)}</div>
@@ -1192,7 +1133,7 @@ const MaintenanceTableRow = React.memo(function MaintenanceTableRow({ row, open,
             </div>
             <DetailPopupButton
               disabled={!row.detailId}
-              onOpen={() => openWorkIssueHistoryDetailWindow('MAINTENANCE', row)}
+              onOpen={() => openWorkIssueHistoryDetailWindow('MAINTENANCE', row, keyword)}
             />
           </div>
           <div className="mt-0.5 text-xs text-slate-500">{highlightText(row.siteCode || '-', keyword)}</div>
@@ -1307,7 +1248,7 @@ function SearchResultList({ projectRows, maintenanceRows, keyword }) {
             </span>
             <DetailPopupButton
               disabled={!row.detailId}
-              onOpen={() => openWorkIssueHistoryDetailWindow(row.workHistoryType, row)}
+              onOpen={() => openWorkIssueHistoryDetailWindow(row.workHistoryType, row, keyword)}
             />
           </div>
           <p className="text-sm text-slate-700">{highlightText(getSearchPreview(row, keyword), keyword)}</p>

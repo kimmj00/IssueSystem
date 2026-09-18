@@ -7,6 +7,8 @@ import { API_BASE, emptyForm, infraOptions } from '../constants/patchHistoryOpti
 import PageTitle from '../components/common/PageTitle';
 import SaveScreenButton from '../components/common/SaveScreenButton';
 import { shouldIgnoreGlobalSearchTransfer } from '../utils/globalSearchTransfer';
+import { sortByFuzzyMatch } from '../utils/fuzzySearch';
+import { highlightText } from '../utils/highlightText';
 
 // 페이지 버튼 목록을 만듭니다.
 // 전체 페이지가 많을 때는 첫 페이지, 마지막 페이지, 현재 페이지 주변만 보여주고 중간은 ... 처리합니다.
@@ -124,7 +126,7 @@ function MultiSelectDropdown({
       return options;
     }
 
-    return options.filter((option) => String(option).toLowerCase().includes(keyword));
+    return sortByFuzzyMatch(options, keyword, (option) => String(option));
   }, [optionKeyword, options]);
 
   const closeDropdown = () => {
@@ -406,7 +408,9 @@ export default function PatchHistoryPage() {
 
   // 패치이력 상세보기를 별도 브라우저 창으로 엽니다.
   const openDetailWindow = (id) => {
-    const url = `${window.location.origin}${window.location.pathname}?popup=patch-history-detail&id=${id}`;
+    const params = new URLSearchParams({ popup: 'patch-history-detail', id: String(id) });
+    if (searchKeyword.trim()) params.set('keyword', searchKeyword.trim());
+    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
     const features = 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
     window.open(url, `patch-history-detail-${id}`, features);
   };
@@ -778,18 +782,18 @@ export default function PatchHistoryPage() {
                       >
                         <td className="px-4 py-3">
                           <div className="truncate" title={patchHistory.infraType || '-'}>
-                            {patchHistory.infraType || '-'}
+                            {highlightText(patchHistory.infraType || '-', searchKeyword)}
                           </div>
                         </td>
 
                         <td className="px-4 py-3 text-slate-700">
                           <div className="max-w-[180px] truncate">
-                            {patchHistory.category || '-'}
+                            {highlightText(patchHistory.category || '-', searchKeyword)}
                           </div>
                         </td>
 
                         <td className="whitespace-nowrap px-4 py-3 text-slate-700">
-                          {patchHistory.deploymentVersion || '-'}
+                          {highlightText(patchHistory.deploymentVersion || '-', searchKeyword)}
                         </td>
 
                         <td className="whitespace-nowrap px-4 py-3 text-slate-700">
@@ -798,13 +802,13 @@ export default function PatchHistoryPage() {
 
                         <td className="px-4 py-3">
                           <div className="max-w-[320px] truncate font-medium text-slate-900">
-                            {patchHistory.title || '-'}
+                            {highlightText(patchHistory.title || '-', searchKeyword)}
                           </div>
                         </td>
 
                         <td className="px-4 py-3 text-slate-700">
                           <div className="max-w-[460px] truncate">
-                            {patchHistory.content || patchHistory.symptomDetail || '-'}
+                            {highlightText(patchHistory.content || patchHistory.symptomDetail || '-', searchKeyword)}
                           </div>
                         </td>
 
@@ -814,7 +818,7 @@ export default function PatchHistoryPage() {
 
                         <td className="px-4 py-3 text-center">
                           <div className="truncate" title={formatAuthorName(patchHistory.authorName)}>
-                            {formatAuthorName(patchHistory.authorName)}
+                            {highlightText(formatAuthorName(patchHistory.authorName), searchKeyword)}
                           </div>
                         </td>
                       </tr>

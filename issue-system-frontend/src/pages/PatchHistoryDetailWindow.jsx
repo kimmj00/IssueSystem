@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Badge from '../components/common/Badge';
 import DetailBlock from '../components/common/DetailBlock';
 import { API_BASE } from '../constants/patchHistoryOptions';
+import { highlightText } from '../utils/highlightText';
 
 // 패치이력 상세보기 새 창 전용 페이지
 // URL 예시: /?popup=patch-history-detail&id=1184
@@ -9,6 +10,10 @@ export default function PatchHistoryDetailWindow({ headerAction = null }) {
   const patchHistoryId = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('id');
+  }, []);
+  const keyword = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('keyword') || '';
   }, []);
 
   const [patchHistory, setPatchHistory] = useState(null);
@@ -98,13 +103,15 @@ export default function PatchHistoryDetailWindow({ headerAction = null }) {
           <div className="space-y-4">
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-2xl font-semibold text-slate-900">{patchHistory.title}</h2>
+                <h2 className="text-2xl font-semibold text-slate-900">
+                  {highlightText(patchHistory.title, keyword)}
+                </h2>
                 <Badge>{patchHistory.infraType}</Badge>
               </div>
 
               <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <InfoBox title="ID" value={patchHistory.id} />
-                <InfoBox title="INFRA" value={patchHistory.infraType} />
+                <InfoBox title="ID" value={patchHistory.id} keyword={keyword} />
+                <InfoBox title="INFRA" value={patchHistory.infraType} keyword={keyword} />
                 <InfoBox title="구분" value={patchHistory.category} />
                 <InfoBox title="배포버전" value={patchHistory.deploymentVersion} />
                 <InfoBox title="완료일" value={patchHistory.completedDate} />
@@ -125,11 +132,13 @@ export default function PatchHistoryDetailWindow({ headerAction = null }) {
   );
 }
 
-function InfoBox({ title, value }) {
+function InfoBox({ title, value, keyword = '' }) {
+  const activeKeyword = keyword || new URLSearchParams(window.location.search).get('keyword') || '';
+
   return (
     <div className="rounded-lg bg-slate-50 px-3 py-3">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</div>
-      <div className="mt-1 break-words text-sm text-slate-900">{value || '-'}</div>
+      <div className="mt-1 break-words text-sm text-slate-900">{highlightText(value || '-', activeKeyword)}</div>
     </div>
   );
 }

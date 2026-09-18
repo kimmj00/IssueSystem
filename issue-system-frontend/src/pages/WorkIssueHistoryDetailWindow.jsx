@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import MaintenanceSupportScope from '../components/workIssue/MaintenanceSupportScope';
 import { API_BASE } from '../constants/patchHistoryOptions';
 import { parseTimelineDateHeader } from '../utils/timelineDates';
+import { highlightText } from '../utils/highlightText';
 
 const text = (value) => (value == null ? '' : String(value).trim());
 const lines = (value) => text(value)
@@ -84,23 +85,23 @@ function SectionTitle({ children, amber = false }) {
   );
 }
 
-function Timeline({ entries, maintenance }) {
+function Timeline({ entries, maintenance, keyword = '' }) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       {entries.length ? entries.map((entry, index) => (
         <div key={`${entry.date}-${index}`} className="border-b border-slate-100 last:border-0">
           {(entry.date || entry.type || entry.executor) && (
             <div className={`flex flex-wrap items-center gap-3 px-5 py-3 text-xs font-bold ${maintenance ? 'bg-teal-50 text-teal-900' : 'bg-blue-50 text-blue-900'}`}>
-              {entry.date && <span className="font-mono text-sm">{entry.date}</span>}
-              {entry.type && <span className={`rounded-full px-2 py-1 text-[11px] ${maintenance ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'}`}>{entry.type}</span>}
-              {entry.executor && <span className="border-l border-slate-200 pl-3 text-slate-600">{entry.executor}</span>}
+              {entry.date && <span className="font-mono text-sm">{highlightText(entry.date, keyword)}</span>}
+              {entry.type && <span className={`rounded-full px-2 py-1 text-[11px] ${maintenance ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'}`}>{highlightText(entry.type, keyword)}</span>}
+              {entry.executor && <span className="border-l border-slate-200 pl-3 text-slate-600">{highlightText(entry.executor, keyword)}</span>}
             </div>
           )}
           <ul className="space-y-3 px-5 py-5 text-sm text-slate-700">
             {entry.content.map((item, itemIndex) => (
               <li key={itemIndex} className="flex gap-3">
                 <span className={`mt-2 h-2 w-2 shrink-0 rounded-full ${maintenance ? 'bg-teal-500' : 'bg-blue-500'}`} />
-                <span>{item}</span>
+                <span>{highlightText(item, keyword)}</span>
               </li>
             ))}
           </ul>
@@ -161,6 +162,7 @@ export default function WorkIssueHistoryDetailWindow({ headerAction = null }) {
     return [...new Set(value.split(',').map((item) => item.trim()).filter(Boolean))];
   }, [params]);
   const type = params.get('type') === 'MAINTENANCE' ? 'MAINTENANCE' : 'PROJECT';
+  const keyword = params.get('keyword') || '';
   const handleClose = () => {
     if (params.get('embedded') === '1' && window.parent && window.parent !== window) {
       window.parent.postMessage(
@@ -242,7 +244,7 @@ export default function WorkIssueHistoryDetailWindow({ headerAction = null }) {
           <span className="font-mono text-slate-500">{detail.no || detail.rowNo || ids[0]}</span>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-             <h1 className="truncate text-lg font-bold">{title || '-'}</h1>
+             <h1 className="truncate text-lg font-bold">{highlightText(title || '-', keyword)}</h1>
              <span className="rounded-md border border-slate-200 px-1.5 py-1 text-slate-500">↗</span>
              {headerAction}
             </div>
@@ -253,10 +255,10 @@ export default function WorkIssueHistoryDetailWindow({ headerAction = null }) {
             className="grid min-w-0 w-full grid-cols-4 items-center text-center"
             style={{ transform: 'translateX(3ch)' }}
           >
-            <span className="w-full min-w-0 break-words">{text(detail.siteCode) || '-'}</span>
-            <span className="w-full min-w-0 break-words">{executorText}</span>
-            <span className="w-full min-w-0 break-words">{maintenance ? text(detail.contractEnd) || '-' : text(detail.startDate) || '-'}</span>
-            <span className="w-full min-w-0 break-words">{maintenance ? text(detail.cycle) || '-' : text(detail.projectScale) || '-'}</span>
+            <span className="w-full min-w-0 break-words">{highlightText(text(detail.siteCode) || '-', keyword)}</span>
+            <span className="w-full min-w-0 break-words">{highlightText(executorText, keyword)}</span>
+            <span className="w-full min-w-0 break-words">{highlightText(maintenance ? text(detail.contractEnd) || '-' : text(detail.startDate) || '-', keyword)}</span>
+            <span className="w-full min-w-0 break-words">{highlightText(maintenance ? text(detail.cycle) || '-' : text(detail.projectScale) || '-', keyword)}</span>
           </div>
           <button type="button" onClick={handleClose} aria-label="창 닫기" className="text-xl text-slate-400 hover:text-slate-700">×</button>
         </div>
@@ -265,7 +267,7 @@ export default function WorkIssueHistoryDetailWindow({ headerAction = null }) {
       <main className="grid gap-8 px-7 py-9 lg:grid-cols-2">
         <section>
           <SectionTitle>{maintenance ? '유지보수 진행내역 및 이슈' : '금주 실적 및 진행 내역 (누적)'}</SectionTitle>
-          <Timeline entries={timeline} maintenance={maintenance} />
+          <Timeline entries={timeline} maintenance={maintenance} keyword={keyword} />
           {!maintenance && detail.startDate && (
             <div className="mt-4 inline-flex rounded-md border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">Start: {detail.startDate}</div>
           )}
@@ -275,16 +277,20 @@ export default function WorkIssueHistoryDetailWindow({ headerAction = null }) {
           <div>
             <SectionTitle amber>잔여 사항 및 이슈 (주의요망)</SectionTitle>
             <div className="min-h-36 rounded-2xl border border-amber-300 bg-amber-50 px-6 py-6 text-sm leading-8 text-amber-800 shadow-sm">
-              {issues.length ? issues.map((item, index) => <div key={index}>□&nbsp; {item}</div>) : <div>잔여 사항 및 이슈가 없습니다.</div>}
+              {issues.length ? issues.map((item, index) => <div key={index}>□&nbsp; {highlightText(item, keyword)}</div>) : <div>잔여 사항 및 이슈가 없습니다.</div>}
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <StatBox title={maintenance ? '지원 범위' : '구축 범위'}>
               {maintenance ? (
-                <MaintenanceSupportScope smsStatus={detail.smsStatus} nmsStatus={detail.nmsStatus} />
+                <MaintenanceSupportScope
+                  smsStatus={detail.smsStatus}
+                  nmsStatus={detail.nmsStatus}
+                  renderValue={(value) => highlightText(value, keyword)}
+                />
               ) : (
-                <div className="whitespace-pre-wrap font-bold leading-7">{scope}</div>
+                <div className="whitespace-pre-wrap font-bold leading-7">{highlightText(scope, keyword)}</div>
               )}
             </StatBox>
             <StatBox title="인원별 지원 횟수 / MD">
@@ -293,7 +299,7 @@ export default function WorkIssueHistoryDetailWindow({ headerAction = null }) {
                   const stats = personStats.get(person) || { visits: 0, md: 0 };
                   return (
                     <div key={person} className="flex items-center justify-between gap-4">
-                      <span className="font-bold text-slate-700">{person}</span>
+                      <span className="font-bold text-slate-700">{highlightText(person, keyword)}</span>
                       <span className="font-mono font-black">
                         {formatMetric(stats.visits)}회&nbsp; / &nbsp;{formatMetric(stats.md)}MD
                       </span>
@@ -302,7 +308,7 @@ export default function WorkIssueHistoryDetailWindow({ headerAction = null }) {
                 }) : null}
                 {maintenance && maintenanceOwners.length ? maintenanceOwners.map((person) => (
                     <div key={person} className="flex items-center justify-between gap-4">
-                      <span className="font-bold text-slate-700">{person}</span>
+                      <span className="font-bold text-slate-700">{highlightText(person, keyword)}</span>
                       <span className="font-mono font-black">
                         {formatMetric(detail.visits)}회&nbsp; / &nbsp;{formatMetric(detail.md)}MD
                       </span>

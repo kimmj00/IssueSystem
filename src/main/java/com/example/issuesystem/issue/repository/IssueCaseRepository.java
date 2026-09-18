@@ -64,6 +64,29 @@ public interface IssueCaseRepository extends JpaRepository<IssueCase, Long> {
                     i.deployment_version,
                     i.version_info
                 )), ' ', '') like concat('%', replace(lower(btrim(:keyword)), ' ', ''), '%')
+                -- Character fallback: include only when enough non-space characters overlap.
+                or (
+                    select count(distinct search_char.ch)::int
+                    from regexp_split_to_table(regexp_replace(lower(btrim(:keyword)), '\\s+', '', 'g'), '') as search_char(ch)
+                    where char_length(search_char.ch) > 0
+                      and lower(concat_ws(' ',
+                            i.title,
+                            i.system_name,
+                            i.customer_name,
+                            i.symptom_summary,
+                            i.symptom_detail,
+                            i.cause_detail,
+                            i.action_detail,
+                            i.tags,
+                            i.category,
+                            i.deployment_version,
+                            i.version_info
+                      )) like concat('%', search_char.ch, '%')
+                ) >= case
+                    when char_length(regexp_replace(lower(btrim(:keyword)), '\\s+', '', 'g')) >= 5 then 3
+                    when char_length(regexp_replace(lower(btrim(:keyword)), '\\s+', '', 'g')) >= 3 then 2
+                    else 999
+                end
 
                 -- 3) 단일 token 검색은 그대로 허용한다.
                 -- 예: "설치"만 검색하면 설치가 포함된 결과를 보여준다.
@@ -215,6 +238,100 @@ public interface IssueCaseRepository extends JpaRepository<IssueCase, Long> {
         order by
             case
                 when :keyword is null or btrim(:keyword) = '' then 0
+                when lower(coalesce(i.title, '')) like concat('%', lower(btrim(:keyword)), '%') then 100000
+                when replace(lower(coalesce(i.title, '')), ' ', '') like concat('%', replace(lower(btrim(:keyword)), ' ', ''), '%') then 90000
+                when (
+                    select max(similarity(title_token.word, lower(btrim(:keyword))))
+                    from regexp_split_to_table(lower(coalesce(i.title, '')), '\\s+') as title_token(word)
+                    where char_length(title_token.word) >= 2
+                ) >= 0.35 then 80000 + floor((
+                    select max(similarity(title_token.word, lower(btrim(:keyword))))
+                    from regexp_split_to_table(lower(coalesce(i.title, '')), '\\s+') as title_token(word)
+                    where char_length(title_token.word) >= 2
+                ) * 1000)::int
+                when similarity(lower(coalesce(i.title, '')), lower(btrim(:keyword))) >= 0.35
+                    then 80000 + floor(similarity(lower(coalesce(i.title, '')), lower(btrim(:keyword))) * 1000)::int
+                when exists (
+                    select 1
+                    from regexp_split_to_table(lower(btrim(:keyword)), '\\s+') as token(word)
+                    where char_length(token.word) >= 2
+                      and lower(coalesce(i.title, '')) like concat('%', token.word, '%')
+                ) then 70000 + coalesce((
+                    select count(*)::int
+                    from regexp_split_to_table(lower(btrim(:keyword)), '\\s+') as token(word)
+                    where char_length(token.word) >= 2
+                      and lower(coalesce(i.title, '')) like concat('%', token.word, '%')
+                ), 0)
+                when lower(concat_ws(' ', i.symptom_summary, i.symptom_detail, i.action_detail, i.cause_detail))
+                    like concat('%', lower(btrim(:keyword)), '%') then 50000
+                when replace(lower(concat_ws(' ', i.symptom_summary, i.symptom_detail, i.action_detail, i.cause_detail)), ' ', '')
+                    like concat('%', replace(lower(btrim(:keyword)), ' ', ''), '%') then 45000
+                when (
+                    select max(similarity(body_token.word, lower(btrim(:keyword))))
+                    from regexp_split_to_table(lower(concat_ws(' ', i.symptom_summary, i.symptom_detail, i.action_detail, i.cause_detail)), '\\s+') as body_token(word)
+                    where char_length(body_token.word) >= 2
+                ) >= 0.35 then 40000 + floor((
+                    select max(similarity(body_token.word, lower(btrim(:keyword))))
+                    from regexp_split_to_table(lower(concat_ws(' ', i.symptom_summary, i.symptom_detail, i.action_detail, i.cause_detail)), '\\s+') as body_token(word)
+                    where char_length(body_token.word) >= 2
+                ) * 1000)::int
+                when greatest(
+                    similarity(lower(coalesce(i.symptom_summary, '')), lower(btrim(:keyword))),
+                    similarity(left(lower(coalesce(i.symptom_detail, '')), 1000), lower(btrim(:keyword))),
+                    similarity(left(lower(coalesce(i.action_detail, '')), 1000), lower(btrim(:keyword))),
+                    similarity(left(lower(coalesce(i.cause_detail, '')), 1000), lower(btrim(:keyword)))
+                ) >= 0.35 then 40000 + floor(greatest(
+                    similarity(lower(coalesce(i.symptom_summary, '')), lower(btrim(:keyword))),
+                    similarity(left(lower(coalesce(i.symptom_detail, '')), 1000), lower(btrim(:keyword))),
+                    similarity(left(lower(coalesce(i.action_detail, '')), 1000), lower(btrim(:keyword))),
+                    similarity(left(lower(coalesce(i.cause_detail, '')), 1000), lower(btrim(:keyword)))
+                ) * 1000)::int
+                when exists (
+                    select 1
+                    from regexp_split_to_table(lower(btrim(:keyword)), '\\s+') as token(word)
+                    where char_length(token.word) >= 2
+                      and lower(concat_ws(' ', i.symptom_summary, i.symptom_detail, i.action_detail, i.cause_detail))
+                          like concat('%', token.word, '%')
+                ) then 30000 + coalesce((
+                    select count(*)::int
+                    from regexp_split_to_table(lower(btrim(:keyword)), '\\s+') as token(word)
+                    where char_length(token.word) >= 2
+                      and lower(concat_ws(' ', i.symptom_summary, i.symptom_detail, i.action_detail, i.cause_detail))
+                          like concat('%', token.word, '%')
+                ), 0)
+                when exists (
+                    select 1
+                    from regexp_split_to_table(lower(btrim(:keyword)), '\\s+') as token(word)
+                    where char_length(token.word) >= 2
+                      and lower(concat_ws(' ', i.tags, i.system_name, i.customer_name, i.category, i.deployment_version, i.version_info))
+                          like concat('%', token.word, '%')
+                ) then 20000
+                when (
+                    select count(distinct search_char.ch)::int
+                    from regexp_split_to_table(regexp_replace(lower(btrim(:keyword)), '\\s+', '', 'g'), '') as search_char(ch)
+                    where char_length(search_char.ch) > 0
+                      and lower(concat_ws(' ',
+                            i.title,
+                            i.system_name,
+                            i.customer_name,
+                            i.symptom_summary,
+                            i.symptom_detail,
+                            i.cause_detail,
+                            i.action_detail,
+                            i.tags,
+                            i.category,
+                            i.deployment_version,
+                            i.version_info
+                      )) like concat('%', search_char.ch, '%')
+                ) >= case
+                    when char_length(regexp_replace(lower(btrim(:keyword)), '\\s+', '', 'g')) >= 5 then 3
+                    when char_length(regexp_replace(lower(btrim(:keyword)), '\\s+', '', 'g')) >= 3 then 2
+                    else 999
+                end then 1000
+                else 0
+            end desc,
+            case
+                when :keyword is null or btrim(:keyword) = '' then 0
                 else
                     -- 제목에서 전체 검색어가 그대로 맞으면 최상위권 점수
                     case when lower(coalesce(i.title, '')) like concat('%', lower(btrim(:keyword)), '%') then 120 else 0 end
@@ -274,6 +391,34 @@ public interface IssueCaseRepository extends JpaRepository<IssueCase, Long> {
                     ), 0)
 
                     -- pg_trgm 유사도 보조 점수
+                    -- Character fallback score. Whole keyword and token matches above stay ranked first.
+                    + coalesce((
+                        select least(count(distinct search_char.ch)::int, 3) * 2
+                        from regexp_split_to_table(regexp_replace(lower(btrim(:keyword)), '\\s+', '', 'g'), '') as search_char(ch)
+                        where char_length(search_char.ch) > 0
+                          and lower(coalesce(i.title, '')) like concat('%', search_char.ch, '%')
+                    ), 0)
+                    + coalesce((
+                        select least(count(distinct search_char.ch)::int, 3)
+                        from regexp_split_to_table(regexp_replace(lower(btrim(:keyword)), '\\s+', '', 'g'), '') as search_char(ch)
+                        where char_length(search_char.ch) > 0
+                          and lower(coalesce(i.symptom_summary, '')) like concat('%', search_char.ch, '%')
+                    ), 0)
+                    + coalesce((
+                        select least(count(distinct search_char.ch)::int, 3)
+                        from regexp_split_to_table(regexp_replace(lower(btrim(:keyword)), '\\s+', '', 'g'), '') as search_char(ch)
+                        where char_length(search_char.ch) > 0
+                          and lower(concat_ws(' ', i.symptom_detail, i.action_detail, i.cause_detail))
+                              like concat('%', search_char.ch, '%')
+                    ), 0)
+                    + coalesce((
+                        select least(count(distinct search_char.ch)::int, 3)
+                        from regexp_split_to_table(regexp_replace(lower(btrim(:keyword)), '\\s+', '', 'g'), '') as search_char(ch)
+                        where char_length(search_char.ch) > 0
+                          and lower(concat_ws(' ', i.tags, i.system_name, i.customer_name, i.category, i.deployment_version, i.version_info))
+                              like concat('%', search_char.ch, '%')
+                    ), 0)
+
                     + floor(greatest(
                         similarity(lower(coalesce(i.title, '')), lower(btrim(:keyword))) * 20,
                         similarity(lower(coalesce(i.symptom_summary, '')), lower(btrim(:keyword))) * 12,
@@ -315,6 +460,28 @@ public interface IssueCaseRepository extends JpaRepository<IssueCase, Long> {
                     i.deployment_version,
                     i.version_info
                 )), ' ', '') like concat('%', replace(lower(btrim(:keyword)), ' ', ''), '%')
+                or (
+                    select count(distinct search_char.ch)::int
+                    from regexp_split_to_table(regexp_replace(lower(btrim(:keyword)), '\\s+', '', 'g'), '') as search_char(ch)
+                    where char_length(search_char.ch) > 0
+                      and lower(concat_ws(' ',
+                            i.title,
+                            i.system_name,
+                            i.customer_name,
+                            i.symptom_summary,
+                            i.symptom_detail,
+                            i.cause_detail,
+                            i.action_detail,
+                            i.tags,
+                            i.category,
+                            i.deployment_version,
+                            i.version_info
+                      )) like concat('%', search_char.ch, '%')
+                ) >= case
+                    when char_length(regexp_replace(lower(btrim(:keyword)), '\\s+', '', 'g')) >= 5 then 3
+                    when char_length(regexp_replace(lower(btrim(:keyword)), '\\s+', '', 'g')) >= 3 then 2
+                    else 999
+                end
                 or (
                     (
                         select count(*)

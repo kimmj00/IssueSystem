@@ -10,6 +10,7 @@ import {
   shouldIgnoreGlobalSearchTransfer,
 } from '../utils/globalSearchTransfer';
 import { stripHtml } from '../utils/htmlText';
+import { highlightText } from '../utils/highlightText';
 
 // 지식공유 인프라 검색/등록 옵션
 const infraOptions = [
@@ -341,7 +342,9 @@ export default function KnowledgePage({ authUser }) {
 
   // 지식공유 상세보기를 별도 브라우저 창으로 엽니다.
   const openKnowledgeDetailWindow = (id) => {
-    const url = `${window.location.origin}${window.location.pathname}?popup=knowledge-detail&id=${id}`;
+    const params = new URLSearchParams({ popup: 'knowledge-detail', id: String(id) });
+    if (keyword.trim()) params.set('keyword', keyword.trim());
+    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
     const features = 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
 
     window.open(url, `knowledge-detail-${id}`, features);
@@ -540,30 +543,30 @@ export default function KnowledgePage({ authUser }) {
                           {/* 제목 */}
                           <td className="px-4 py-3">
                             <div className="max-w-[240px] truncate font-medium text-slate-900">
-                              {item.title || '-'}
+                              {highlightText(item.title || '-', keyword)}
                             </div>
                           </td>
 
                           {/* 내용: 제목 바로 다음에 표시 */}
                           <td className="px-4 py-3 text-slate-600">
                             <div className="max-w-[460px] truncate">
-                              {stripHtml(item.content) || '-'}
+                              {highlightText(stripHtml(item.content) || '-', keyword)}
                             </div>
                           </td>
 
                           {/* 인프라 */}
                           <td className="px-4 py-3 text-slate-700">
-                            {(item.infraTypes || []).join(', ') || '-'}
+                            {highlightText((item.infraTypes || []).join(', ') || '-', keyword)}
                           </td>
 
                           {/* 고객사 */}
                           <td className="px-4 py-3 text-slate-700">
-                            {item.customerName || '-'}
+                            {highlightText(item.customerName || '-', keyword)}
                           </td>
 
                           {/* 작성자 */}
                           <td className="px-4 py-3 text-slate-700">
-                            {item.authorName || '-'}
+                            {highlightText(item.authorName || '-', keyword)}
                           </td>
 
                           {/* 등록일 */}
@@ -582,7 +585,7 @@ export default function KnowledgePage({ authUser }) {
                                     onClick={(e) => e.stopPropagation()}
                                     className="block max-w-[220px] truncate text-sm font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900"
                                   >
-                                    {file.originalFileName}
+                                    {highlightText(file.originalFileName, keyword)}
                                   </a>
                                 ))}
                                 {item.attachments.length > 2 && (

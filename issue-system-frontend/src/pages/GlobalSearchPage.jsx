@@ -5,6 +5,7 @@ import SaveScreenButton from '../components/common/SaveScreenButton';
 import { API_BASE, infraOptions } from '../constants/patchHistoryOptions';
 import { stripHtml } from '../utils/htmlText';
 import { getMaintenancePopupFeatures } from '../utils/maintenancePopup';
+import { highlightText } from '../utils/highlightText';
 
 const searchInputClass =
   'h-9 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none ring-0 focus:border-slate-500';
@@ -43,12 +44,19 @@ function normalizeList(value) {
 
 function rowClass(level) {
   switch (level) {
+    case 'TITLE_EXACT':
     case 'VERY_HIGH':
       return 'bg-emerald-100/80 hover:bg-emerald-100';
+    case 'TITLE_SIMILAR':
     case 'HIGH':
       return 'bg-green-50 hover:bg-green-100/70';
+    case 'BODY_EXACT':
+      return 'bg-sky-50 hover:bg-sky-100/70';
+    case 'BODY_SIMILAR':
     case 'MEDIUM':
       return 'bg-yellow-50 hover:bg-yellow-100/70';
+    case 'PARTIAL':
+      return 'bg-amber-50 hover:bg-amber-100/70';
     default:
       return 'bg-white hover:bg-slate-50';
   }
@@ -148,14 +156,14 @@ function SummaryCard({ label, count, description, onClick }) {
   );
 }
 
-function TruncateCell({ value, className = '', strong = false }) {
+function TruncateCell({ value, className = '', strong = false, keyword = '' }) {
   const text = value || '-';
   return (
     <div
       title={String(text)}
       className={`min-w-0 truncate ${strong ? 'font-medium text-slate-900' : ''} ${className}`}
     >
-      {text}
+      {highlightText(text, keyword)}
     </div>
   );
 }
@@ -488,20 +496,30 @@ export default function GlobalSearchPage() {
   };
 
   const openPatchHistoryDetailWindow = (id) => {
-    const url = `${window.location.origin}${window.location.pathname}?popup=patch-history-detail&id=${id}`;
+    const params = new URLSearchParams({ popup: 'patch-history-detail', id: String(id) });
+    if (keyword.trim()) params.set('keyword', keyword.trim());
+    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
     const features = 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
     window.open(url, `patch-history-detail-${id}`, features);
   };
 
   const openKnowledgeDetailWindow = (id) => {
-    const url = `${window.location.origin}${window.location.pathname}?popup=knowledge-detail&id=${id}`;
+    const params = new URLSearchParams({ popup: 'knowledge-detail', id: String(id) });
+    if (keyword.trim()) params.set('keyword', keyword.trim());
+    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
     const features = 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
     window.open(url, `knowledge-detail-${id}`, features);
   };
 
   const openWorkIssueHistoryDetailWindow = (item) => {
     const type = item.workHistoryType === 'MAINTENANCE' ? 'MAINTENANCE' : 'PROJECT';
-    const url = `${window.location.origin}${window.location.pathname}?popup=work-issue-history-detail&type=${type}&id=${item.id}`;
+    const params = new URLSearchParams({
+      popup: 'work-issue-history-detail',
+      type,
+      id: String(item.id),
+    });
+    if (keyword.trim()) params.set('keyword', keyword.trim());
+    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
     const features = type === 'MAINTENANCE'
       ? getMaintenancePopupFeatures()
       : 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
@@ -671,19 +689,27 @@ export default function GlobalSearchPage() {
 
             <span className="inline-flex items-center gap-2">
               <span className="h-3 w-6 rounded bg-emerald-100 ring-1 ring-emerald-200" />
-              매우 높음
+              제목 정확
             </span>
             <span className="inline-flex items-center gap-2">
               <span className="h-3 w-6 rounded bg-green-50 ring-1 ring-green-200" />
-              높음
+              제목 유사
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <span className="h-3 w-6 rounded bg-sky-50 ring-1 ring-sky-200" />
+              내용 정확
             </span>
             <span className="inline-flex items-center gap-2">
               <span className="h-3 w-6 rounded bg-yellow-50 ring-1 ring-yellow-200" />
-              보통
+              내용 유사
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <span className="h-3 w-6 rounded bg-amber-50 ring-1 ring-amber-200" />
+              부분 일치
             </span>
             <span className="inline-flex items-center gap-2">
               <span className="h-3 w-6 rounded bg-white ring-1 ring-slate-200" />
-              낮음
+              낮은 관련
             </span>
           </div>
         </div>
@@ -735,13 +761,13 @@ export default function GlobalSearchPage() {
                           className={`cursor-pointer transition ${rowClass(patchHistory.matchLevel)}`}
                         >
                           <td className="min-w-0 px-2 py-3">
-                            <TruncateCell value={patchHistory.title} strong />
+                            <TruncateCell value={patchHistory.title} keyword={keyword} strong />
                           </td>
                           <td className="min-w-0 px-2 py-3">
-                            <TruncateCell value={normalizeList(patchHistory.infraTypes).join(', ')} />
+                            <TruncateCell value={normalizeList(patchHistory.infraTypes).join(', ')} keyword={keyword} />
                           </td>
                           <td className="min-w-0 px-2 py-3">
-                            <TruncateCell value={patchHistory.customerName} />
+                            <TruncateCell value={patchHistory.customerName} keyword={keyword} />
                           </td>
                           <td className="min-w-0 px-2 py-3 text-slate-700">
                             <TruncateCell value={formatDateTime(patchHistory.createdAt)} />
@@ -806,19 +832,19 @@ export default function GlobalSearchPage() {
                           className={`cursor-pointer transition ${rowClass(item.matchLevel)}`}
                         >
                           <td className="min-w-0 px-2 py-3">
-                            <TruncateCell value={item.title} strong />
+                            <TruncateCell value={item.title} keyword={keyword} strong />
                           </td>
                           <td className="min-w-0 px-2 py-3 text-slate-700">
-                            <TruncateCell value={stripHtml(item.summary || item.detail)} />
+                            <TruncateCell value={stripHtml(item.summary || item.detail)} keyword={keyword} />
                           </td>
                           <td className="min-w-0 px-2 py-3 text-slate-700">
-                            <TruncateCell value={normalizeList(item.infraTypes).join(', ')} />
+                            <TruncateCell value={normalizeList(item.infraTypes).join(', ')} keyword={keyword} />
                           </td>
                           <td className="min-w-0 px-2 py-3">
-                            <TruncateCell value={item.customerName} />
+                            <TruncateCell value={item.customerName} keyword={keyword} />
                           </td>
                           <td className="min-w-0 px-2 py-3">
-                            <TruncateCell value={item.authorName} />
+                            <TruncateCell value={item.authorName} keyword={keyword} />
                           </td>
                           <td className="min-w-0 px-2 py-3 text-slate-700">
                             <TruncateCell value={formatDateTime(item.createdAt)} />
@@ -917,13 +943,13 @@ export default function GlobalSearchPage() {
                           className={`cursor-pointer transition ${rowClass(item.matchLevel)}`}
                         >
                           <td className="min-w-0 px-2 py-3">
-                            <TruncateCell value={item.title} strong />
+                            <TruncateCell value={item.title} keyword={keyword} strong />
                           </td>
                           <td className="min-w-0 px-2 py-3 text-slate-700">
-                            <TruncateCell value={item.summary || item.detail} />
+                            <TruncateCell value={item.summary || item.detail} keyword={keyword} />
                           </td>
                           <td className="min-w-0 px-2 py-3">
-                            <TruncateCell value={item.authorName} />
+                            <TruncateCell value={item.authorName} keyword={keyword} />
                           </td>
                           <td className="min-w-0 px-2 py-3 text-slate-700">
                             <TruncateCell value={formatDateTime(item.createdAt)} />

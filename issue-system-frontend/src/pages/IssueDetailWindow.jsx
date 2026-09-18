@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Badge from '../components/common/Badge';
 import DetailBlock from '../components/common/DetailBlock';
 import { API_BASE } from '../constants/issueOptions';
+import { highlightText } from '../utils/highlightText';
 
 // 이슈 상세보기 새 창 전용 페이지
 // URL 예시: /?popup=issue-detail&id=1184
@@ -9,6 +10,10 @@ export default function IssueDetailWindow() {
   const issueId = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('id');
+  }, []);
+  const keyword = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('keyword') || '';
   }, []);
 
   const [issue, setIssue] = useState(null);
@@ -80,7 +85,9 @@ export default function IssueDetailWindow() {
           <div className="space-y-4">
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-2xl font-semibold text-slate-900">{issue.title}</h2>
+                <h2 className="text-2xl font-semibold text-slate-900">
+                  {highlightText(issue.title, keyword)}
+                </h2>
                 <Badge>{issue.infraType}</Badge>
                 <Badge>{issue.status}</Badge>
               </div>
@@ -114,10 +121,12 @@ export default function IssueDetailWindow() {
 }
 
 function InfoBox({ title, value }) {
+  const keyword = new URLSearchParams(window.location.search).get('keyword') || '';
+
   return (
     <div className="rounded-lg bg-slate-50 px-3 py-3">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</div>
-      <div className="mt-1 break-words text-sm text-slate-900">{value || '-'}</div>
+      <div className="mt-1 break-words text-sm text-slate-900">{highlightText(value || '-', keyword)}</div>
     </div>
   );
 }

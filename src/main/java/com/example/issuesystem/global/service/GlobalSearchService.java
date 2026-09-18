@@ -20,7 +20,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 통합검색 서비스
@@ -33,6 +37,18 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class GlobalSearchService {
+
+    private static final int TITLE_EXACT_SCORE = 100_000;
+    private static final int TITLE_COMPACT_SCORE = 90_000;
+    private static final int TITLE_TYPO_SCORE = 80_000;
+    private static final int TITLE_TOKEN_SCORE = 70_000;
+    private static final int BODY_EXACT_SCORE = 50_000;
+    private static final int BODY_COMPACT_SCORE = 45_000;
+    private static final int BODY_TYPO_SCORE = 40_000;
+    private static final int BODY_TOKEN_SCORE = 30_000;
+    private static final int AUX_TOKEN_SCORE = 20_000;
+    private static final int FALLBACK_SCORE = 1_000;
+    private static final Pattern ASCII_FRAGMENT_PATTERN = Pattern.compile("[a-z0-9]+");
 
     private final PatchHistoryService patchHistoryService;
     private final KnowledgeShareService knowledgeShareService;
@@ -97,10 +113,12 @@ public class GlobalSearchService {
 
         List<GlobalSearchItemResponse> patchHistories = patchHistoryPageResult.getContent().stream()
                 .map(patchHistory -> toPatchHistoryItem(patchHistory, keyword, infraType, customerName))
+                .sorted(matchScoreComparator())
                 .toList();
 
         List<GlobalSearchItemResponse> knowledgeShares = knowledgePageResult.getContent().stream()
                 .map(item -> toKnowledgeItem(item, keyword, infraType, customerName))
+                .sorted(matchScoreComparator())
                 .toList();
 
         LocalDateTime startDateTime = startDate != null
@@ -258,12 +276,15 @@ public class GlobalSearchService {
     }
 
     private Comparator<GlobalSearchItemResponse> workIssueSortComparator() {
-        return Comparator.comparingInt(GlobalSearchItemResponse::getMatchScore)
-                .reversed()
+        return matchScoreComparator()
                 .thenComparing(
                         GlobalSearchItemResponse::getId,
                         Comparator.nullsLast(Comparator.naturalOrder())
                 );
+    }
+
+    private Comparator<GlobalSearchItemResponse> matchScoreComparator() {
+        return Comparator.comparingInt(GlobalSearchItemResponse::getMatchScore).reversed();
     }
 
     private record WorkIssueSearchResult(
@@ -395,6 +416,7 @@ public class GlobalSearchService {
     ) {
         String normalizedKeyword = normalize(keyword);
         List<String> tokens = tokenize(normalizedKeyword);
+        List<String> characters = characterTokens(normalizedKeyword);
         int score = 0;
 
         if (!normalizedKeyword.isBlank()) {
@@ -420,7 +442,42 @@ public class GlobalSearchService {
                 if (contains(patchHistory.getDeploymentVersion(), token)) score += 4;
                 if (contains(patchHistory.getVersionInfo(), token)) score += 4;
             }
+
+            score += scoreCharacterMatches(characters, 5, patchHistory.getTitle());
+            score += scoreCharacterMatches(characters, 3, patchHistory.getSymptomSummary());
+            score += scoreCharacterMatches(characters, 2,
+                    patchHistory.getSymptomDetail(),
+                    patchHistory.getActionDetail(),
+                    patchHistory.getCauseDetail()
+            );
+            score += scoreCharacterMatches(characters, 1,
+                    patchHistory.getTags(),
+                    patchHistory.getSystemName(),
+                    patchHistory.getCustomerName(),
+                    patchHistory.getCategory(),
+                    patchHistory.getDeploymentVersion(),
+                    patchHistory.getVersionInfo()
+            );
         }
+
+        score = calculateStructuredMatchScore(
+                normalizedKeyword,
+                values(patchHistory.getTitle()),
+                values(
+                        patchHistory.getSymptomSummary(),
+                        patchHistory.getSymptomDetail(),
+                        patchHistory.getActionDetail(),
+                        patchHistory.getCauseDetail()
+                ),
+                values(
+                        patchHistory.getTags(),
+                        patchHistory.getSystemName(),
+                        patchHistory.getCustomerName(),
+                        patchHistory.getCategory(),
+                        patchHistory.getDeploymentVersion(),
+                        patchHistory.getVersionInfo()
+                )
+        );
 
         if (infraType != null && infraType.equals(patchHistory.getInfraType())) {
             score += 20;
@@ -441,6 +498,7 @@ public class GlobalSearchService {
     ) {
         String normalizedKeyword = normalize(keyword);
         List<String> tokens = tokenize(normalizedKeyword);
+        List<String> characters = characterTokens(normalizedKeyword);
         int score = 0;
 
         if (!normalizedKeyword.isBlank()) {
@@ -459,7 +517,22 @@ public class GlobalSearchService {
                 if (contains(item.getAuthorName(), token)) score += 6;
                 if (contains(item.getAttachmentName(), token)) score += 4;
             }
+
+            score += scoreCharacterMatches(characters, 5, item.getTitle());
+            score += scoreCharacterMatches(characters, 2, item.getContent());
+            score += scoreCharacterMatches(characters, 1,
+                    item.getCustomerName(),
+                    item.getAuthorName(),
+                    item.getAttachmentName()
+            );
         }
+
+        score = calculateStructuredMatchScore(
+                normalizedKeyword,
+                values(item.getTitle()),
+                values(item.getContent()),
+                values(item.getCustomerName(), item.getAuthorName(), item.getAttachmentName())
+        );
 
         if (infraType != null && item.getInfraTypes() != null && item.getInfraTypes().contains(infraType)) {
             score += 20;
@@ -479,6 +552,7 @@ public class GlobalSearchService {
     ) {
         String normalizedKeyword = normalize(keyword);
         List<String> tokens = tokenize(normalizedKeyword);
+        List<String> characters = characterTokens(normalizedKeyword);
         int score = 0;
 
         if (!normalizedKeyword.isBlank()) {
@@ -495,7 +569,27 @@ public class GlobalSearchService {
                 if (contains(project.getExecutors(), token)) score += 8;
                 if (contains(project.getSalesRep(), token)) score += 6;
             }
+
+            score += scoreCharacterMatches(characters, 5, project.getClientName());
+            score += scoreCharacterMatches(characters, 2,
+                    project.getScope(),
+                    project.getProgressLogs(),
+                    project.getRemainingIssues()
+            );
+            score += scoreCharacterMatches(characters, 1,
+                    project.getExecutors(),
+                    project.getSalesRep(),
+                    project.getSiteCode(),
+                    project.getProjectScale()
+            );
         }
+
+        score = calculateStructuredMatchScore(
+                normalizedKeyword,
+                values(project.getClientName()),
+                values(project.getScope(), project.getProgressLogs(), project.getRemainingIssues()),
+                values(project.getExecutors(), project.getSalesRep(), project.getSiteCode(), project.getProjectScale())
+        );
 
         if (!normalize(customerName).isBlank() && contains(project.getClientName(), normalize(customerName))) {
             score += 20;
@@ -511,6 +605,7 @@ public class GlobalSearchService {
     ) {
         String normalizedKeyword = normalize(keyword);
         List<String> tokens = tokenize(normalizedKeyword);
+        List<String> characters = characterTokens(normalizedKeyword);
         int score = 0;
 
         if (!normalizedKeyword.isBlank()) {
@@ -526,7 +621,33 @@ public class GlobalSearchService {
                 if (contains(maintenance.getSubDev(), token)) score += 8;
                 if (contains(maintenance.getSalesRep(), token)) score += 6;
             }
+
+            score += scoreCharacterMatches(characters, 5, maintenance.getMaintenanceName());
+            score += scoreCharacterMatches(characters, 2,
+                    maintenance.getProgressIssues(),
+                    maintenance.getRemarks()
+            );
+            score += scoreCharacterMatches(characters, 1,
+                    maintenance.getMainDev(),
+                    maintenance.getSubDev(),
+                    maintenance.getSalesRep(),
+                    maintenance.getSiteCode(),
+                    maintenance.getRegion()
+            );
         }
+
+        score = calculateStructuredMatchScore(
+                normalizedKeyword,
+                values(maintenance.getMaintenanceName()),
+                values(maintenance.getProgressIssues(), maintenance.getRemarks()),
+                values(
+                        maintenance.getMainDev(),
+                        maintenance.getSubDev(),
+                        maintenance.getSalesRep(),
+                        maintenance.getSiteCode(),
+                        maintenance.getRegion()
+                )
+        );
 
         if (!normalize(customerName).isBlank() && contains(maintenance.getMaintenanceName(), normalize(customerName))) {
             score += 20;
@@ -536,19 +657,93 @@ public class GlobalSearchService {
     }
 
     private String toMatchLevel(int score) {
-        if (score >= 140) {
-            return "VERY_HIGH";
+        if (score >= TITLE_COMPACT_SCORE) {
+            return "TITLE_EXACT";
         }
 
-        if (score >= 80) {
-            return "HIGH";
+        if (score >= TITLE_TOKEN_SCORE) {
+            return "TITLE_SIMILAR";
         }
 
-        if (score >= 20) {
-            return "MEDIUM";
+        if (score >= BODY_COMPACT_SCORE) {
+            return "BODY_EXACT";
+        }
+
+        if (score >= BODY_TOKEN_SCORE) {
+            return "BODY_SIMILAR";
+        }
+
+        if (score >= AUX_TOKEN_SCORE) {
+            return "PARTIAL";
         }
 
         return "LOW";
+    }
+
+    private int calculateStructuredMatchScore(
+            String normalizedKeyword,
+            List<String> titleValues,
+            List<String> bodyValues,
+            List<String> auxiliaryValues
+    ) {
+        if (normalizedKeyword.isBlank()) {
+            return 0;
+        }
+
+        List<String> tokens = tokenize(normalizedKeyword);
+        List<String> characters = characterTokens(normalizedKeyword);
+        double titleSimilarity = maxTypoSimilarity(titleValues, normalizedKeyword);
+        double bodySimilarity = maxTypoSimilarity(bodyValues, normalizedKeyword);
+
+        if (containsAny(titleValues, normalizedKeyword)) {
+            return TITLE_EXACT_SCORE;
+        }
+
+        if (containsAnyWithoutSpace(titleValues, normalizedKeyword)) {
+            return TITLE_COMPACT_SCORE;
+        }
+
+        if (isTypoCandidate(titleSimilarity, normalizedKeyword)) {
+            return TITLE_TYPO_SCORE + similarityTieScore(titleSimilarity);
+        }
+
+        int titleTokenMatches = tokenMatchCount(tokens, titleValues);
+        if (titleTokenMatches > 0) {
+            return TITLE_TOKEN_SCORE + Math.min(titleTokenMatches, 20);
+        }
+
+        if (containsAny(bodyValues, normalizedKeyword)) {
+            return BODY_EXACT_SCORE;
+        }
+
+        if (containsAnyWithoutSpace(bodyValues, normalizedKeyword)) {
+            return BODY_COMPACT_SCORE;
+        }
+
+        if (isTypoCandidate(bodySimilarity, normalizedKeyword)) {
+            return BODY_TYPO_SCORE + similarityTieScore(bodySimilarity);
+        }
+
+        int bodyTokenMatches = tokenMatchCount(tokens, bodyValues);
+        if (bodyTokenMatches > 0) {
+            return BODY_TOKEN_SCORE + Math.min(bodyTokenMatches, 20);
+        }
+
+        int auxiliaryTokenMatches = tokenMatchCount(tokens, auxiliaryValues);
+        if (auxiliaryTokenMatches > 0) {
+            return AUX_TOKEN_SCORE + Math.min(auxiliaryTokenMatches, 20);
+        }
+
+        int fallbackMatches = characterMatchCount(characters, titleValues, bodyValues, auxiliaryValues);
+        if (fallbackMatches >= minimumFallbackCharacterMatches(characters.size())) {
+            return FALLBACK_SCORE + Math.min(fallbackMatches, 20);
+        }
+
+        return 0;
+    }
+
+    private List<String> values(String... values) {
+        return Arrays.asList(values);
     }
 
     private List<String> tokenize(String value) {
@@ -561,6 +756,212 @@ public class GlobalSearchService {
                 .filter(token -> token.length() >= 2)
                 .distinct()
                 .toList();
+    }
+
+    private List<String> characterTokens(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+
+        return value.replaceAll("\\s+", "")
+                .codePoints()
+                .mapToObj(codePoint -> new String(Character.toChars(codePoint)))
+                .filter(token -> !token.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private int scoreCharacterMatches(List<String> characters, int weight, String... values) {
+        if (characters.isEmpty() || values == null || values.length == 0) {
+            return 0;
+        }
+
+        int matchedCount = 0;
+        for (String character : characters) {
+            boolean matched = Arrays.stream(values).anyMatch(value -> contains(value, character));
+            if (matched) {
+                matchedCount++;
+            }
+        }
+
+        return matchedCount * weight;
+    }
+
+    @SafeVarargs
+    private int characterMatchCount(List<String> characters, List<String>... valueGroups) {
+        if (characters.isEmpty() || valueGroups == null || valueGroups.length == 0) {
+            return 0;
+        }
+
+        int matchedCount = 0;
+        for (String character : characters) {
+            boolean matched = Arrays.stream(valueGroups)
+                    .flatMap(List::stream)
+                    .anyMatch(value -> contains(value, character));
+            if (matched) {
+                matchedCount++;
+            }
+        }
+
+        return matchedCount;
+    }
+
+    private int minimumFallbackCharacterMatches(int characterCount) {
+        if (characterCount >= 5) {
+            return 3;
+        }
+
+        if (characterCount >= 3) {
+            return 2;
+        }
+
+        return Integer.MAX_VALUE;
+    }
+
+    private boolean containsAny(List<String> values, String keyword) {
+        return values.stream().anyMatch(value -> contains(value, keyword));
+    }
+
+    private boolean containsAnyWithoutSpace(List<String> values, String keyword) {
+        return values.stream().anyMatch(value -> containsWithoutSpace(value, keyword));
+    }
+
+    private int tokenMatchCount(List<String> tokens, List<String> values) {
+        if (tokens.isEmpty()) {
+            return 0;
+        }
+
+        int matchCount = 0;
+        for (String token : tokens) {
+            for (String value : values) {
+                if (contains(value, token)) {
+                    matchCount++;
+                }
+            }
+        }
+
+        return matchCount;
+    }
+
+    private double maxTypoSimilarity(List<String> values, String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return 0;
+        }
+
+        return values.stream()
+                .mapToDouble(value -> typoSimilarity(value, keyword))
+                .max()
+                .orElse(0);
+    }
+
+    private boolean isTypoCandidate(double similarity, String keyword) {
+        int length = compact(keyword).length();
+        double threshold = length <= 3 ? 0.66 : 0.74;
+
+        return similarity >= threshold;
+    }
+
+    private int similarityTieScore(double similarity) {
+        return (int) Math.floor(similarity * 1_000);
+    }
+
+    private double typoSimilarity(String value, String keyword) {
+        String target = normalize(value);
+        String query = normalize(keyword);
+
+        if (target.isBlank() || query.isBlank()) {
+            return 0;
+        }
+
+        Set<String> fragments = new LinkedHashSet<>();
+        fragments.add(target);
+        fragments.add(compact(target));
+        fragments.addAll(tokenize(target));
+        addAsciiFragments(fragments, target);
+
+        double best = 0;
+        for (String fragment : fragments) {
+            if (fragment.isBlank()) {
+                continue;
+            }
+
+            best = Math.max(best, typoSimilarityFragment(fragment, query));
+            best = Math.max(best, typoSimilarityFragment(compact(fragment), compact(query)));
+        }
+
+        return best;
+    }
+
+    private void addAsciiFragments(Set<String> fragments, String value) {
+        Matcher matcher = ASCII_FRAGMENT_PATTERN.matcher(value);
+        while (matcher.find()) {
+            fragments.add(matcher.group());
+        }
+    }
+
+    private double typoSimilarityFragment(String value, String keyword) {
+        if (value.isBlank() || keyword.isBlank()) {
+            return 0;
+        }
+
+        int maxLength = Math.max(value.length(), keyword.length());
+        if (maxLength == 0) {
+            return 0;
+        }
+
+        int distance = damerauLevenshteinDistance(value, keyword);
+        double similarity = 1.0 - ((double) distance / maxLength);
+
+        if (commonPrefixLength(value, keyword) >= 3) {
+            similarity += 0.08;
+        }
+
+        return Math.min(similarity, 1.0);
+    }
+
+    private int commonPrefixLength(String left, String right) {
+        int limit = Math.min(left.length(), right.length());
+        int count = 0;
+        while (count < limit && left.charAt(count) == right.charAt(count)) {
+            count++;
+        }
+
+        return count;
+    }
+
+    private int damerauLevenshteinDistance(String left, String right) {
+        int[][] distance = new int[left.length() + 1][right.length() + 1];
+
+        for (int i = 0; i <= left.length(); i++) {
+            distance[i][0] = i;
+        }
+
+        for (int j = 0; j <= right.length(); j++) {
+            distance[0][j] = j;
+        }
+
+        for (int i = 1; i <= left.length(); i++) {
+            for (int j = 1; j <= right.length(); j++) {
+                int cost = left.charAt(i - 1) == right.charAt(j - 1) ? 0 : 1;
+                int next = Math.min(
+                        Math.min(distance[i - 1][j] + 1, distance[i][j - 1] + 1),
+                        distance[i - 1][j - 1] + cost
+                );
+
+                if (
+                        i > 1
+                                && j > 1
+                                && left.charAt(i - 1) == right.charAt(j - 2)
+                                && left.charAt(i - 2) == right.charAt(j - 1)
+                ) {
+                    next = Math.min(next, distance[i - 2][j - 2] + 1);
+                }
+
+                distance[i][j] = next;
+            }
+        }
+
+        return distance[left.length()][right.length()];
     }
 
     private boolean contains(String value, String keyword) {
@@ -581,6 +982,10 @@ public class GlobalSearchService {
         String normalizedKeyword = keyword.toLowerCase().replace(" ", "");
 
         return normalizedValue.contains(normalizedKeyword);
+    }
+
+    private String compact(String value) {
+        return value == null ? "" : value.toLowerCase().replaceAll("\\s+", "");
     }
 
     private String normalize(String value) {

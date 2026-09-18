@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { API_BASE } from '../constants/patchHistoryOptions';
 import CreateKnowledgeModal from '../components/modal/CreateKnowledgeModal';
+import { highlightHtml, highlightText } from '../utils/highlightText';
 
 function formatDateTime(value) {
     if (!value) {
@@ -75,22 +76,26 @@ function sanitizeContentHtml(value) {
     return template.innerHTML;
 }
 
-function InfoBox({ label, value }) {
+function InfoBox({ label, value, keyword = '' }) {
+    const activeKeyword = keyword || new URLSearchParams(window.location.search).get('keyword') || '';
+
     return (
         <div className="rounded-lg bg-slate-50 px-3 py-3">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 {label}
             </div>
             <div className="mt-1 break-words text-sm text-slate-900">
-                {value || '-'}
+                {highlightText(value || '-', activeKeyword)}
             </div>
         </div>
     );
 }
 
-function DetailBlock({ title, value }) {
+function DetailBlock({ title, value, keyword = '' }) {
     const isHtml = hasHtmlContent(value);
     const sanitizedHtml = isHtml ? sanitizeContentHtml(value) : '';
+    const activeKeyword = keyword || new URLSearchParams(window.location.search).get('keyword') || '';
+    const highlightedHtml = isHtml ? highlightHtml(sanitizedHtml, activeKeyword) : '';
 
     return (
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -100,11 +105,11 @@ function DetailBlock({ title, value }) {
             {isHtml ? (
                 <div
                     className="min-h-14 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 [&_img]:my-3 [&_img]:max-w-full [&_img]:rounded-lg"
-                    dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+                    dangerouslySetInnerHTML={{ __html: highlightedHtml }}
                 />
             ) : (
                 <div className="min-h-14 whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800">
-                    {value || '-'}
+                    {highlightText(value || '-', activeKeyword)}
                 </div>
             )}
         </section>
@@ -123,6 +128,7 @@ export default function KnowledgeDetailWindow({ headerAction = null }) {
 
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id');
+    const keyword = params.get('keyword') || '';
     let currentAccountId = null;
     let currentAccountRole = null;
     try {
@@ -316,7 +322,7 @@ export default function KnowledgeDetailWindow({ headerAction = null }) {
                         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                             <div className="flex flex-wrap items-center gap-2">
                                 <h2 className="text-2xl font-semibold text-slate-900">
-                                    {knowledge.title}
+                                    {highlightText(knowledge.title, keyword)}
                                 </h2>
 
                                 {(knowledge.infraTypes || []).map((infraType) => (
@@ -352,7 +358,7 @@ export default function KnowledgeDetailWindow({ headerAction = null }) {
                                             href={downloadUrl(file.id)}
                                             className="block rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 underline underline-offset-2 hover:bg-slate-100 hover:text-slate-900"
                                         >
-                                            {file.originalFileName}
+                                            {highlightText(file.originalFileName, keyword)}
                                         </a>
                                     ))}
                                 </div>

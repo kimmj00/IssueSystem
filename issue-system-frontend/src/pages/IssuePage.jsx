@@ -6,6 +6,7 @@ import CreateIssueModal from '../components/modal/CreateIssueModal';
 import ExcelUploadModal from '../components/modal/ExcelUploadModal';
 import { API_BASE, emptyForm, infraOptions, statusOptions } from '../constants/issueOptions';
 import PageTitle from '../components/common/PageTitle';
+import { highlightText } from '../utils/highlightText';
 
 // 페이지 버튼 목록을 만듭니다.
 // 전체 페이지가 많을 때는 첫 페이지, 마지막 페이지, 현재 페이지 주변만 보여주고 중간은 ... 처리합니다.
@@ -193,7 +194,9 @@ export default function IssuePage() {
 
   // 이슈 상세보기를 별도 브라우저 창으로 엽니다.
   const openDetailWindow = (id) => {
-    const url = `${window.location.origin}${window.location.pathname}?popup=issue-detail&id=${id}`;
+    const params = new URLSearchParams({ popup: 'issue-detail', id: String(id) });
+    if (searchKeyword.trim()) params.set('keyword', searchKeyword.trim());
+    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
     const features = 'width=1200,height=820,left=120,top=80,scrollbars=yes,resizable=yes';
     window.open(url, `issue-detail-${id}`, features);
   };
@@ -516,28 +519,28 @@ export default function IssuePage() {
                       >
                         <td className="px-4 py-3">
                           <div className="max-w-[220px] truncate font-medium text-slate-900">
-                            {issue.title || '-'}
+                            {highlightText(issue.title || '-', searchKeyword)}
                           </div>
                         </td>
 
                         <td className="px-4 py-3 text-slate-700">
                           <div className="max-w-[280px] truncate">
-                            {issue.symptomSummary || '-'}
+                            {highlightText(issue.symptomSummary || '-', searchKeyword)}
                           </div>
                         </td>
 
                         <td className="px-4 py-3 text-slate-700">
                           <div className="max-w-[430px] truncate">
-                            {issue.symptomDetail || '-'}
+                            {highlightText(issue.symptomDetail || '-', searchKeyword)}
                           </div>
                         </td>
 
                         <td className="px-4 py-3">
-                          {issue.infraType || '-'}
+                          {highlightText(issue.infraType || '-', searchKeyword)}
                         </td>
 
                         <td className="whitespace-nowrap px-4 py-3">
-                          {issue.customerName || '-'}
+                          {highlightText(issue.customerName || '-', searchKeyword)}
                         </td>
 
                         <td className="px-4 py-3">
@@ -545,7 +548,7 @@ export default function IssuePage() {
                         </td>
 
                         <td className="px-4 py-3">
-                          {issue.authorName || '-'}
+                          {highlightText(issue.authorName || '-', searchKeyword)}
                         </td>
 
                         <td className="whitespace-nowrap px-4 py-3 text-slate-700">
