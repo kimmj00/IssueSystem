@@ -15,6 +15,13 @@ java {
 	}
 }
 
+// Spring MVC가 요청 파라미터 이름을 JAR에서도 읽을 수 있도록 보존한다.
+tasks.withType(JavaCompile).configureEach {
+	if (!options.compilerArgs.contains('-parameters')) {
+		options.compilerArgs.add('-parameters')
+	}
+}
+
 repositories {
 	mavenCentral()
 }
@@ -80,6 +87,11 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	// 전용 PostgreSQL을 명시한 경우에만 실제 검색 SQL 통합 테스트를 실행한다.
+	['url', 'user', 'password'].each { key ->
+		def value = System.getenv("SEARCH_TEST_POSTGRES_${key.toUpperCase()}")
+		if (value != null) systemProperty "search.test.postgres.${key}", value
+	}
 }
 
 /**

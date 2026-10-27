@@ -71,7 +71,7 @@ public class KnowledgeShareController {
     /** 지식공유 수정 - 첨부파일 추가 포함 */
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<Void> update(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestPart("request") KnowledgeShareCreateRequest request,
             @RequestPart(value = "files", required = false) List<MultipartFile> files,
             @RequestParam(value = "deleteAttachmentIds", required = false) List<Long> deleteAttachmentIds,
@@ -84,7 +84,7 @@ public class KnowledgeShareController {
     /** 지식공유 수정 - JSON 전용 */
     @PutMapping("/{id}/json")
     public ApiResponse<Void> updateJson(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody KnowledgeShareCreateRequest request,
             HttpSession session
     ) {
@@ -93,7 +93,7 @@ public class KnowledgeShareController {
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> delete(@PathVariable Long id, HttpSession session) {
+    public ApiResponse<Void> delete(@PathVariable("id") Long id, HttpSession session) {
         knowledgeShareService.delete(id, requireAccountId(session));
         return ApiResponse.okMessage("삭제되었습니다.");
     }
@@ -106,16 +106,16 @@ public class KnowledgeShareController {
      */
     @GetMapping("/search")
     public ApiResponse<PageResponse<KnowledgeShareResponse>> search(
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String titleKeyword,
-            @RequestParam(required = false) String contentKeyword,
-            @RequestParam(required = false) String customerName,
-            @RequestParam(required = false) InfraType infraType,
-            @RequestParam(required = false) List<InfraType> infraTypes,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
+            @RequestParam(name = "keyword", required = false) String keyword,
+            @RequestParam(name = "titleKeyword", required = false) String titleKeyword,
+            @RequestParam(name = "contentKeyword", required = false) String contentKeyword,
+            @RequestParam(name = "customerName", required = false) String customerName,
+            @RequestParam(name = "infraType", required = false) InfraType infraType,
+            @RequestParam(name = "infraTypes", required = false) List<InfraType> infraTypes,
+            @RequestParam(name = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(name = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "10") int size
     ) {
         return ApiResponse.ok(
                 knowledgeShareService.search(
@@ -140,7 +140,7 @@ public class KnowledgeShareController {
      */
     @GetMapping("/{id}")
     public ApiResponse<KnowledgeShareResponse> get(
-            @PathVariable Long id
+            @PathVariable("id") Long id
     ) {
         return ApiResponse.ok(knowledgeShareService.get(id));
     }
@@ -153,7 +153,7 @@ public class KnowledgeShareController {
      */
     @GetMapping("/attachments/{attachmentId}/download")
     public ResponseEntity<Resource> downloadAttachment(
-            @PathVariable Long attachmentId
+            @PathVariable("attachmentId") Long attachmentId
     ) {
         KnowledgeShareService.DownloadFile downloadFile =
                 knowledgeShareService.getDownloadFile(attachmentId);

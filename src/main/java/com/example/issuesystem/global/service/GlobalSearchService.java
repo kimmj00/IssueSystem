@@ -12,14 +12,18 @@ import com.example.issuesystem.workissuehistory.domain.WorkMaintenanceHistory;
 import com.example.issuesystem.workissuehistory.domain.WorkProjectHistory;
 import com.example.issuesystem.workissuehistory.repository.WorkMaintenanceHistoryRepository;
 import com.example.issuesystem.workissuehistory.repository.WorkProjectHistoryRepository;
+import com.example.issuesystem.workissuehistory.repository.WorkIssueGlobalSearchRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -38,6 +42,12 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class GlobalSearchService {
 
+    public enum SearchTarget {
+        PATCH_HISTORY,
+        KNOWLEDGE,
+        WORK_ISSUE
+    }
+
     private static final int TITLE_EXACT_SCORE = 100_000;
     private static final int TITLE_COMPACT_SCORE = 90_000;
     private static final int TITLE_TYPO_SCORE = 80_000;
@@ -48,12 +58,15 @@ public class GlobalSearchService {
     private static final int BODY_TOKEN_SCORE = 30_000;
     private static final int AUX_TOKEN_SCORE = 20_000;
     private static final int FALLBACK_SCORE = 1_000;
+    private static final int SUMMARY_PREVIEW_LENGTH = 500;
+    private static final int DETAIL_PREVIEW_LENGTH = 1_200;
     private static final Pattern ASCII_FRAGMENT_PATTERN = Pattern.compile("[a-z0-9]+");
 
     private final PatchHistoryService patchHistoryService;
     private final KnowledgeShareService knowledgeShareService;
     private final WorkProjectHistoryRepository workProjectHistoryRepository;
     private final WorkMaintenanceHistoryRepository workMaintenanceHistoryRepository;
+    private final WorkIssueGlobalSearchRepository workIssueGlobalSearchRepository;
 
     @Transactional
     public GlobalSearchResponse search(
@@ -70,8 +83,12 @@ public class GlobalSearchService {
             int knowledgeSize,
             int workIssuePage,
             int workIssueSize,
-            String workIssueType
+            String workIssueType,
+            Set<SearchTarget> targets
     ) {
+        Set<SearchTarget> resolvedTargets = targets == null || targets.isEmpty()
+                ? EnumSet.allOf(SearchTarget.class)
+                : EnumSet.copyOf(targets);
         int safePatchHistoryPage = Math.max(patchHistoryPage, 0);
         int safeKnowledgePage = Math.max(knowledgePage, 0);
         int safeWorkIssuePage = Math.max(workIssuePage, 0);
@@ -82,72 +99,90 @@ public class GlobalSearchService {
         int safeWorkIssueSize = normalizeSize(workIssueSize, 7);
         String highlightKeyword = resolveHighlightKeyword(keyword, titleKeyword, contentKeyword);
 
-        PageResponse<PatchHistoryResponse> patchHistoryPageResult = patchHistoryService.search(
-                keyword,
-                titleKeyword,
-                contentKeyword,
-                infraType,
-                null,
-                null,
-                customerName,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                startDate,
-                endDate,
-                safePatchHistoryPage,
-                safePatchHistorySize
-        );
+        PageResponse<PatchHistoryResponse> patchHistoryPageResult = null;
+        List<GlobalSearchItemResponse> patchHistories = null;
+        long patchHistoryTotal = 0;
 
-        PageResponse<KnowledgeShareResponse> knowledgePageResult = knowledgeShareService.search(
-                keyword,
-                titleKeyword,
-                contentKeyword,
-                customerName,
-                infraType,
-                null,
-                startDate,
-                endDate,
-                safeKnowledgePage,
-                safeKnowledgeSize
-        );
+        if (resolvedTargets.contains(SearchTarget.PATCH_HISTORY)) {
+            patchHistoryPageResult = patchHistoryService.search(
+                    keyword,
+                    titleKeyword,
+                    contentKeyword,
+                    infraType,
+                    null,
+                    null,
+                    customerName,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    startDate,
+                    endDate,
+                    safePatchHistoryPage,
+                    safePatchHistorySize
+            );
 
-        List<GlobalSearchItemResponse> patchHistories = patchHistoryPageResult.getContent().stream()
-                .map(patchHistory -> toPatchHistoryItem(patchHistory, highlightKeyword, infraType, customerName))
-                .sorted(matchScoreComparator())
-                .toList();
+            patchHistories = patchHistoryPageResult.getContent().stream()
+                    .map(patchHistory -> toPatchHistoryItem(patchHistory, highlightKeyword, infraType, customerName))
+                    .toList();
+            patchHistoryTotal = patchHistoryPageResult.getTotalElements();
+        }
 
-        List<GlobalSearchItemResponse> knowledgeShares = knowledgePageResult.getContent().stream()
-                .map(item -> toKnowledgeItem(item, highlightKeyword, infraType, customerName))
-                .sorted(matchScoreComparator())
-                .toList();
+        PageResponse<KnowledgeShareResponse> knowledgePageResult = null;
+        List<GlobalSearchItemResponse> knowledgeShares = null;
+        long knowledgeTotal = 0;
 
-        LocalDateTime startDateTime = startDate != null
-                ? startDate.atStartOfDay()
-                : LocalDateTime.of(1970, 1, 1, 0, 0);
-        LocalDateTime endDateTime = endDate != null
-                ? endDate.plusDays(1).atStartOfDay()
-                : LocalDateTime.of(9999, 12, 31, 0, 0);
-        WorkIssueSearchResult workIssueResult = searchWorkIssueHistories(
-                highlightKeyword,
-                customerName,
-                startDateTime,
-                endDateTime,
-                workIssueType,
-                safeWorkIssuePage,
-                safeWorkIssueSize
-        );
+        if (resolvedTargets.contains(SearchTarget.KNOWLEDGE)) {
+            knowledgePageResult = knowledgeShareService.search(
+                    keyword,
+                    titleKeyword,
+                    contentKeyword,
+                    customerName,
+                    infraType,
+                    null,
+                    startDate,
+                    endDate,
+                    safeKnowledgePage,
+                    safeKnowledgeSize
+            );
 
-        long patchHistoryTotal = patchHistoryPageResult.getTotalElements();
-        long knowledgeTotal = knowledgePageResult.getTotalElements();
-        long workProjectTotal = workIssueResult.workProjectTotal();
-        long workMaintenanceTotal = workIssueResult.workMaintenanceTotal();
+            knowledgeShares = knowledgePageResult.getContent().stream()
+                    .map(item -> toKnowledgeItem(item, highlightKeyword, infraType, customerName))
+                    .toList();
+            knowledgeTotal = knowledgePageResult.getTotalElements();
+        }
+
+        WorkIssueSearchResult workIssueResult = emptyWorkIssueSearchResult(safeWorkIssuePage, safeWorkIssueSize);
+        long workProjectTotal = 0;
+        long workMaintenanceTotal = 0;
+
+        if (resolvedTargets.contains(SearchTarget.WORK_ISSUE)) {
+            LocalDateTime startDateTime = startDate != null
+                    ? startDate.atStartOfDay()
+                    : LocalDateTime.of(1970, 1, 1, 0, 0);
+            LocalDateTime endDateTime = endDate != null
+                    ? endDate.plusDays(1).atStartOfDay()
+                    : LocalDateTime.of(9999, 12, 31, 0, 0);
+            workIssueResult = searchWorkIssueHistories(
+                    keyword,
+                    titleKeyword,
+                    contentKeyword,
+                    customerName,
+                    startDateTime,
+                    endDateTime,
+                    workIssueType,
+                    safeWorkIssuePage,
+                    safeWorkIssueSize
+            );
+            workProjectTotal = workIssueResult.workProjectTotal();
+            workMaintenanceTotal = workIssueResult.workMaintenanceTotal();
+        }
+
         long workIssueHistoryTotal = workProjectTotal + workMaintenanceTotal;
 
         return GlobalSearchResponse.builder()
@@ -165,113 +200,51 @@ public class GlobalSearchService {
                 .workIssueTotalPages(workIssueResult.totalPages())
                 .workIssueHasNext(workIssueResult.hasNext())
                 .workIssueHasPrevious(workIssueResult.hasPrevious())
-                .patchHistoryPage(patchHistoryPageResult.getPage())
-                .patchHistorySize(patchHistoryPageResult.getSize())
-                .patchHistoryTotalPages(patchHistoryPageResult.getTotalPages())
-                .patchHistoryHasNext(patchHistoryPageResult.isHasNext())
-                .patchHistoryHasPrevious(patchHistoryPageResult.isHasPrevious())
-                .knowledgePage(knowledgePageResult.getPage())
-                .knowledgeSize(knowledgePageResult.getSize())
-                .knowledgeTotalPages(knowledgePageResult.getTotalPages())
-                .knowledgeHasNext(knowledgePageResult.isHasNext())
-                .knowledgeHasPrevious(knowledgePageResult.isHasPrevious())
+                .patchHistoryPage(patchHistoryPageResult == null ? safePatchHistoryPage : patchHistoryPageResult.getPage())
+                .patchHistorySize(patchHistoryPageResult == null ? safePatchHistorySize : patchHistoryPageResult.getSize())
+                .patchHistoryTotalPages(patchHistoryPageResult == null ? 0 : patchHistoryPageResult.getTotalPages())
+                .patchHistoryHasNext(patchHistoryPageResult != null && patchHistoryPageResult.isHasNext())
+                .patchHistoryHasPrevious(patchHistoryPageResult != null && patchHistoryPageResult.isHasPrevious())
+                .knowledgePage(knowledgePageResult == null ? safeKnowledgePage : knowledgePageResult.getPage())
+                .knowledgeSize(knowledgePageResult == null ? safeKnowledgeSize : knowledgePageResult.getSize())
+                .knowledgeTotalPages(knowledgePageResult == null ? 0 : knowledgePageResult.getTotalPages())
+                .knowledgeHasNext(knowledgePageResult != null && knowledgePageResult.isHasNext())
+                .knowledgeHasPrevious(knowledgePageResult != null && knowledgePageResult.isHasPrevious())
                 .build();
     }
 
-    private WorkIssueSearchResult searchWorkIssueHistories(
-            String keyword,
-            String customerName,
-            LocalDateTime startDateTime,
-            LocalDateTime endDateTime,
-            String workIssueType,
-            int page,
-            int size
-    ) {
-        String resolvedWorkIssueType = normalize(workIssueType).toUpperCase();
-
-        List<GlobalSearchItemResponse> projectRows = workProjectHistoryRepository.searchForGlobal(
-                        keyword,
-                        customerName,
-                        startDateTime,
-                        endDateTime
-                )
-                .stream()
-                .map(item -> toWorkProjectItem(item, keyword, customerName))
-                .toList();
-
-        List<GlobalSearchItemResponse> maintenanceRows = workMaintenanceHistoryRepository.searchForGlobal(
-                        keyword,
-                        customerName,
-                        startDateTime,
-                        endDateTime
-                )
-                .stream()
-                .map(item -> toWorkMaintenanceItem(item, keyword, customerName))
-                .toList();
-
-        if ("PROJECT".equals(resolvedWorkIssueType)) {
-            return buildWorkIssueSearchResult(
-                    projectRows,
-                    page,
-                    size,
-                    projectRows.size(),
-                    projectRows.size(),
-                    maintenanceRows.size()
-            );
-        }
-
-        if ("MAINTENANCE".equals(resolvedWorkIssueType)) {
-            return buildWorkIssueSearchResult(
-                    maintenanceRows,
-                    page,
-                    size,
-                    maintenanceRows.size(),
-                    projectRows.size(),
-                    maintenanceRows.size()
-            );
-        }
-
-        List<GlobalSearchItemResponse> mergedRows = new java.util.ArrayList<>();
-        mergedRows.addAll(projectRows);
-        mergedRows.addAll(maintenanceRows);
-
-        return buildWorkIssueSearchResult(
-                mergedRows,
-                page,
-                size,
-                mergedRows.size(),
-                projectRows.size(),
-                maintenanceRows.size()
-        );
+    private WorkIssueSearchResult emptyWorkIssueSearchResult(int page, int size) {
+        return new WorkIssueSearchResult(List.of(), page, size, 0, false, false, 0, 0);
     }
 
-    private WorkIssueSearchResult buildWorkIssueSearchResult(
-            List<GlobalSearchItemResponse> rows,
-            int page,
-            int size,
-            long totalElements,
-            long workProjectTotal,
-            long workMaintenanceTotal
+    private WorkIssueSearchResult searchWorkIssueHistories(
+            String keyword, String titleKeyword, String contentKeyword, String customerName,
+            LocalDateTime startDateTime, LocalDateTime endDateTime, String workIssueType, int page, int size
     ) {
-        List<GlobalSearchItemResponse> sortedRows = rows.stream()
-                .sorted(workIssueSortComparator())
-                .toList();
-
-        long startOffset = (long) page * size;
-        int startIndex = startOffset >= sortedRows.size() ? sortedRows.size() : (int) startOffset;
-        int endIndex = Math.min(startIndex + size, sortedRows.size());
-        int totalPages = calculateTotalPages(totalElements, size);
-
-        return new WorkIssueSearchResult(
-                sortedRows.subList(startIndex, endIndex),
-                page,
-                size,
-                totalPages,
-                (((long) page + 1L) * size) < totalElements,
-                page > 0 && totalElements > 0,
-                workProjectTotal,
-                workMaintenanceTotal
-        );
+        var result = workIssueGlobalSearchRepository.search(keyword, titleKeyword, contentKeyword,
+                customerName, startDateTime, endDateTime, workIssueType, page, size);
+        List<Long> projectIds = result.rows().stream().filter(row -> "PROJECT".equals(row.type()))
+                .map(WorkIssueGlobalSearchRepository.Row::id).toList();
+        List<Long> maintenanceIds = result.rows().stream().filter(row -> "MAINTENANCE".equals(row.type()))
+                .map(WorkIssueGlobalSearchRepository.Row::id).toList();
+        Map<Long, WorkProjectHistory> projects = projectIds.isEmpty() ? Map.of()
+                : workProjectHistoryRepository.findAllById(projectIds).stream()
+                    .collect(Collectors.toMap(WorkProjectHistory::getId, item -> item));
+        Map<Long, WorkMaintenanceHistory> maintenance = maintenanceIds.isEmpty() ? Map.of()
+                : workMaintenanceHistoryRepository.findAllById(maintenanceIds).stream()
+                    .collect(Collectors.toMap(WorkMaintenanceHistory::getId, item -> item));
+        String highlight = resolveHighlightKeyword(keyword, titleKeyword, contentKeyword);
+        List<GlobalSearchItemResponse> content = new ArrayList<>();
+        for (var row : result.rows()) {
+            if ("PROJECT".equals(row.type())) {
+                if (projects.containsKey(row.id())) content.add(toWorkProjectItem(projects.get(row.id()), highlight, customerName));
+            } else if (maintenance.containsKey(row.id())) {
+                content.add(toWorkMaintenanceItem(maintenance.get(row.id()), highlight, customerName));
+            }
+        }
+        long total = result.projectTotal() + result.maintenanceTotal();
+        return new WorkIssueSearchResult(content, page, size, calculateTotalPages(total, size),
+                ((long) page + 1) * size < total, page > 0, result.projectTotal(), result.maintenanceTotal());
     }
 
     private int calculateTotalPages(long totalElements, int size) {
@@ -280,18 +253,6 @@ public class GlobalSearchService {
         }
 
         return (int) ((totalElements + size - 1) / size);
-    }
-
-    private Comparator<GlobalSearchItemResponse> workIssueSortComparator() {
-        return matchScoreComparator()
-                .thenComparing(
-                        GlobalSearchItemResponse::getId,
-                        Comparator.nullsLast(Comparator.naturalOrder())
-                );
-    }
-
-    private Comparator<GlobalSearchItemResponse> matchScoreComparator() {
-        return Comparator.comparingInt(GlobalSearchItemResponse::getMatchScore).reversed();
     }
 
     private record WorkIssueSearchResult(
@@ -319,8 +280,8 @@ public class GlobalSearchService {
                 .workHistoryType("PROJECT")
                 .id(project.getId())
                 .title(project.getClientName())
-                .summary(project.getScope())
-                .detail(project.getProgressLogs())
+                .summary(preview(project.getScope(), keyword, SUMMARY_PREVIEW_LENGTH))
+                .detail(preview(project.getProgressLogs(), keyword, DETAIL_PREVIEW_LENGTH))
                 .infraTypes(List.of())
                 .customerName(project.getClientName())
                 .authorName(project.getExecutors())
@@ -343,8 +304,8 @@ public class GlobalSearchService {
                 .workHistoryType("MAINTENANCE")
                 .id(maintenance.getId())
                 .title(maintenance.getMaintenanceName())
-                .summary(maintenance.getProgressIssues())
-                .detail(maintenance.getRemarks())
+                .summary(preview(maintenance.getProgressIssues(), keyword, SUMMARY_PREVIEW_LENGTH))
+                .detail(preview(maintenance.getRemarks(), keyword, DETAIL_PREVIEW_LENGTH))
                 .infraTypes(List.of())
                 .customerName(maintenance.getMaintenanceName())
                 .authorName(maintenance.getMainDev())
@@ -367,8 +328,8 @@ public class GlobalSearchService {
                 .sourceLabel("패치이력")
                 .id(patchHistory.getId())
                 .title(patchHistory.getTitle())
-                .summary(patchHistory.getSymptomSummary())
-                .detail(patchHistory.getSymptomDetail())
+                .summary(preview(patchHistory.getSymptomSummary(), keyword, SUMMARY_PREVIEW_LENGTH))
+                .detail(preview(patchHistory.getSymptomDetail(), keyword, DETAIL_PREVIEW_LENGTH))
                 .infraTypes(patchHistory.getInfraType() == null ? List.of() : List.of(patchHistory.getInfraType().name()))
                 .customerName(patchHistory.getCustomerName())
                 .authorName(patchHistory.getAuthorName())
@@ -391,8 +352,8 @@ public class GlobalSearchService {
                 .sourceLabel("지식공유 DB")
                 .id(item.getId())
                 .title(item.getTitle())
-                .summary(item.getContent())
-                .detail(item.getContent())
+                .summary(preview(item.getContent(), keyword, SUMMARY_PREVIEW_LENGTH))
+                .detail(preview(item.getContent(), keyword, DETAIL_PREVIEW_LENGTH))
                 .infraTypes(
                         item.getInfraTypes() == null
                                 ? List.of()
@@ -415,6 +376,54 @@ public class GlobalSearchService {
         return Math.min(size, 50);
     }
 
+    private String preview(String value, String keyword, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+
+        int start = previewStart(value, keyword, maxLength);
+        int end = Math.min(value.length(), start + maxLength);
+        String preview = value.substring(start, end).trim();
+
+        if (start > 0) {
+            preview = "..." + preview;
+        }
+
+        if (end < value.length()) {
+            preview = preview + "...";
+        }
+
+        return preview;
+    }
+
+    private int previewStart(String value, String keyword, int maxLength) {
+        int matchIndex = firstKeywordIndex(value, keyword);
+        if (matchIndex < 0) {
+            return 0;
+        }
+
+        return Math.max(0, matchIndex - (maxLength / 4));
+    }
+
+    private int firstKeywordIndex(String value, String keyword) {
+        String normalizedValue = normalize(value);
+        String normalizedKeyword = normalize(keyword);
+        if (normalizedValue.isBlank() || normalizedKeyword.isBlank()) {
+            return -1;
+        }
+
+        int exactIndex = normalizedValue.indexOf(normalizedKeyword);
+        if (exactIndex >= 0) {
+            return exactIndex;
+        }
+
+        return tokenize(normalizedKeyword).stream()
+                .mapToInt(normalizedValue::indexOf)
+                .filter(index -> index >= 0)
+                .min()
+                .orElse(-1);
+    }
+
     private int calculatePatchHistoryScore(
             PatchHistoryResponse patchHistory,
             String keyword,
@@ -422,52 +431,7 @@ public class GlobalSearchService {
             String customerName
     ) {
         String normalizedKeyword = normalize(keyword);
-        List<String> tokens = tokenize(normalizedKeyword);
-        List<String> characters = characterTokens(normalizedKeyword);
-        int score = 0;
-
-        if (!normalizedKeyword.isBlank()) {
-            // 전체 검색어가 그대로 포함되면 높은 점수를 준다.
-            if (contains(patchHistory.getTitle(), normalizedKeyword)) score += 120;
-            if (containsWithoutSpace(patchHistory.getTitle(), normalizedKeyword)) score += 100;
-            if (contains(patchHistory.getSymptomSummary(), normalizedKeyword)) score += 80;
-            if (contains(patchHistory.getSymptomDetail(), normalizedKeyword)) score += 50;
-            if (contains(patchHistory.getActionDetail(), normalizedKeyword)) score += 35;
-            if (contains(patchHistory.getCauseDetail(), normalizedKeyword)) score += 30;
-
-            // 검색어를 쪼갠 token이 많이 맞을수록 점수를 올린다.
-            for (String token : tokens) {
-                if (contains(patchHistory.getTitle(), token)) score += 30;
-                if (contains(patchHistory.getSymptomSummary(), token)) score += 20;
-                if (contains(patchHistory.getSymptomDetail(), token)) score += 12;
-                if (contains(patchHistory.getActionDetail(), token)) score += 8;
-                if (contains(patchHistory.getCauseDetail(), token)) score += 8;
-                if (contains(patchHistory.getTags(), token)) score += 6;
-                if (contains(patchHistory.getSystemName(), token)) score += 6;
-                if (contains(patchHistory.getCustomerName(), token)) score += 6;
-                if (contains(patchHistory.getCategory(), token)) score += 4;
-                if (contains(patchHistory.getDeploymentVersion(), token)) score += 4;
-                if (contains(patchHistory.getVersionInfo(), token)) score += 4;
-            }
-
-            score += scoreCharacterMatches(characters, 5, patchHistory.getTitle());
-            score += scoreCharacterMatches(characters, 3, patchHistory.getSymptomSummary());
-            score += scoreCharacterMatches(characters, 2,
-                    patchHistory.getSymptomDetail(),
-                    patchHistory.getActionDetail(),
-                    patchHistory.getCauseDetail()
-            );
-            score += scoreCharacterMatches(characters, 1,
-                    patchHistory.getTags(),
-                    patchHistory.getSystemName(),
-                    patchHistory.getCustomerName(),
-                    patchHistory.getCategory(),
-                    patchHistory.getDeploymentVersion(),
-                    patchHistory.getVersionInfo()
-            );
-        }
-
-        score = calculateStructuredMatchScore(
+        int score = calculateStructuredMatchScore(
                 normalizedKeyword,
                 values(patchHistory.getTitle()),
                 values(
@@ -504,37 +468,7 @@ public class GlobalSearchService {
             String customerName
     ) {
         String normalizedKeyword = normalize(keyword);
-        List<String> tokens = tokenize(normalizedKeyword);
-        List<String> characters = characterTokens(normalizedKeyword);
-        int score = 0;
-
-        if (!normalizedKeyword.isBlank()) {
-            // 전체 검색어가 그대로 포함되면 높은 점수를 준다.
-            if (contains(item.getTitle(), normalizedKeyword)) score += 120;
-            if (containsWithoutSpace(item.getTitle(), normalizedKeyword)) score += 100;
-            if (contains(item.getContent(), normalizedKeyword)) score += 70;
-            if (contains(item.getCustomerName(), normalizedKeyword)) score += 10;
-            if (contains(item.getAuthorName(), normalizedKeyword)) score += 10;
-
-            // 검색어를 쪼갠 token이 많이 맞을수록 점수를 올린다.
-            for (String token : tokens) {
-                if (contains(item.getTitle(), token)) score += 30;
-                if (contains(item.getContent(), token)) score += 15;
-                if (contains(item.getCustomerName(), token)) score += 6;
-                if (contains(item.getAuthorName(), token)) score += 6;
-                if (contains(item.getAttachmentName(), token)) score += 4;
-            }
-
-            score += scoreCharacterMatches(characters, 5, item.getTitle());
-            score += scoreCharacterMatches(characters, 2, item.getContent());
-            score += scoreCharacterMatches(characters, 1,
-                    item.getCustomerName(),
-                    item.getAuthorName(),
-                    item.getAttachmentName()
-            );
-        }
-
-        score = calculateStructuredMatchScore(
+        int score = calculateStructuredMatchScore(
                 normalizedKeyword,
                 values(item.getTitle()),
                 values(item.getContent()),
@@ -558,40 +492,7 @@ public class GlobalSearchService {
             String customerName
     ) {
         String normalizedKeyword = normalize(keyword);
-        List<String> tokens = tokenize(normalizedKeyword);
-        List<String> characters = characterTokens(normalizedKeyword);
-        int score = 0;
-
-        if (!normalizedKeyword.isBlank()) {
-            if (contains(project.getClientName(), normalizedKeyword)) score += 80;
-            if (contains(project.getScope(), normalizedKeyword)) score += 60;
-            if (contains(project.getProgressLogs(), normalizedKeyword)) score += 50;
-            if (contains(project.getRemainingIssues(), normalizedKeyword)) score += 40;
-
-            for (String token : tokens) {
-                if (contains(project.getClientName(), token)) score += 24;
-                if (contains(project.getScope(), token)) score += 16;
-                if (contains(project.getProgressLogs(), token)) score += 12;
-                if (contains(project.getRemainingIssues(), token)) score += 10;
-                if (contains(project.getExecutors(), token)) score += 8;
-                if (contains(project.getSalesRep(), token)) score += 6;
-            }
-
-            score += scoreCharacterMatches(characters, 5, project.getClientName());
-            score += scoreCharacterMatches(characters, 2,
-                    project.getScope(),
-                    project.getProgressLogs(),
-                    project.getRemainingIssues()
-            );
-            score += scoreCharacterMatches(characters, 1,
-                    project.getExecutors(),
-                    project.getSalesRep(),
-                    project.getSiteCode(),
-                    project.getProjectScale()
-            );
-        }
-
-        score = calculateStructuredMatchScore(
+        int score = calculateStructuredMatchScore(
                 normalizedKeyword,
                 values(project.getClientName()),
                 values(project.getScope(), project.getProgressLogs(), project.getRemainingIssues()),
@@ -611,39 +512,7 @@ public class GlobalSearchService {
             String customerName
     ) {
         String normalizedKeyword = normalize(keyword);
-        List<String> tokens = tokenize(normalizedKeyword);
-        List<String> characters = characterTokens(normalizedKeyword);
-        int score = 0;
-
-        if (!normalizedKeyword.isBlank()) {
-            if (contains(maintenance.getMaintenanceName(), normalizedKeyword)) score += 80;
-            if (contains(maintenance.getProgressIssues(), normalizedKeyword)) score += 60;
-            if (contains(maintenance.getRemarks(), normalizedKeyword)) score += 40;
-
-            for (String token : tokens) {
-                if (contains(maintenance.getMaintenanceName(), token)) score += 24;
-                if (contains(maintenance.getProgressIssues(), token)) score += 16;
-                if (contains(maintenance.getRemarks(), token)) score += 12;
-                if (contains(maintenance.getMainDev(), token)) score += 8;
-                if (contains(maintenance.getSubDev(), token)) score += 8;
-                if (contains(maintenance.getSalesRep(), token)) score += 6;
-            }
-
-            score += scoreCharacterMatches(characters, 5, maintenance.getMaintenanceName());
-            score += scoreCharacterMatches(characters, 2,
-                    maintenance.getProgressIssues(),
-                    maintenance.getRemarks()
-            );
-            score += scoreCharacterMatches(characters, 1,
-                    maintenance.getMainDev(),
-                    maintenance.getSubDev(),
-                    maintenance.getSalesRep(),
-                    maintenance.getSiteCode(),
-                    maintenance.getRegion()
-            );
-        }
-
-        score = calculateStructuredMatchScore(
+        int score = calculateStructuredMatchScore(
                 normalizedKeyword,
                 values(maintenance.getMaintenanceName()),
                 values(maintenance.getProgressIssues(), maintenance.getRemarks()),
@@ -698,9 +567,6 @@ public class GlobalSearchService {
         }
 
         List<String> tokens = tokenize(normalizedKeyword);
-        List<String> characters = characterTokens(normalizedKeyword);
-        double titleSimilarity = maxTypoSimilarity(titleValues, normalizedKeyword);
-        double bodySimilarity = maxTypoSimilarity(bodyValues, normalizedKeyword);
 
         if (containsAny(titleValues, normalizedKeyword)) {
             return TITLE_EXACT_SCORE;
@@ -710,6 +576,7 @@ public class GlobalSearchService {
             return TITLE_COMPACT_SCORE;
         }
 
+        double titleSimilarity = maxTypoSimilarity(titleValues, normalizedKeyword);
         if (isTypoCandidate(titleSimilarity, normalizedKeyword)) {
             return TITLE_TYPO_SCORE + similarityTieScore(titleSimilarity);
         }
@@ -727,6 +594,7 @@ public class GlobalSearchService {
             return BODY_COMPACT_SCORE;
         }
 
+        double bodySimilarity = maxTypoSimilarity(bodyValues, normalizedKeyword);
         if (isTypoCandidate(bodySimilarity, normalizedKeyword)) {
             return BODY_TYPO_SCORE + similarityTieScore(bodySimilarity);
         }
@@ -741,6 +609,7 @@ public class GlobalSearchService {
             return AUX_TOKEN_SCORE + Math.min(auxiliaryTokenMatches, 20);
         }
 
+        List<String> characters = characterTokens(normalizedKeyword);
         int fallbackMatches = characterMatchCount(characters, titleValues, bodyValues, auxiliaryValues);
         if (fallbackMatches >= minimumFallbackCharacterMatches(characters.size())) {
             return FALLBACK_SCORE + Math.min(fallbackMatches, 20);
@@ -776,22 +645,6 @@ public class GlobalSearchService {
                 .filter(token -> !token.isBlank())
                 .distinct()
                 .toList();
-    }
-
-    private int scoreCharacterMatches(List<String> characters, int weight, String... values) {
-        if (characters.isEmpty() || values == null || values.length == 0) {
-            return 0;
-        }
-
-        int matchedCount = 0;
-        for (String character : characters) {
-            boolean matched = Arrays.stream(values).anyMatch(value -> contains(value, character));
-            if (matched) {
-                matchedCount++;
-            }
-        }
-
-        return matchedCount * weight;
     }
 
     @SafeVarargs
@@ -862,10 +715,11 @@ public class GlobalSearchService {
     }
 
     private boolean isTypoCandidate(double similarity, String keyword) {
-        int length = compact(keyword).length();
-        double threshold = length <= 3 ? 0.66 : 0.74;
+        return similarity >= typoThreshold(compact(keyword));
+    }
 
-        return similarity >= threshold;
+    private double typoThreshold(String compactKeyword) {
+        return compactKeyword.length() <= 3 ? 0.66 : 0.74;
     }
 
     private int similarityTieScore(double similarity) {
@@ -880,6 +734,9 @@ public class GlobalSearchService {
             return 0;
         }
 
+        String compactQuery = compact(query);
+        double threshold = typoThreshold(compactQuery);
+
         Set<String> fragments = new LinkedHashSet<>();
         fragments.add(target);
         fragments.add(compact(target));
@@ -892,8 +749,11 @@ public class GlobalSearchService {
                 continue;
             }
 
-            best = Math.max(best, typoSimilarityFragment(fragment, query));
-            best = Math.max(best, typoSimilarityFragment(compact(fragment), compact(query)));
+            best = Math.max(best, typoSimilarityFragment(fragment, query, threshold));
+            best = Math.max(best, typoSimilarityFragment(compact(fragment), compactQuery, threshold));
+            if (best >= 1.0) {
+                return best;
+            }
         }
 
         return best;
@@ -906,7 +766,7 @@ public class GlobalSearchService {
         }
     }
 
-    private double typoSimilarityFragment(String value, String keyword) {
+    private double typoSimilarityFragment(String value, String keyword, double threshold) {
         if (value.isBlank() || keyword.isBlank()) {
             return 0;
         }
@@ -916,13 +776,17 @@ public class GlobalSearchService {
             return 0;
         }
 
-        int distance = damerauLevenshteinDistance(value, keyword);
-        double similarity = 1.0 - ((double) distance / maxLength);
-
-        if (commonPrefixLength(value, keyword) >= 3) {
-            similarity += 0.08;
+        double prefixBonus = commonPrefixLength(value, keyword) >= 3 ? 0.08 : 0;
+        // 편집 거리는 길이 차이보다 작을 수 없다. 접두사 가산점까지 더해도
+        // 오타 기준에 못 미치는 긴 본문은 거리 행렬을 계산할 필요가 없다.
+        double upperBound = 1.0 - ((double) Math.abs(value.length() - keyword.length()) / maxLength)
+                + prefixBonus;
+        if (upperBound < threshold) {
+            return 0;
         }
 
+        int distance = damerauLevenshteinDistance(value, keyword);
+        double similarity = 1.0 - ((double) distance / maxLength) + prefixBonus;
         return Math.min(similarity, 1.0);
     }
 
@@ -937,22 +801,24 @@ public class GlobalSearchService {
     }
 
     private int damerauLevenshteinDistance(String left, String right) {
-        int[][] distance = new int[left.length() + 1][right.length() + 1];
-
-        for (int i = 0; i <= left.length(); i++) {
-            distance[i][0] = i;
+        if (left.length() < right.length()) {
+            return damerauLevenshteinDistance(right, left);
         }
-
+        // 인접 문자 교환에는 직전 두 행만 필요하다.
+        int[] previousPrevious = new int[right.length() + 1];
+        int[] previous = new int[right.length() + 1];
+        int[] current = new int[right.length() + 1];
         for (int j = 0; j <= right.length(); j++) {
-            distance[0][j] = j;
+            previous[j] = j;
         }
 
         for (int i = 1; i <= left.length(); i++) {
+            current[0] = i;
             for (int j = 1; j <= right.length(); j++) {
                 int cost = left.charAt(i - 1) == right.charAt(j - 1) ? 0 : 1;
                 int next = Math.min(
-                        Math.min(distance[i - 1][j] + 1, distance[i][j - 1] + 1),
-                        distance[i - 1][j - 1] + cost
+                        Math.min(previous[j] + 1, current[j - 1] + 1),
+                        previous[j - 1] + cost
                 );
 
                 if (
@@ -961,14 +827,18 @@ public class GlobalSearchService {
                                 && left.charAt(i - 1) == right.charAt(j - 2)
                                 && left.charAt(i - 2) == right.charAt(j - 1)
                 ) {
-                    next = Math.min(next, distance[i - 2][j - 2] + 1);
+                    next = Math.min(next, previousPrevious[j - 2] + 1);
                 }
 
-                distance[i][j] = next;
+                current[j] = next;
             }
+            int[] reusable = previousPrevious;
+            previousPrevious = previous;
+            previous = current;
+            current = reusable;
         }
 
-        return distance[left.length()][right.length()];
+        return previous[right.length()];
     }
 
     private boolean contains(String value, String keyword) {

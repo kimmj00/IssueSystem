@@ -50,7 +50,7 @@ public class AccountController {
 
     @PatchMapping("/{accountId}/password")
     public ApiResponse<Void> changePassword(
-            @PathVariable Long accountId,
+            @PathVariable("accountId") Long accountId,
             @Valid @RequestBody AdminPasswordChangeRequest request,
             HttpSession session
     ) {

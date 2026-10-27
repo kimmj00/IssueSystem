@@ -39,7 +39,7 @@ public class WorkProjectHistoryResponse {
     public static WorkProjectHistoryResponse from(WorkProjectHistory item) {
         return WorkProjectHistoryResponse.builder()
                 .id(item.getId())
-                .uploadId(item.getUpload().getId())
+                .uploadId(item.getUploadId())
                 .rowNo(item.getRowNo())
                 .no(item.getNo())
                 .salesRep(item.getSalesRep())

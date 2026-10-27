@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import SectionCard from '../components/common/SectionCard';
 import LabeledInput from '../components/common/LabeledInput';
 import SaveScreenButton from '../components/common/SaveScreenButton';
@@ -1279,6 +1279,7 @@ export default function WorkIssueHistoryPage() {
   const [maintenanceRows, setMaintenanceRows] = useState([]);
 
   const [keyword, setKeyword] = useState(() => getInitialSearchParam('keyword'));
+  const deferredKeyword = useDeferredValue(keyword);
   const [salesRep, setSalesRep] = useState(() => getInitialSearchParam('salesRep'));
   const [executor, setExecutor] = useState(() => getInitialSearchParam('executor'));
   const [customer, setCustomer] = useState(() => getInitialSearchParam('customerName', getInitialSearchParam('customer')));
@@ -1374,23 +1375,23 @@ export default function WorkIssueHistoryPage() {
 
   const filteredProjects = useMemo(() => {
     return getFilteredRows(projects, {
-      keyword,
+      keyword: deferredKeyword,
       salesRep,
       executor,
       customer,
       infraTypes: selectedInfraTypes,
     });
-  }, [projects, keyword, salesRep, executor, customer, selectedInfraTypes]);
+  }, [projects, deferredKeyword, salesRep, executor, customer, selectedInfraTypes]);
 
   const filteredMaintenance = useMemo(() => {
     return getFilteredRows(maintenanceRows, {
-      keyword,
+      keyword: deferredKeyword,
       salesRep,
       executor,
       customer: '',
       infraTypes: selectedInfraTypes,
     });
-  }, [maintenanceRows, keyword, salesRep, executor, selectedInfraTypes]);
+  }, [maintenanceRows, deferredKeyword, salesRep, executor, selectedInfraTypes]);
 
   const buildSavedScreenUrl = () => {
     const params = new URLSearchParams();
@@ -1520,13 +1521,13 @@ export default function WorkIssueHistoryPage() {
             showCustomerFilter={activeInnerTab === 'projects'}
           />
 
-          {activeInnerTab === 'projects' ? <ProjectTable rows={filteredProjects} keyword={keyword} /> : null}
-          {activeInnerTab === 'maintenance' ? <MaintenanceTable rows={filteredMaintenance} keyword={keyword} /> : null}
+          {activeInnerTab === 'projects' ? <ProjectTable rows={filteredProjects} keyword={deferredKeyword} /> : null}
+          {activeInnerTab === 'maintenance' ? <MaintenanceTable rows={filteredMaintenance} keyword={deferredKeyword} /> : null}
           {activeInnerTab === 'search' ? (
             <SearchResultList
               projectRows={filteredProjects}
               maintenanceRows={filteredMaintenance}
-              keyword={keyword}
+              keyword={deferredKeyword}
             />
           ) : null}
         </div>

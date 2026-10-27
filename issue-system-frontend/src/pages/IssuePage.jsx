@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Badge from '../components/common/Badge';
 import LabeledInput from '../components/common/LabeledInput';
 import SectionCard from '../components/common/SectionCard';
@@ -126,9 +126,20 @@ export default function IssuePage() {
 
   // 현재 페이지 기준으로 하단 페이지 버튼 목록을 계산합니다.
   const pageItems = useMemo(() => buildPageItems(page, totalPages), [page, totalPages]);
+  const listAbortRef = useRef(null);
+  const listRequestSeqRef = useRef(0);
 
   // 검색 조건과 페이지 정보를 기준으로 목록을 조회합니다.
   const fetchIssues = async (targetPage = page, targetSize = size) => {
+    if (listAbortRef.current) {
+      listAbortRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    listAbortRef.current = controller;
+    listRequestSeqRef.current += 1;
+    const requestSeq = listRequestSeqRef.current;
+
     setLoadingList(true);
     setError('');
 
@@ -150,8 +161,13 @@ export default function IssuePage() {
       params.append('page', targetPage);
       params.append('size', targetSize);
 
-      const res = await fetch(`${API_BASE}/api/issue-cases/search?${params.toString()}`);
+      const res = await fetch(`${API_BASE}/api/issue-cases/search?${params.toString()}`, {
+        signal: controller.signal,
+      });
       const result = await res.json();
+      if (listRequestSeqRef.current !== requestSeq) {
+        return;
+      }
 
       if (!res.ok || !result.success) {
         throw new Error(result.message || '목록 조회에 실패했습니다.');
@@ -165,9 +181,14 @@ export default function IssuePage() {
       setHasNext(pageData.hasNext);
       setHasPrevious(pageData.hasPrevious);
     } catch (e) {
+      if (listRequestSeqRef.current !== requestSeq || e.name === 'AbortError') {
+        return;
+      }
       setError(e.message || '목록 조회 중 오류가 발생했습니다.');
     } finally {
-      setLoadingList(false);
+      if (listRequestSeqRef.current === requestSeq) {
+        setLoadingList(false);
+      }
     }
   };
 
@@ -295,6 +316,11 @@ export default function IssuePage() {
   // 최초 진입 시 목록을 1회 조회합니다.
   useEffect(() => {
     fetchIssues(0, 5);
+    return () => {
+      if (listAbortRef.current) {
+        listAbortRef.current.abort();
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

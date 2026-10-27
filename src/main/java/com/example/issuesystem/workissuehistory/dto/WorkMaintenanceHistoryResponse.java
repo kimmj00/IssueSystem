@@ -50,7 +50,7 @@ public class WorkMaintenanceHistoryResponse {
     public static WorkMaintenanceHistoryResponse from(WorkMaintenanceHistory item) {
         return WorkMaintenanceHistoryResponse.builder()
                 .id(item.getId())
-                .uploadId(item.getUpload().getId())
+                .uploadId(item.getUploadId())
                 .rowNo(item.getRowNo())
                 .no(item.getNo())
                 .maintenanceName(item.getMaintenanceName())

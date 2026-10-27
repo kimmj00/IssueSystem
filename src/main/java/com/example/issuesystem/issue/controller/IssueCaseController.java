@@ -47,7 +47,7 @@ public class IssueCaseController {
     /** 이슈 수정 */
     @PutMapping("/{id}")
     public ApiResponse<Void> update(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody IssueCaseUpdateRequest request
     ) {
         issueCaseService.update(id, request);
@@ -56,7 +56,7 @@ public class IssueCaseController {
 
     /** 이슈 단건 상세 조회 */
     @GetMapping("/{id}")
-    public ApiResponse<IssueCaseResponse> get(@PathVariable Long id) {
+    public ApiResponse<IssueCaseResponse> get(@PathVariable("id") Long id) {
         return ApiResponse.ok(issueCaseService.get(id));
     }
 
@@ -75,16 +75,16 @@ public class IssueCaseController {
      */
     @GetMapping("/search")
     public ApiResponse<PageResponse<IssueCaseResponse>> search(
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) InfraType infraType,
-            @RequestParam(required = false) IssueStatus status,
-            @RequestParam(required = false) String customerName,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) String deploymentVersion,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "5") int size
+            @RequestParam(name = "keyword", required = false) String keyword,
+            @RequestParam(name = "infraType", required = false) InfraType infraType,
+            @RequestParam(name = "status", required = false) IssueStatus status,
+            @RequestParam(name = "customerName", required = false) String customerName,
+            @RequestParam(name = "category", required = false) String category,
+            @RequestParam(name = "deploymentVersion", required = false) String deploymentVersion,
+            @RequestParam(name = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(name = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "5") int size
     ) {
         return ApiResponse.ok(
                 issueCaseService.search(

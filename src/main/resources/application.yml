@@ -30,6 +30,13 @@ logging:
     org.hibernate.SQL: debug
 
 app:
+  logging:
+    query:
+      enabled: true
+      log-all: true
+      slow-threshold-ms: 1000
+      include-sql: true
+      max-sql-length: 2000
   file:
     upload-dir: C:/issue/uploads
   crypto:
@@ -71,6 +78,13 @@ logging:
     org.hibernate.SQL: info
 
 app:
+  logging:
+    query:
+      enabled: true
+      log-all: true
+      slow-threshold-ms: 1000
+      include-sql: true
+      max-sql-length: 10000
   file:
     upload-dir: /home/issue/app/uploads
   crypto:
@@ -112,6 +126,13 @@ logging:
     org.hibernate.SQL: info
 
 app:
+  logging:
+    query:
+      enabled: true
+      log-all: true
+      slow-threshold-ms: 1000
+      include-sql: false
+      max-sql-length: 2000
   file:
     upload-dir: /tmp/issue_system/uploads # Render 무료 서버용 임시 업로드 경로
 
@@ -151,6 +172,13 @@ logging:
     org.hibernate.SQL: debug
 
 app:
+  logging:
+    query:
+      enabled: true
+      log-all: true
+      slow-threshold-ms: 1000
+      include-sql: false
+      max-sql-length: 2000
   file:
     upload-dir: D:/issue_system/test-uploads
   crypto:

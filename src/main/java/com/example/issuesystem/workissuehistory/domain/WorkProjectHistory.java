@@ -30,6 +30,9 @@ public class WorkProjectHistory extends BaseTimeEntity {
     @JoinColumn(name = "upload_id", nullable = false)
     private WorkReportUpload upload;
 
+    @Column(name = "upload_id", insertable = false, updatable = false)
+    private Long uploadId;
+
     // 엑셀의 실제 행 번호입니다. 장애 분석이나 재확인 때 원본 행을 찾기 쉽게 저장합니다.
     @Column(name = "row_no", nullable = false)
     private int rowNo;

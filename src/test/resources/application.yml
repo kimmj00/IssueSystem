@@ -19,6 +19,9 @@ logging:
     org.hibernate.SQL: off
 
 app:
+  logging:
+    query:
+      enabled: false
   file:
     upload-dir: build/test-uploads
   crypto:

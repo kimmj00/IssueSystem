@@ -32,8 +32,8 @@ public class WorkIssueHistoryController {
     @PostMapping("/upload")
     public ApiResponse<WorkIssueUploadResultResponse> upload(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(required = false) String reportWeek,
-            @RequestParam(required = false) String uploadedBy
+            @RequestParam(name = "reportWeek", required = false) String reportWeek,
+            @RequestParam(name = "uploadedBy", required = false) String uploadedBy
     ) {
         return ApiResponse.ok(workIssueHistoryService.upload(file, reportWeek, uploadedBy));
     }
@@ -46,29 +46,29 @@ public class WorkIssueHistoryController {
 
     /** 화면 상단 요약 카드 데이터입니다. uploadId가 없으면 최신 업로드 건 기준입니다. */
     @GetMapping("/summary")
-    public ApiResponse<WorkIssueSummaryResponse> getSummary(@RequestParam(required = false) Long uploadId) {
+    public ApiResponse<WorkIssueSummaryResponse> getSummary(@RequestParam(name = "uploadId", required = false) Long uploadId) {
         return ApiResponse.ok(workIssueHistoryService.getSummary(uploadId));
     }
 
     /** 프로젝트 현황 목록입니다. uploadId가 없으면 최신 업로드 건 기준입니다. */
     @GetMapping("/projects")
-    public ApiResponse<List<WorkProjectHistoryResponse>> getProjects(@RequestParam(required = false) Long uploadId) {
+    public ApiResponse<List<WorkProjectHistoryResponse>> getProjects(@RequestParam(name = "uploadId", required = false) Long uploadId) {
         return ApiResponse.ok(workIssueHistoryService.getProjects(uploadId));
     }
 
     @GetMapping("/projects/{id}")
-    public ApiResponse<WorkProjectHistoryResponse> getProject(@PathVariable Long id) {
+    public ApiResponse<WorkProjectHistoryResponse> getProject(@PathVariable("id") Long id) {
         return ApiResponse.ok(workIssueHistoryService.getProject(id));
     }
 
     /** 유지보수 현황 목록입니다. uploadId가 없으면 최신 업로드 건 기준입니다. */
     @GetMapping("/maintenance")
-    public ApiResponse<List<WorkMaintenanceHistoryResponse>> getMaintenance(@RequestParam(required = false) Long uploadId) {
+    public ApiResponse<List<WorkMaintenanceHistoryResponse>> getMaintenance(@RequestParam(name = "uploadId", required = false) Long uploadId) {
         return ApiResponse.ok(workIssueHistoryService.getMaintenance(uploadId));
     }
 
     @GetMapping("/maintenance/{id}")
-    public ApiResponse<WorkMaintenanceHistoryResponse> getMaintenanceItem(@PathVariable Long id) {
+    public ApiResponse<WorkMaintenanceHistoryResponse> getMaintenanceItem(@PathVariable("id") Long id) {
         return ApiResponse.ok(workIssueHistoryService.getMaintenanceItem(id));
     }
 }

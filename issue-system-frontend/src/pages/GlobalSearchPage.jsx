@@ -113,6 +113,7 @@ function buildSearchParams({
   workIssuePage,
   workIssueSize,
   workIssueType,
+  targets = [],
 }) {
   const params = new URLSearchParams();
   const combinedKeyword = combineKeywords(titleKeyword, contentKeyword);
@@ -148,6 +149,9 @@ function buildSearchParams({
   params.append('knowledgeSize', String(knowledgeSize));
   params.append('workIssuePage', String(workIssuePage));
   params.append('workIssueSize', String(workIssueSize));
+  if (targets.length > 0) {
+    params.append('targets', targets.join(','));
+  }
 
   return params;
 }
@@ -230,6 +234,7 @@ export default function GlobalSearchPage() {
   const [error, setError] = useState('');
 
   const abortRef = useRef(null);
+  const requestSeqRef = useRef(0);
   const autoSearchInitializedRef = useRef(false);
 
   const searchAll = async ({
@@ -240,6 +245,7 @@ export default function GlobalSearchPage() {
     targetWorkIssuePage = workIssuePage,
     targetWorkIssueSize = workIssueSize,
     targetWorkIssueType = workIssueType,
+    targets = [],
   } = {}) => {
     if (abortRef.current) {
       abortRef.current.abort();
@@ -247,6 +253,12 @@ export default function GlobalSearchPage() {
 
     const controller = new AbortController();
     abortRef.current = controller;
+    requestSeqRef.current += 1;
+    const requestSeq = requestSeqRef.current;
+    const fullSearch = targets.length === 0;
+    const includesPatchHistory = fullSearch || targets.includes('PATCH_HISTORY');
+    const includesKnowledge = fullSearch || targets.includes('KNOWLEDGE');
+    const includesWorkIssue = fullSearch || targets.includes('WORK_ISSUE');
 
     setLoading(true);
     setSearched(true);
@@ -267,74 +279,106 @@ export default function GlobalSearchPage() {
         workIssuePage: targetWorkIssuePage,
         workIssueSize: targetWorkIssueSize,
         workIssueType: targetWorkIssueType,
+        targets,
       });
 
       const res = await fetch(`${API_BASE}/api/global-search?${params.toString()}`, {
         signal: controller.signal,
       });
       const body = await res.json();
+      if (requestSeqRef.current !== requestSeq) {
+        return;
+      }
 
       if (!res.ok || !body.success) {
         throw new Error(body.message || '통합검색에 실패했습니다.');
       }
 
       const data = body.data || {};
-      setPatchHistoryRows(data.patchHistories || []);
-      setKnowledgeRows(data.knowledgeShares || []);
-      setWorkIssueHistoryRows(data.workIssueHistories || []);
+      if (includesPatchHistory && Array.isArray(data.patchHistories)) {
+        setPatchHistoryRows(data.patchHistories);
+        setPatchHistoryTotal(data.patchHistoryTotal || 0);
+        setPatchHistoryPage(
+          Number.isInteger(data.patchHistoryPage) ? data.patchHistoryPage : targetPatchHistoryPage
+        );
+        setPatchHistorySize(data.patchHistorySize || targetPatchHistorySize);
+        setPatchHistoryTotalPages(data.patchHistoryTotalPages || 0);
+        setPatchHistoryHasNext(Boolean(data.patchHistoryHasNext));
+        setPatchHistoryHasPrevious(Boolean(data.patchHistoryHasPrevious));
+      }
 
-      setPatchHistoryTotal(data.patchHistoryTotal || 0);
-      setKnowledgeTotal(data.knowledgeTotal || 0);
-      setWorkIssueHistoryTotal(data.workIssueHistoryTotal || 0);
-      setWorkProjectTotal(data.workProjectTotal || 0);
-      setWorkMaintenanceTotal(data.workMaintenanceTotal || 0);
-      setTotalCount(data.total || 0);
+      if (includesKnowledge && Array.isArray(data.knowledgeShares)) {
+        setKnowledgeRows(data.knowledgeShares);
+        setKnowledgeTotal(data.knowledgeTotal || 0);
+        setKnowledgePage(
+          Number.isInteger(data.knowledgePage) ? data.knowledgePage : targetKnowledgePage
+        );
+        setKnowledgeSize(data.knowledgeSize || targetKnowledgeSize);
+        setKnowledgeTotalPages(data.knowledgeTotalPages || 0);
+        setKnowledgeHasNext(Boolean(data.knowledgeHasNext));
+        setKnowledgeHasPrevious(Boolean(data.knowledgeHasPrevious));
+      }
 
-      setPatchHistoryPage(
-        Number.isInteger(data.patchHistoryPage) ? data.patchHistoryPage : targetPatchHistoryPage
-      );
-      setPatchHistorySize(data.patchHistorySize || targetPatchHistorySize);
-      setPatchHistoryTotalPages(data.patchHistoryTotalPages || 0);
-      setPatchHistoryHasNext(Boolean(data.patchHistoryHasNext));
-      setPatchHistoryHasPrevious(Boolean(data.patchHistoryHasPrevious));
+      if (includesWorkIssue && Array.isArray(data.workIssueHistories)) {
+        setWorkIssueHistoryRows(data.workIssueHistories);
+        setWorkIssueHistoryTotal(data.workIssueHistoryTotal || 0);
+        setWorkProjectTotal(data.workProjectTotal || 0);
+        setWorkMaintenanceTotal(data.workMaintenanceTotal || 0);
+        setWorkIssuePage(Number.isInteger(data.workIssuePage) ? data.workIssuePage : targetWorkIssuePage);
+        setWorkIssueSize(data.workIssueSize || targetWorkIssueSize);
+        setWorkIssueTotalPages(data.workIssueTotalPages || 0);
+        setWorkIssueHasNext(Boolean(data.workIssueHasNext));
+        setWorkIssueHasPrevious(Boolean(data.workIssueHasPrevious));
+      }
 
-      setKnowledgePage(
-        Number.isInteger(data.knowledgePage) ? data.knowledgePage : targetKnowledgePage
-      );
-      setKnowledgeSize(data.knowledgeSize || targetKnowledgeSize);
-      setKnowledgeTotalPages(data.knowledgeTotalPages || 0);
-      setKnowledgeHasNext(Boolean(data.knowledgeHasNext));
-      setKnowledgeHasPrevious(Boolean(data.knowledgeHasPrevious));
-
-      setWorkIssuePage(Number.isInteger(data.workIssuePage) ? data.workIssuePage : targetWorkIssuePage);
-      setWorkIssueSize(data.workIssueSize || targetWorkIssueSize);
-      setWorkIssueTotalPages(data.workIssueTotalPages || 0);
-      setWorkIssueHasNext(Boolean(data.workIssueHasNext));
-      setWorkIssueHasPrevious(Boolean(data.workIssueHasPrevious));
+      if (fullSearch) {
+        setTotalCount(data.total || 0);
+      } else {
+        setTotalCount((prev) => {
+          let next = prev;
+          if (includesPatchHistory && Array.isArray(data.patchHistories)) {
+            next += (data.patchHistoryTotal || 0) - patchHistoryTotal;
+          }
+          if (includesKnowledge && Array.isArray(data.knowledgeShares)) {
+            next += (data.knowledgeTotal || 0) - knowledgeTotal;
+          }
+          if (includesWorkIssue && Array.isArray(data.workIssueHistories)) {
+            next += (data.workIssueHistoryTotal || 0) - workIssueHistoryTotal;
+          }
+          return Math.max(next, 0);
+        });
+      }
     } catch (e) {
+      if (requestSeqRef.current !== requestSeq) {
+        return;
+      }
       if (e.name !== 'AbortError') {
         setError(e.message || '통합검색 중 오류가 발생했습니다.');
-        setPatchHistoryRows([]);
-        setKnowledgeRows([]);
-        setWorkIssueHistoryRows([]);
-        setPatchHistoryTotal(0);
-        setKnowledgeTotal(0);
-        setWorkIssueHistoryTotal(0);
-        setWorkProjectTotal(0);
-        setWorkMaintenanceTotal(0);
-        setTotalCount(0);
-        setPatchHistoryTotalPages(0);
-        setKnowledgeTotalPages(0);
-        setWorkIssueTotalPages(0);
-        setPatchHistoryHasNext(false);
-        setPatchHistoryHasPrevious(false);
-        setKnowledgeHasNext(false);
-        setKnowledgeHasPrevious(false);
-        setWorkIssueHasNext(false);
-        setWorkIssueHasPrevious(false);
+        if (fullSearch) {
+          setPatchHistoryRows([]);
+          setKnowledgeRows([]);
+          setWorkIssueHistoryRows([]);
+          setPatchHistoryTotal(0);
+          setKnowledgeTotal(0);
+          setWorkIssueHistoryTotal(0);
+          setWorkProjectTotal(0);
+          setWorkMaintenanceTotal(0);
+          setTotalCount(0);
+          setPatchHistoryTotalPages(0);
+          setKnowledgeTotalPages(0);
+          setWorkIssueTotalPages(0);
+          setPatchHistoryHasNext(false);
+          setPatchHistoryHasPrevious(false);
+          setKnowledgeHasNext(false);
+          setKnowledgeHasPrevious(false);
+          setWorkIssueHasNext(false);
+          setWorkIssueHasPrevious(false);
+        }
       }
     } finally {
-      setLoading(false);
+      if (requestSeqRef.current === requestSeq) {
+        setLoading(false);
+      }
     }
   };
 
@@ -423,6 +467,7 @@ export default function GlobalSearchPage() {
       targetWorkIssuePage: workIssuePage,
       targetWorkIssueSize: workIssueSize,
       targetWorkIssueType: workIssueType,
+      targets: ['PATCH_HISTORY'],
     });
   };
 
@@ -439,6 +484,7 @@ export default function GlobalSearchPage() {
       targetWorkIssuePage: workIssuePage,
       targetWorkIssueSize: workIssueSize,
       targetWorkIssueType: workIssueType,
+      targets: ['KNOWLEDGE'],
     });
   };
 
@@ -452,6 +498,7 @@ export default function GlobalSearchPage() {
       targetWorkIssuePage: workIssuePage,
       targetWorkIssueSize: workIssueSize,
       targetWorkIssueType: workIssueType,
+      targets: ['PATCH_HISTORY'],
     });
   };
 
@@ -465,6 +512,7 @@ export default function GlobalSearchPage() {
       targetWorkIssuePage: workIssuePage,
       targetWorkIssueSize: workIssueSize,
       targetWorkIssueType: workIssueType,
+      targets: ['KNOWLEDGE'],
     });
   };
 
@@ -481,6 +529,7 @@ export default function GlobalSearchPage() {
       targetWorkIssuePage: targetPage,
       targetWorkIssueSize: workIssueSize,
       targetWorkIssueType: workIssueType,
+      targets: ['WORK_ISSUE'],
     });
   };
 
@@ -495,6 +544,7 @@ export default function GlobalSearchPage() {
       targetWorkIssuePage: 0,
       targetWorkIssueSize: nextSize,
       targetWorkIssueType: workIssueType,
+      targets: ['WORK_ISSUE'],
     });
   };
 
@@ -513,6 +563,7 @@ export default function GlobalSearchPage() {
       targetWorkIssuePage: 0,
       targetWorkIssueSize: workIssueSize,
       targetWorkIssueType: nextType,
+      targets: ['WORK_ISSUE'],
     });
   };
 

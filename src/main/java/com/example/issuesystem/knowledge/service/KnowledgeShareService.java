@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -24,9 +25,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /** 지식공유 서비스 */
 @Service
@@ -241,12 +246,29 @@ public class KnowledgeShareService {
                         pageRequest
                 );
 
-        Page<KnowledgeShareResponse> responsePage = pageResult.map(knowledgeShare -> {
-            List<KnowledgeShareAttachment> attachments =
-                    attachmentRepository.findByKnowledgeShareId(knowledgeShare.getId());
+        List<KnowledgeShare> knowledgeShares = pageResult.getContent();
+        List<Long> knowledgeShareIds = knowledgeShares.stream()
+                .map(KnowledgeShare::getId)
+                .toList();
 
-            return KnowledgeShareResponse.from(knowledgeShare, attachments);
-        });
+        Map<Long, List<KnowledgeShareAttachment>> attachmentsByKnowledgeShareId =
+                findAttachmentsByKnowledgeShareId(knowledgeShareIds);
+        Map<Long, Set<InfraType>> infraTypesByKnowledgeShareId =
+                findInfraTypesByKnowledgeShareId(knowledgeShareIds);
+
+        List<KnowledgeShareResponse> content = knowledgeShares.stream()
+                .map(knowledgeShare -> KnowledgeShareResponse.from(
+                        knowledgeShare,
+                        infraTypesByKnowledgeShareId.getOrDefault(knowledgeShare.getId(), Set.of()),
+                        attachmentsByKnowledgeShareId.getOrDefault(knowledgeShare.getId(), List.of())
+                ))
+                .toList();
+
+        Page<KnowledgeShareResponse> responsePage = new PageImpl<>(
+                content,
+                pageResult.getPageable(),
+                pageResult.getTotalElements()
+        );
 
         return PageResponse.from(responsePage);
     }
@@ -321,6 +343,56 @@ public class KnowledgeShareService {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private Map<Long, List<KnowledgeShareAttachment>> findAttachmentsByKnowledgeShareId(List<Long> knowledgeShareIds) {
+        if (knowledgeShareIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return attachmentRepository.findByKnowledgeShareIdIn(knowledgeShareIds).stream()
+                .collect(Collectors.groupingBy(
+                        attachment -> attachment.getKnowledgeShare().getId(),
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+    }
+
+    private Map<Long, Set<InfraType>> findInfraTypesByKnowledgeShareId(List<Long> knowledgeShareIds) {
+        if (knowledgeShareIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, Set<InfraType>> result = knowledgeShareIds.stream()
+                .collect(Collectors.toMap(
+                        id -> id,
+                        id -> new LinkedHashSet<>(),
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
+
+        for (KnowledgeShareRepository.KnowledgeShareInfraTypeRow row :
+                knowledgeShareRepository.findInfraTypesByKnowledgeShareIdIn(knowledgeShareIds)) {
+            InfraType infraType = parseInfraType(row.getInfraType());
+            if (infraType != null) {
+                result.computeIfAbsent(row.getKnowledgeShareId(), ignored -> new LinkedHashSet<>())
+                        .add(infraType);
+            }
+        }
+
+        return result;
+    }
+
+    private InfraType parseInfraType(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        try {
+            return InfraType.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /** 다운로드 응답에 필요한 파일 정보 */

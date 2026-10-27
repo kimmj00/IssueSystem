@@ -19,7 +19,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping({"/api/patch-histories", "/api/issue-cases"})
+@RequestMapping("/api/patch-histories")
 public class PatchHistoryController {
 
     private final PatchHistoryService patchHistoryService;
@@ -28,7 +28,8 @@ public class PatchHistoryController {
      * 패치이력 등록
      *
      * issue_attachment 테이블을 사용하지 않으므로 multipart 기반 첨부파일 등록은 제거했다.
-     * 프론트에서는 /api/patch-histories/json을 사용하고, 기존 /api/issue-cases/json은 호환 경로로 유지한다.
+     * 프론트에서는 /api/patch-histories/json을 사용한다.
+     * 기존 /api/issue-cases 경로는 IssueCaseController가 처리한다.
      */
     @PostMapping
     public ApiResponse<Long> create(@Valid @RequestBody PatchHistoryCreateRequest request) {
@@ -38,7 +39,7 @@ public class PatchHistoryController {
     /**
      * JSON 기반 패치이력 등록
      *
-     * 기본 경로는 /api/patch-histories/json이며, 기존 /api/issue-cases/json도 같은 컨트롤러에서 호환 처리한다.
+     * 기본 경로는 /api/patch-histories/json이다.
      */
     @PostMapping("/json")
     public ApiResponse<Long> createJson(@Valid @RequestBody PatchHistoryCreateRequest request) {
@@ -48,7 +49,7 @@ public class PatchHistoryController {
     /** 패치이력 수정 */
     @PutMapping("/{id}")
     public ApiResponse<Void> update(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody PatchHistoryUpdateRequest request
     ) {
         patchHistoryService.update(id, request);
@@ -57,7 +58,7 @@ public class PatchHistoryController {
 
     /** 패치이력 단건 상세 조회 */
     @GetMapping("/{id}")
-    public ApiResponse<PatchHistoryResponse> get(@PathVariable Long id) {
+    public ApiResponse<PatchHistoryResponse> get(@PathVariable("id") Long id) {
         return ApiResponse.ok(patchHistoryService.get(id));
     }
 
@@ -76,26 +77,26 @@ public class PatchHistoryController {
      */
     @GetMapping("/search")
     public ApiResponse<PageResponse<PatchHistoryResponse>> search(
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String titleKeyword,
-            @RequestParam(required = false) String contentKeyword,
-            @RequestParam(required = false) InfraType infraType,
-            @RequestParam(required = false) List<InfraType> infraTypes,
-            @RequestParam(required = false) PatchStatus status,
-            @RequestParam(required = false) String customerName,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) List<String> categories,
-            @RequestParam(required = false) String deploymentVersion,
-            @RequestParam(required = false) List<String> deploymentVersions,
-            @RequestParam(required = false) String referenceDeploymentVersion,
-            @RequestParam(required = false) String versionRelation,
-            @RequestParam(required = false) String detailType,
-            @RequestParam(required = false) String detailDeploymentVersion,
-            @RequestParam(required = false) String detailVersionRelation,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size
+            @RequestParam(name = "keyword", required = false) String keyword,
+            @RequestParam(name = "titleKeyword", required = false) String titleKeyword,
+            @RequestParam(name = "contentKeyword", required = false) String contentKeyword,
+            @RequestParam(name = "infraType", required = false) InfraType infraType,
+            @RequestParam(name = "infraTypes", required = false) List<InfraType> infraTypes,
+            @RequestParam(name = "status", required = false) PatchStatus status,
+            @RequestParam(name = "customerName", required = false) String customerName,
+            @RequestParam(name = "category", required = false) String category,
+            @RequestParam(name = "categories", required = false) List<String> categories,
+            @RequestParam(name = "deploymentVersion", required = false) String deploymentVersion,
+            @RequestParam(name = "deploymentVersions", required = false) List<String> deploymentVersions,
+            @RequestParam(name = "referenceDeploymentVersion", required = false) String referenceDeploymentVersion,
+            @RequestParam(name = "versionRelation", required = false) String versionRelation,
+            @RequestParam(name = "detailType", required = false) String detailType,
+            @RequestParam(name = "detailDeploymentVersion", required = false) String detailDeploymentVersion,
+            @RequestParam(name = "detailVersionRelation", required = false) String detailVersionRelation,
+            @RequestParam(name = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(name = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "50") int size
     ) {
         return ApiResponse.ok(
                 patchHistoryService.search(
@@ -125,14 +126,14 @@ public class PatchHistoryController {
 
     @GetMapping("/filter-options")
     public ApiResponse<PatchHistoryFilterOptionsResponse> getFilterOptions(
-            @RequestParam(required = false) List<String> categories
+            @RequestParam(name = "categories", required = false) List<String> categories
     ) {
         return ApiResponse.ok(patchHistoryService.getFilterOptions(categories));
     }
 
     @GetMapping("/deployment-versions")
     public ApiResponse<List<String>> getDeploymentVersions(
-            @RequestParam(required = false) String detailType
+            @RequestParam(name = "detailType", required = false) String detailType
     ) {
         return ApiResponse.ok(patchHistoryService.getDeploymentVersions(detailType));
     }

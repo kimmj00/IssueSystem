@@ -41,6 +41,20 @@ public class KnowledgeShareResponse {
             KnowledgeShare knowledgeShare,
             List<KnowledgeShareAttachment> attachments
     ) {
+        return from(
+                knowledgeShare,
+                knowledgeShare.getInfraTypes() == null
+                        ? Set.of()
+                        : Set.copyOf(knowledgeShare.getInfraTypes()),
+                attachments
+        );
+    }
+
+    public static KnowledgeShareResponse from(
+            KnowledgeShare knowledgeShare,
+            Set<InfraType> infraTypes,
+            List<KnowledgeShareAttachment> attachments
+    ) {
         return KnowledgeShareResponse.builder()
                 .id(knowledgeShare.getId())
                 .title(knowledgeShare.getTitle())
@@ -50,12 +64,7 @@ public class KnowledgeShareResponse {
                 .attachmentName(knowledgeShare.getAttachmentName())
                 .content(knowledgeShare.getContent())
                 .viewCount(knowledgeShare.getViewCount())
-                // @ElementCollection을 DTO 생성 시점에 실제 Set으로 복사한다.
-                .infraTypes(
-                        knowledgeShare.getInfraTypes() == null
-                                ? Set.of()
-                                : Set.copyOf(knowledgeShare.getInfraTypes())
-                )
+                .infraTypes(infraTypes == null ? Set.of() : Set.copyOf(infraTypes))
                 // 화면의 등록일은 마지막 수정 적용 시점을 표시한다.
                 // 원본 생성 시점은 DB created_at에 그대로 보존한다.
                 .createdAt(knowledgeShare.getUpdatedAt())

@@ -280,8 +280,11 @@ export default function PatchHistoryPage() {
   const [contentKeyword, setContentKeyword] = useState(() => getInitialSearchParam('contentKeyword'));
   const searchKeyword = combineKeywords(titleKeyword, contentKeyword);
   const customerFilter = '';
-  const [selectedInfraTypes, setSelectedInfraTypes] = useState([]);
-  const [infraFilter, setInfraFilter] = useState(() => getInitialSearchParam('infraType', 'ALL'));
+  const [selectedInfraTypes, setSelectedInfraTypes] = useState(() => {
+    const initialInfraType = getInitialSearchParam('infraType');
+    return initialInfraType ? [initialInfraType] : [];
+  });
+  const [infraFilter] = useState(() => getInitialSearchParam('infraType', 'ALL'));
   const statusFilter = 'ALL';
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedDeploymentVersions, setSelectedDeploymentVersions] = useState(
@@ -295,13 +298,13 @@ export default function PatchHistoryPage() {
       : 'ALL';
   });
   const [categoryOptions, setCategoryOptions] = useState([]);
-  const [categoryFilter, setCategoryFilter] = useState(initialParams.get('category') || '');
-  const [deploymentVersionFilter, setDeploymentVersionFilter] = useState(initialParams.get('deploymentVersion') || '');
-  const [isDetailSearchOpen, setIsDetailSearchOpen] = useState(initialParams.get('detailSearch') === 'true');
-  const [detailInfraFilter, setDetailInfraFilter] = useState(initialParams.get('detailInfraType') || '');
-  const [detailType, setDetailType] = useState(initialParams.get('detailType') || 'WEB');
-  const [detailDeploymentVersion, setDetailDeploymentVersion] = useState(initialParams.get('detailDeploymentVersion') || '');
-  const [detailVersionRelation, setDetailVersionRelation] = useState(initialParams.get('detailVersionRelation') || 'ALL');
+  const [categoryFilter] = useState(initialParams.get('category') || '');
+  const [deploymentVersionFilter] = useState(initialParams.get('deploymentVersion') || '');
+  const [isDetailSearchOpen] = useState(initialParams.get('detailSearch') === 'true');
+  const [detailInfraFilter] = useState(initialParams.get('detailInfraType') || '');
+  const [detailType] = useState(initialParams.get('detailType') || 'WEB');
+  const [detailDeploymentVersion] = useState(initialParams.get('detailDeploymentVersion') || '');
+  const [detailVersionRelation] = useState(initialParams.get('detailVersionRelation') || 'ALL');
   const [deploymentVersionOptions, setDeploymentVersionOptions] = useState([]);
   const [loadingFilterOptions, setLoadingFilterOptions] = useState(false);
   // 기간 검색 조건. 기본값은 비워두어 기존처럼 전체 기간을 조회한다.
@@ -320,6 +323,9 @@ export default function PatchHistoryPage() {
   // 현재 페이지 기준으로 하단 페이지 버튼 목록을 계산합니다.
   const pageItems = useMemo(() => buildPageItems(page, totalPages), [page, totalPages]);
   const autoSearchInitializedRef = useRef(false);
+  const filterOptionsInitializedRef = useRef(false);
+  const listAbortRef = useRef(null);
+  const listRequestSeqRef = useRef(0);
 
   const fetchFilterOptions = async (targetCategories = selectedCategories) => {
     setLoadingFilterOptions(true);
@@ -354,6 +360,15 @@ export default function PatchHistoryPage() {
 
   // 검색 조건과 페이지 정보를 기준으로 목록을 조회합니다.
   const fetchPatchHistories = async (targetPage = page, targetSize = size) => {
+    if (listAbortRef.current) {
+      listAbortRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    listAbortRef.current = controller;
+    listRequestSeqRef.current += 1;
+    const requestSeq = listRequestSeqRef.current;
+
     setLoadingList(true);
     setError('');
 
@@ -382,8 +397,13 @@ export default function PatchHistoryPage() {
       params.append('page', targetPage);
       params.append('size', targetSize);
 
-      const res = await fetch(`${API_BASE}/api/patch-histories/search?${params.toString()}`);
+      const res = await fetch(`${API_BASE}/api/patch-histories/search?${params.toString()}`, {
+        signal: controller.signal,
+      });
       const result = await res.json();
+      if (listRequestSeqRef.current !== requestSeq) {
+        return;
+      }
 
       if (!res.ok || !result.success) {
         throw new Error(result.message || '목록 조회에 실패했습니다.');
@@ -397,9 +417,14 @@ export default function PatchHistoryPage() {
       setHasNext(pageData.hasNext);
       setHasPrevious(pageData.hasPrevious);
     } catch (e) {
+      if (listRequestSeqRef.current !== requestSeq || e.name === 'AbortError') {
+        return;
+      }
       setError(e.message || '목록 조회 중 오류가 발생했습니다.');
     } finally {
-      setLoadingList(false);
+      if (listRequestSeqRef.current === requestSeq) {
+        setLoadingList(false);
+      }
     }
   };
 
@@ -576,10 +601,20 @@ export default function PatchHistoryPage() {
   useEffect(() => {
     fetchFilterOptions([]);
     fetchPatchHistories(page, size);
+    return () => {
+      if (listAbortRef.current) {
+        listAbortRef.current.abort();
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    if (!filterOptionsInitializedRef.current) {
+      filterOptionsInitializedRef.current = true;
+      return;
+    }
+
     fetchFilterOptions(selectedCategories);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategories]);

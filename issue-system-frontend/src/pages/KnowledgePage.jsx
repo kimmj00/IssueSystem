@@ -143,7 +143,10 @@ export default function KnowledgePage({ authUser }) {
   // 검색 조건 상태
   // const [keyword, setKeyword] = useState('');
   // const [customerName, setCustomerName] = useState('');
-  const [selectedInfraTypes, setSelectedInfraTypes] = useState([]);
+  const [selectedInfraTypes, setSelectedInfraTypes] = useState(() => {
+    const initialInfraType = getInitialSearchParam('infraType');
+    return initialInfraType ? [initialInfraType] : [];
+  });
   // const [startDate, setStartDate] = useState('');
   // const [endDate, setEndDate] = useState(getDefaultEndDate);
   const [titleKeyword, setTitleKeyword] = useState(
@@ -185,9 +188,20 @@ export default function KnowledgePage({ authUser }) {
       [page, totalPages]
   );
   const autoSearchInitializedRef = useRef(false);
+  const listAbortRef = useRef(null);
+  const listRequestSeqRef = useRef(0);
 
   // 지식공유 목록 조회
   const fetchKnowledge = async (targetPage = page, targetSize = size) => {
+    if (listAbortRef.current) {
+      listAbortRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    listAbortRef.current = controller;
+    listRequestSeqRef.current += 1;
+    const requestSeq = listRequestSeqRef.current;
+
     setLoading(true);
     setError('');
 
@@ -224,10 +238,14 @@ export default function KnowledgePage({ authUser }) {
       params.append('size', String(targetSize));
 
       const res = await fetch(
-          `${API_BASE}/api/knowledge-shares/search?${params.toString()}`
+          `${API_BASE}/api/knowledge-shares/search?${params.toString()}`,
+          { signal: controller.signal }
       );
 
       const result = await res.json();
+      if (listRequestSeqRef.current !== requestSeq) {
+        return;
+      }
 
       if (!res.ok || !result.success) {
         throw new Error(result.message || '지식공유 목록 조회에 실패했습니다.');
@@ -243,15 +261,25 @@ export default function KnowledgePage({ authUser }) {
       setHasPrevious(Boolean(pageData.hasPrevious));
       setHasNext(Boolean(pageData.hasNext));
     } catch (e) {
+      if (listRequestSeqRef.current !== requestSeq || e.name === 'AbortError') {
+        return;
+      }
       setError(e.message || '지식공유 목록 조회 중 오류가 발생했습니다.');
     } finally {
-      setLoading(false);
+      if (listRequestSeqRef.current === requestSeq) {
+        setLoading(false);
+      }
     }
   };
 
   // 최초 진입 시 1회 조회
   useEffect(() => {
     fetchKnowledge(page, size);
+    return () => {
+      if (listAbortRef.current) {
+        listAbortRef.current.abort();
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
