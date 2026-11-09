@@ -24,6 +24,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLWarning;
 import java.sql.Statement;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -218,7 +219,9 @@ public class QueryExecutionLoggingConfig {
             long startedAt = System.nanoTime();
             try {
                 Object result = invokeTarget(target, method, args);
-                logSuccess(method, System.nanoTime() - startedAt, result, sql);
+                long elapsedNanos = System.nanoTime() - startedAt;
+                logSearchMetrics(sql);
+                logSuccess(method, elapsedNanos, result, sql);
                 return result;
             } catch (Throwable error) {
                 logFailure(method, System.nanoTime() - startedAt, error, sql);
@@ -229,6 +232,22 @@ public class QueryExecutionLoggingConfig {
         private String resolveSql(Object[] args) {
             String sql = firstStringArgument(args);
             return sql != null ? sql : preparedSql;
+        }
+
+        private void logSearchMetrics(String sql) {
+            if (sql == null || (!sql.contains("app_search_rank(") && !sql.contains("app_search_candidates("))) return;
+            try {
+                // 함수가 보낸 진단만 읽는다. 파라미터/사용자 입력이나 다른 DB 경고를 출력하지 않는다.
+                for (SQLWarning warning = target.getWarnings(); warning != null; warning = warning.getNextWarning()) {
+                    String message = warning.getMessage();
+                    if (message != null && message.startsWith("issue_search_metrics ")) {
+                        log.warn("검색 엔진 지연: queryName={}, sqlId={}, metrics={}",
+                                queryName(sql), sqlId(sql), oneLine(message.substring("issue_search_metrics ".length())));
+                    }
+                }
+            } catch (SQLException ignored) {
+                // 진단을 읽지 못해도 검색 결과와 예외 처리는 바꾸지 않는다.
+            }
         }
 
         private void logSuccess(Method method, long elapsedNanos, Object result, String sql) {

@@ -3,26 +3,25 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@testing-library/dom": "^10.4.1",
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^13.5.0",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5",
-    "react-scripts": "5.0.1",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "postinstall": "node scripts/verify-build-tools.mjs",
+    "start": "node scripts/start.mjs",
+    "prebuild": "node scripts/verify-build-tools.mjs",
+    "build": "npm run lint && vite build",
+    "pretest": "node scripts/verify-build-tools.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --max-warnings 0",
+    "preview": "vite preview",
+    "verify:tools": "node scripts/verify-build-tools.mjs",
+    "audit": "npm audit --include=dev"
   },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+  "engines": {
+    "node": "^22.13.0 || ^24.0.0 || >=26.0.0"
   },
   "browserslist": {
     "production": [
@@ -37,8 +36,22 @@
     ]
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^13.5.0",
+    "@vitejs/plugin-react": "^6.1.2",
     "autoprefixer": "^10.5.0",
-    "postcss": "^8.5.10",
-    "tailwindcss": "^3.4.19"
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "jsdom": "^29.1.1",
+    "postcss": "^8.5.32",
+    "tailwindcss": "^3.4.19",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5",
+    "yaml": "^2.9.1"
   }
 }

@@ -3,6 +3,8 @@ package com.example.issuesystem.global.service;
 import com.example.issuesystem.knowledge.repository.KnowledgeShareRepository;
 import com.example.issuesystem.patchhistory.repository.PatchHistoryRepository;
 import com.example.issuesystem.workissuehistory.repository.WorkIssueGlobalSearchRepository;
+import com.example.issuesystem.config.QueryExecutionLoggingConfig;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -10,8 +12,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -20,7 +26,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
 import java.time.LocalDateTime;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Map;
+import javax.sql.DataSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -175,6 +184,110 @@ class SearchPostgresIntegrationTest {
     }
 
     @Test
+    void 검색_함수의_계획_설정이_다른_쿼리에_남지_않는다() {
+        jdbc.execute("set local plan_cache_mode = force_custom_plan");
+        jdbc.execute("set local jit = on");
+        jdbc.execute("set local client_min_messages = warning");
+        long id = insertKnowledge("agent", "보안", "고객");
+        var page = knowledge.searchBySeparatedKeywords("agent", "보안", null, null, null, "|",
+                START, END, PageRequest.of(0, 10));
+        assertThat(page.getContent()).extracting(item -> item.getId()).containsExactly(id);
+        assertThat(jdbc.queryForObject("select current_setting('plan_cache_mode')", String.class))
+                .isEqualTo("force_custom_plan");
+        assertThat(jdbc.queryForObject("select current_setting('jit')", String.class)).isEqualTo("on");
+        assertThat(jdbc.queryForObject("select current_setting('client_min_messages')", String.class)).isEqualTo("warning");
+    }
+
+    @Test
+    void 기존_검색연결을_자동갱신하고_예전_INSERT와_단어_변경도_지원한다() throws Exception {
+        // 배포 전 4열 구조를 재현한다. 테스트 전체는 종료 시 롤백된다.
+        jdbc.execute("drop trigger app_search_posting_length on app_search_posting");
+        jdbc.execute("alter table app_search_posting drop column char_signature cascade");
+        jdbc.execute("alter table app_search_posting drop column word_length cascade");
+        jdbc.update("""
+                insert into app_search_document values ('MIGRATION',1,'TITLE','agent','agent',app_search_chars('agent'))
+                """);
+        jdbc.update("insert into app_search_term values (md5('agent'),'agent',app_search_chars('agent'),5) on conflict do nothing");
+        jdbc.update("insert into app_search_posting values ('MIGRATION',1,'TITLE',md5('agent'))");
+        String sql = new ClassPathResource("db/search-functions.sql").getContentAsString(StandardCharsets.UTF_8);
+        jdbc.execute(sql);
+        assertThat(jdbc.queryForObject("select word_length from app_search_posting where source_kind='MIGRATION'", Integer.class)).isEqualTo(5);
+        assertThat(jdbc.queryForObject("select attnotnull from pg_attribute where attrelid='app_search_posting'::regclass and attname='word_length'", Boolean.class)).isTrue();
+        assertThat(jdbc.queryForObject("select indisvalid from pg_index where indexrelid='idx_app_search_posting_scope_terms'::regclass", Boolean.class)).isTrue();
+        assertThat(jdbc.queryForObject("select char_signature=app_search_signature(app_search_chars('agent')) from app_search_posting where source_kind='MIGRATION'", Boolean.class)).isTrue();
+        // 두 번째 적용은 기존 데이터를 다시 쓰지 않는다.
+        String tuple = jdbc.queryForObject("select ctid::text from app_search_posting where source_kind='MIGRATION'", String.class);
+        jdbc.execute(sql);
+        assertThat(jdbc.queryForObject("select ctid::text from app_search_posting where source_kind='MIGRATION'", String.class)).isEqualTo(tuple);
+        jdbc.update("delete from app_search_posting where source_kind='MIGRATION'");
+        jdbc.update("insert into app_search_posting values ('MIGRATION',1,'TITLE',md5('agent'))");
+        assertThat(jdbc.queryForObject("select word_length from app_search_posting where source_kind='MIGRATION'", Integer.class)).isEqualTo(5);
+        jdbc.update("insert into app_search_term values (md5('보안'),'보안',app_search_chars('보안'),2) on conflict do nothing");
+        jdbc.update("update app_search_posting set word_hash=md5('보안') where source_kind='MIGRATION'");
+        assertThat(jdbc.queryForObject("select word_length from app_search_posting where source_kind='MIGRATION'", Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("select char_signature=app_search_signature(app_search_chars('보안')) from app_search_posting where source_kind='MIGRATION'", Boolean.class)).isTrue();
+        long id = insertKnowledge("서비스", "보안", "고객");
+        assertThat(knowledge.searchBySeparatedKeywords("서지스", "보안", null, null, null, "|", START, END, PageRequest.of(0, 10))
+                .getContent()).extracting(item -> item.getId()).containsExactly(id);
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void PostgreSQL_진단_알림이_앱_로그로_전달된다(CapturedOutput output) throws Exception {
+        var properties = new QueryExecutionLoggingConfig.QueryLoggingProperties();
+        var factory = new StaticListableBeanFactory(Map.of("properties", properties));
+        var processor = QueryExecutionLoggingConfig.queryExecutionLoggingDataSourceBeanPostProcessor(
+                factory.getBeanProvider(QueryExecutionLoggingConfig.QueryLoggingProperties.class));
+        var source = (DataSource) processor.postProcessAfterInitialization(jdbc.getDataSource(), "diagnosticTest");
+        try (var connection = source.getConnection(); var statement = connection.prepareStatement("""
+                /* app_search_rank( diagnostic transport test */
+                do $$ begin raise notice 'issue_search_metrics %',
+                    json_build_object('source','KNOWLEDGE','field','CONTENT','elapsedMs',1001); end $$
+                """)) {
+            statement.execute();
+        }
+        assertThat(output).contains("검색 엔진 지연:", "\"KNOWLEDGE\"", "\"CONTENT\"", "1001");
+    }
+
+    @Test
+    void 제한된_편집거리도_기존_유사도와_일치판정과_점수가_같다() {
+        // 짧은 문자열의 모든 조합: 삽입/삭제/치환/인접 교환, 반복 문자, 한글을 양방향 비교한다.
+        Long mismatches = jdbc.queryForObject("""
+                with recursive words(w,n) as (
+                    select ''::text,0 union all
+                    select w||ch,n+1 from words cross join unnest(array['a','b','가']) ch where n<4
+                ), pairs as materialized (
+                    select a.w,b.w as q from words a cross join words b
+                    union all
+                    select w,overlay(w placing '오류' from 4 for 2)
+                    from (select repeat('가나다abc',n)||'가나다abc' as w from generate_series(1,15) n) s
+                    union all
+                    select w,substring(w from 2)||left(w,1)
+                    from (select repeat('가나다abc',n)||'가나다abc' as w from generate_series(1,15) n) s
+                    union all
+                    select w,case when n%3=0 then substring(w from 2)||left(w,1)
+                                  when n%3=1 then overlay(w placing '나a' from 1+n%length(w) for 2)
+                                  else substring(w from 1+n%length(w)) end
+                    from (select n,substring(repeat(md5(n::text)||'가나다',4) from 1 for 1+n%100) as w
+                          from generate_series(1,1000) n) s
+                    union all
+                    select w,q from (values ('abc','abcd'),('abcd','abc'),('abcdef','abcdxefyz'),
+                        ('abcdxefyz','abcdef'),('ca','abc'),('agent!!!','agant!!!'),
+                        (repeat('가',50),repeat('가',37)||repeat('나',13)),
+                        (repeat('a',100),repeat('a',66)||repeat('b',34))) v(w,q)
+                ), scores as materialized (
+                    select app_search_similarity(w,q) as old_score,
+                           app_search_similarity_match(w,q) as new_score,
+                           case when length(q)<=3 then 0.66 else 0.74 end::double precision as threshold
+                    from pairs
+                ) select count(*) from scores
+                where (old_score>=threshold) is distinct from (new_score>=threshold)
+                   or (old_score>=threshold and old_score is distinct from new_score)
+                """, Long.class);
+        assertThat(mismatches).isZero();
+    }
+
+    @Test
     void 날짜형_버전과_숫자형_버전_필터를_유지한다() {
         long first = insertPatch("agent", "보안");
         long second = insertPatch("agent", "보안");
@@ -189,6 +302,43 @@ class SearchPostgresIntegrationTest {
         var detail = patches.detailSearchIds("agent", null, null, null, null, null, null, null, null, "|",
                 "WEB", null, "ALL", null, false, null, START, END, PageRequest.of(0, 10));
         assertThat(detail.getContent()).containsExactly(first);
+    }
+
+    @Test
+    void 공용사전과_검색범위가_달라도_모든단어를_평가한_결과와_점수가_동일하다() throws Exception {
+        jdbc.execute(new ClassPathResource("db/search-reference.sql").getContentAsString(StandardCharsets.UTF_8));
+        jdbc.execute("set local plan_cache_mode = force_generic_plan");
+        // 압축률에 의존하지 않고 큰 본문에서 쓰는 경로도 검증한다. 종료 시 롤백된다.
+        jdbc.execute("alter table app_search_document alter column normalized_text set storage external");
+        String[] texts = {"agent", "agnet", "agnt", "agant!!!", "서비스", "서지스", "보안", "보완",
+                "abcdef", "abcdeff", "abcdxefyz", "aaaaa", "aaaba", "aabaa", "a g e n t", "에이전트 설치", "일반 안내", "!!!"};
+        var allowed = new ArrayList<Long>();
+        for (int i = 0; i < texts.length; i++) {
+            long id = insertKnowledge(texts[i], "x".repeat(10000) + " abcde " + texts[(i + 5) % texts.length], "고객");
+            if (i % 2 == 0) allowed.add(id);
+        }
+        // 본문 전용 단어가 공용 사전에 많이 남은 상황에서도 문서 범위를 벗어나지 않아야 한다.
+        jdbc.update("""
+                insert into app_search_term(word_hash,word,characters,word_length)
+                select md5(w),w,app_search_chars(w),length(w)
+                from (select 'abcde'||lpad(to_hex(n),4,'0') as w from generate_series(1,6500) n) s
+                on conflict do nothing
+                """);
+        String subset = "{" + allowed.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(",")) + "}";
+        // NULL=전체, 빈 배열=없음, 중복 ID=집합이라는 기존 범위 의미도 검증한다.
+        for (String scope : new String[]{null, "{}", subset, subset.replace("}", "," + allowed.get(0) + "}")}) {
+            for (String field : new String[]{"TITLE", "CONTENT", "ANY"}) {
+                for (String keyword : new String[]{null, "", " \t ", "agent", "agnet", "agnt", "agant!!!", "a", "aa", "aaaaa",
+                        "서비스", "서지스", "보안", "보완", "설치", "에이전트설치", "ABCDEF", "abcdxefyz", "없는단어", "!!!"}) {
+                    var actual = jdbc.queryForList("select * from app_search_candidates_scope('KNOWLEDGE',?,?,cast(? as bigint[])) order by document_id",
+                            field, keyword, scope);
+                    var expected = jdbc.queryForList("select * from pg_temp.search_reference('KNOWLEDGE',?,?,cast(? as bigint[])) order by document_id",
+                            field, keyword, scope);
+                    assertThat(actual).as("field=%s, keyword=%s, scope=%s", field, keyword, scope)
+                            .containsExactlyElementsOf(expected);
+                }
+            }
+        }
     }
 
     private long insertKnowledge(String title, String body, String customer) {

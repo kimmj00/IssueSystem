@@ -1,9 +1,10 @@
-import org.apache.tools.ant.taskdefs.condition.Os
+import com.github.gradle.node.npm.task.NpmTask
 
 plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.0.5'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'com.github.node-gradle.node' version '7.1.0'
 }
 
 group = 'com.example'
@@ -27,39 +28,17 @@ repositories {
 }
 
 def frontendDir = "$projectDir/issue-system-frontend"
-def frontendBuildDir = "$frontendDir/build"
+def frontendBuildWorkspace = "$projectDir/.gradle/frontend-build"
+def frontendBuildDir = "$frontendBuildWorkspace/build"
 def backendStaticDir = "$projectDir/src/main/resources/static"
 
-def resolveWindowsNpm = {
-	def candidates = []
-
-	(System.getenv('PATH') ?: '').split(File.pathSeparator).findAll().each { pathEntry ->
-		candidates << new File(pathEntry, 'npm.cmd')
-	}
-
-	def programFiles = System.getenv('ProgramFiles')
-	def localAppData = System.getenv('LOCALAPPDATA')
-	def appData = System.getenv('APPDATA')
-
-	if (programFiles) candidates << new File(programFiles, 'nodejs/npm.cmd')
-	if (localAppData) candidates << new File(localAppData, 'Programs/nodejs/npm.cmd')
-	if (appData) candidates << new File(appData, 'npm/npm.cmd')
-
-	if (localAppData) {
-		def jetBrainsHome = new File(localAppData, 'JetBrains')
-		if (jetBrainsHome.isDirectory()) {
-			candidates.addAll(fileTree(jetBrainsHome) {
-				include 'IntelliJIdea*/acp-agents/.runtimes/node/*/bin/npm.cmd'
-			}.files.sort { first, second -> second.lastModified() <=> first.lastModified() })
-		}
-	}
-
-	def npm = candidates.find { it.isFile() }
-	if (!npm) {
-		throw new GradleException('npm.cmd를 찾을 수 없습니다. Node.js를 설치하거나 PATH에 npm 경로를 추가하세요.')
-	}
-
-	return npm.absolutePath
+// IDE/PATH에 설치된 Node와 무관하게 검증한 버전을 사용한다.
+node {
+	version = file("$frontendDir/.node-version").text.trim()
+	download = true
+	// npm ci가 실행 중인 개발 서버의 node_modules를 삭제하지 않도록 분리한다.
+	nodeProjectDir = file(frontendBuildWorkspace)
+	npmInstallCommand = 'ci'
 }
 
 dependencies {
@@ -103,34 +82,52 @@ tasks.register('cleanFrontendStatic', Delete) {
 }
 
 /**
- * 프론트 npm install
+ * 빌드 소스를 복사하되 빌드 전용 의존성과 결과물은 보존한다.
  */
-tasks.register('npmInstall', Exec) {
-	workingDir = file(frontendDir)
-
-	if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-		def npm = resolveWindowsNpm()
-		environment 'PATH', "${new File(npm).parent}${File.pathSeparator}${System.getenv('PATH') ?: ''}"
-		commandLine 'cmd', '/d', '/s', '/c', "\"\"${npm}\" install\""
-	} else {
-		commandLine 'npm', 'install'
+tasks.register('prepareFrontendBuild', Sync) {
+	from frontendDir
+	into frontendBuildWorkspace
+	exclude 'node_modules/**', 'build/**'
+	preserve {
+		include 'node_modules/**', 'build/**'
 	}
 }
 
 /**
- * 프론트 React build
+ * 잠금 파일에 고정된 프론트 의존성 설치
  */
-tasks.register('npmBuild', Exec) {
-	dependsOn 'npmInstall'
-	workingDir = file(frontendDir)
+tasks.named('npmInstall') {
+	dependsOn 'prepareFrontendBuild'
+	args.set(['--include=dev', '--include=optional'])
+	inputs.property('frontendNodeVersion', node.version)
+	inputs.files(
+		file("$frontendDir/.npmrc"),
+		file("$frontendDir/scripts/verify-build-tools.mjs"),
+		file("$frontendDir/scripts/node-version.mjs")
+	)
+}
 
-	if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-		def npm = resolveWindowsNpm()
-		environment 'PATH', "${new File(npm).parent}${File.pathSeparator}${System.getenv('PATH') ?: ''}"
-		commandLine 'cmd', '/d', '/s', '/c', "\"\"${npm}\" run build\""
-	} else {
-		commandLine 'npm', 'run', 'build'
+// 개발/테스트/감사도 IDE의 전역 Node 대신 같은 전용 런타임을 사용한다.
+[
+	npmBuild: ['run', 'build'],
+	npmTest: ['test'],
+	npmAudit: ['run', 'audit']
+].each { taskName, commandArgs ->
+	tasks.register(taskName, NpmTask) {
+		group = 'frontend'
+		description = "프로젝트 전용 Node로 npm ${commandArgs.join(' ')} 실행"
+		dependsOn 'npmInstall'
+		args.set(commandArgs)
 	}
+}
+
+// 개발 서버는 원본 소스와 개발용 node_modules를 사용한다.
+// 필요한 의존성은 start.mjs가 확인하고 복구한다.
+tasks.register('npmStart', NpmTask) {
+	group = 'frontend'
+	description = '프로젝트 전용 Node로 프론트엔드 개발 서버 실행'
+	workingDir = file(frontendDir)
+	args.set(['start'])
 }
 
 /**

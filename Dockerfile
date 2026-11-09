@@ -3,11 +3,7 @@ FROM eclipse-temurin:17-jdk AS build
 
 WORKDIR /app
 
-# Node.js 설치
-RUN apt-get update && apt-get install -y curl \
-    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+# 프론트 빌드용 Node는 Gradle이 고정 버전을 내려받아 사용한다.
 
 # Gradle 관련 파일 복사
 COPY gradlew .
