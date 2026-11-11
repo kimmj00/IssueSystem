@@ -55,7 +55,8 @@ public class WorkMaintenanceHistory extends BaseTimeEntity {
     @Column(name = "status_date", length = 50)
     private String statusDate;
 
-    @Column(name = "is_uploaded", length = 50)
+    // 시스템별 업로드 현황이 여러 줄로 누적되어 50자를 넘을 수 있습니다.
+    @Column(name = "is_uploaded", columnDefinition = "text")
     private String isUploaded;
 
     @Column(name = "sms_status", length = 100)

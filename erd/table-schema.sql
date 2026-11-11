@@ -155,7 +155,7 @@ CREATE TABLE IF NOT EXISTS work_maintenance_history (
     pg_version VARCHAR(100),
     web_version VARCHAR(100),
     status_date VARCHAR(50),
-    is_uploaded VARCHAR(50),
+    is_uploaded TEXT,
     sms_status VARCHAR(100),
     nms_status VARCHAR(100),
     oz VARCHAR(20),
@@ -215,6 +215,9 @@ ALTER TABLE knowledge_share
 
 ALTER TABLE knowledge_share
     ALTER COLUMN view_count SET NOT NULL;
+
+ALTER TABLE work_maintenance_history
+    ALTER COLUMN is_uploaded TYPE TEXT;
 
 
 DO $$
@@ -502,7 +505,7 @@ COMMENT ON COLUMN work_maintenance_history.version IS '제품 또는 계약 버�
 COMMENT ON COLUMN work_maintenance_history.pg_version IS 'PG 버전';
 COMMENT ON COLUMN work_maintenance_history.web_version IS 'WEB 버전';
 COMMENT ON COLUMN work_maintenance_history.status_date IS '현황 기준일';
-COMMENT ON COLUMN work_maintenance_history.is_uploaded IS '업로드 또는 적용 여부';
+COMMENT ON COLUMN work_maintenance_history.is_uploaded IS '시스템별 업로드 또는 적용 현황 원문';
 COMMENT ON COLUMN work_maintenance_history.sms_status IS 'SMS 상태';
 COMMENT ON COLUMN work_maintenance_history.nms_status IS 'NMS 상태';
 COMMENT ON COLUMN work_maintenance_history.oz IS 'OZ 제품 적용 여부 또는 상태';

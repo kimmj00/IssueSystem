@@ -182,26 +182,6 @@ function text(value) {
   return value == null ? '' : String(value).trim();
 }
 
-function normalizeUploadFileName(fileName) {
-  return text(fileName).toLowerCase();
-}
-
-function uniqueUploadList(uploadList) {
-  const uniqueUploads = new Map();
-
-  (uploadList || []).forEach((upload) => {
-    const key = normalizeUploadFileName(upload.originalFileName);
-
-    if (!key || uniqueUploads.has(key)) {
-      return;
-    }
-
-    uniqueUploads.set(key, upload);
-  });
-
-  return Array.from(uniqueUploads.values());
-}
-
 function number(value) {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -1306,8 +1286,8 @@ export default function WorkIssueHistoryPage() {
       const uploadList = await fetch(`${WORK_ISSUE_API}/uploads`)
         .then((response) => readApiResponse(response, '업로드 이력 조회에 실패했습니다.'));
 
-      const uniqueUploads = uniqueUploadList(uploadList);
-      const resolvedUploadId = uploadId || (uniqueUploads?.[0]?.uploadId ? String(uniqueUploads[0].uploadId) : '');
+      const uploadHistory = uploadList || [];
+      const resolvedUploadId = uploadId || (uploadHistory[0]?.uploadId ? String(uploadHistory[0].uploadId) : '');
       const query = resolvedUploadId ? `?uploadId=${resolvedUploadId}` : '';
 
       const [projectData, maintenanceData] = await Promise.all([
@@ -1315,7 +1295,7 @@ export default function WorkIssueHistoryPage() {
         fetch(`${WORK_ISSUE_API}/maintenance${query}`).then((response) => readApiResponse(response, '유지보수 조회에 실패했습니다.')),
       ]);
 
-      setUploads(uniqueUploads);
+      setUploads(uploadHistory);
       setSelectedUploadId(resolvedUploadId);
       setProjects(groupProjectRows((projectData || []).map(normalizeProject)));
       setMaintenanceRows((maintenanceData || []).map(normalizeMaintenance));

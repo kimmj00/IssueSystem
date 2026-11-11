@@ -1,5 +1,6 @@
 package com.example.issuesystem.workissuehistory.service;
 
+import com.example.issuesystem.workissuehistory.domain.WorkMaintenanceHistory;
 import com.example.issuesystem.workissuehistory.domain.WorkProjectHistory;
 import com.example.issuesystem.workissuehistory.domain.WorkReportUpload;
 import org.apache.poi.ss.usermodel.Row;
@@ -66,5 +67,48 @@ class WorkIssueExcelParserTest {
         assertThat(projects)
                 .extracting(WorkProjectHistory::getExecutors)
                 .containsExactly("김정대", "천우진", "최승훈", "임성현", "김민제");
+    }
+
+    @Test
+    void 유지보수_업로드_현황이_50자를_넘어도_원문을_보존한다() throws Exception {
+        String uploadStatus = """
+                SMS(314/400)
+                NMS(104/180)
+                DBMS(70/100)
+                APM(260/500)
+                IMS(65)
+                FMS(8)
+                OZ
+                Dash
+                """.stripTrailing();
+        byte[] excel;
+
+        try (Workbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            Sheet maintenanceSheet = workbook.createSheet("02_유지보수");
+            Row row = maintenanceSheet.createRow(13);
+            row.createCell(1).setCellValue("테스트 고객사");
+            row.createCell(6).setCellValue(uploadStatus);
+
+            workbook.write(output);
+            excel = output.toByteArray();
+        }
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "weekly-report.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                excel
+        );
+
+        List<WorkMaintenanceHistory> items = parser.parse(
+                file,
+                WorkReportUpload.builder().build()
+        ).getMaintenanceItems();
+
+        assertThat(uploadStatus).hasSizeGreaterThan(50);
+        assertThat(items).singleElement()
+                .extracting(WorkMaintenanceHistory::getIsUploaded)
+                .isEqualTo(uploadStatus);
     }
 }
